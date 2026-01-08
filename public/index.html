@@ -239,8 +239,8 @@
 
     <script>
         // Configuration
-        const API_URL = window.location.origin.includes('localhost') ? 'http://localhost:8002/api' : '/api';
-        const WS_URL = window.location.origin.includes('localhost') ? 'ws://localhost:8002/ws' : `ws://${window.location.host.replace('http', 'ws')}/ws`;
+        const API_URL = '/api';
+        const WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
 
         let currentPage = 1;
         let allNews = [];
@@ -360,26 +360,48 @@
         function connectWS() {
             try {
                 const ws = new WebSocket(WS_URL);
+                let pingInterval;
+                
                 ws.onopen = () => {
+                    console.log('WebSocket connected to:', WS_URL);
                     document.getElementById('live-indicator').classList.remove('hidden');
+                    // Send pong every 20 seconds to keep connection alive
+                    pingInterval = setInterval(() => {
+                        if (ws.readyState === WebSocket.OPEN) {
+                            ws.send('pong');
+                        }
+                    }, 20000);
                 };
                 ws.onmessage = (event) => {
-                    const message = JSON.parse(event.data);
-                    if (message.type === 'new_news') {
-                        pendingNews.push(message.data);
-                        document.getElementById('new-news-banner').innerText = `هناك ${pendingNews.length} أخبار جديدة - اضغط للتحديث`;
-                        document.getElementById('new-news-banner').classList.remove('hidden');
+                    try {
+                        const message = JSON.parse(event.data);
+                        // Handle ping from server
+                        if (message.type === 'ping') {
+                            ws.send('pong');
+                            return;
+                        }
+                        if (message.type === 'new_news') {
+                            pendingNews.push(message.data);
+                            document.getElementById('new-news-banner').innerText = `هناك ${pendingNews.length} أخبار جديدة - اضغط للتحديث`;
+                            document.getElementById('new-news-banner').classList.remove('hidden');
+                            console.log('New news received:', message.data.title);
+                        }
+                    } catch (e) {
+                        console.error('Error parsing message:', e);
                     }
                 };
                 ws.onclose = () => {
+                    console.log('WebSocket disconnected, reconnecting...');
                     document.getElementById('live-indicator').classList.add('hidden');
-                    setTimeout(connectWS, 5000);
+                    if (pingInterval) clearInterval(pingInterval);
+                    setTimeout(connectWS, 3000);
                 };
-                ws.onerror = () => {
-                    // Silently handle errors
+                ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
                 };
             } catch (e) {
-                // WebSocket not available, continue without it
+                console.error('WebSocket setup error:', e);
+                setTimeout(connectWS, 5000);
             }
         }
 
