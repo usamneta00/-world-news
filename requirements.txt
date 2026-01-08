@@ -1,9 +1,12 @@
 fastapi
 uvicorn
+feedparser
 sqlalchemy
 pydantic
+requests
+beautifulsoup4
 python-multipart
 aiosqlite
 asyncio
-python-dateutil
 yt-dlp
+python-dateutil
