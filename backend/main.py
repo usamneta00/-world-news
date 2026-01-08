@@ -43,26 +43,6 @@ class ChannelLastVideo(Base):
     last_video_published = Column(DateTime)  # Most recent video's publish date
     updated_at = Column(DateTime, default=datetime.now)
 
-# Yemen News Models
-class YemenNewsItem(Base):
-    __tablename__ = "yemen_news"
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String)
-    link = Column(String, unique=True)
-    summary = Column(String)
-    published = Column(DateTime)
-    source = Column(String)
-    image_url = Column(String, nullable=True)
-    video_id = Column(String, nullable=True)
-
-class YemenChannelLastVideo(Base):
-    __tablename__ = "yemen_channel_last_video"
-    id = Column(Integer, primary_key=True, index=True)
-    channel_name = Column(String, unique=True)
-    last_video_ids = Column(String)  # JSON array of last 10 video IDs
-    last_video_published = Column(DateTime)
-    updated_at = Column(DateTime, default=datetime.now)
-
 Base.metadata.create_all(bind=engine)
 
 # Migration: Add video_id column and channel_last_video table
@@ -117,7 +97,7 @@ def migrate_database():
 # Run migration on startup
 migrate_database()
 
-# YouTube Channels List - includes channels and playlists (World News)
+# YouTube Channels List - includes channels and playlists
 YOUTUBE_CHANNELS = [
     {"url": "https://www.youtube.com/@Reuters/videos", "name": "Reuters", "type": "channel"},
     {"url": "https://www.youtube.com/@aljazeeraenglish/videos", "name": "Al Jazeera English", "type": "channel"},
@@ -135,79 +115,6 @@ YOUTUBE_CHANNELS = [
     {"url": "https://www.youtube.com/@ForbesBreakingNews/videos", "name": "Forbes Breaking News", "type": "channel"},
     {"url": "https://www.youtube.com/@FoxNews/videos", "name": "Fox News", "type": "channel"},
 ]
-
-# Yemen News YouTube Channels List
-YEMEN_YOUTUBE_CHANNELS = [
-    {"url": "https://www.youtube.com/@Mohammed.Naser.Official/videos", "name": "محمد ناصر", "type": "channel"},
-    {"url": "https://www.youtube.com/@aljazeera/videos", "name": "الجزيرة", "type": "channel"},
-    {"url": "https://www.youtube.com/@raghebelsergany/videos", "name": "راغب السرجاني", "type": "channel"},
-    {"url": "https://www.youtube.com/@AlarabyTv_News/videos", "name": "التلفزيون العربي", "type": "channel"},
-    {"url": "https://www.youtube.com/@AlHadath/videos", "name": "الحدث", "type": "channel"},
-    {"url": "https://www.youtube.com/@bbcnewsarabic/videos", "name": "BBC عربي", "type": "channel"},
-    {"url": "https://www.youtube.com/@AlArabiya/videos", "name": "العربية", "type": "channel"},
-    {"url": "https://www.youtube.com/@ibrahiemmustafaelsharkawy/videos", "name": "إبراهيم الشرقاوي", "type": "channel"},
-    {"url": "https://www.youtube.com/@AlmahriahTV/videos", "name": "المهرية", "type": "channel"},
-    {"url": "https://www.youtube.com/@Aimn_Al-Qasemi/videos", "name": "أيمن القاسمي", "type": "channel"},
-    {"url": "https://www.youtube.com/@Ne3rafChannel/videos", "name": "نعرف", "type": "channel"},
-    {"url": "https://www.youtube.com/@Sahmoo7/videos", "name": "صهموح", "type": "channel"},
-    {"url": "https://www.youtube.com/@aljoumhouriyaTV/videos", "name": "الجمهورية", "type": "channel"},
-    {"url": "https://www.youtube.com/@mns777/videos", "name": "MNS", "type": "channel"},
-    {"url": "https://www.youtube.com/@yementvyem/videos", "name": "يمن تي في", "type": "channel"},
-]
-
-# Yemen News Filter Keywords - Only accept videos containing these keywords
-YEMEN_FILTER_KEYWORDS = [
-    'يمن',
-    'اليمن',
-    'يمني',
-    'يمنية',
-    'صنعاء',
-    'عدن',
-    'تعز',
-    'حضرموت',
-    'الحديدة',
-    'مأرب',
-    'ذمار',
-    'إب',
-    'المكلا',
-    'سيئون',
-    'شبوة',
-    'أبين',
-    'لحج',
-    'الضالع',
-    'حوثي',
-    'الحوثي',
-    'الحوثيين',
-    'أنصار الله',
-    'انصار الله',
-    'درع الوطن',
-    'درع وطن',
-    'الانتقالي',
-    'الانتقالي الجنوبي',
-    'المجلس الانتقالي',
-    'الجنوب',
-    'جنوب اليمن',
-    'الجنوبي',
-    'الجنوبية',
-    'STC',  # Southern Transitional Council
-    'الحكومة اليمنية',
-    'الشرعية',
-    'الشرعية اليمنية',
-]
-
-def is_yemen_related(title: str) -> bool:
-    """Check if video title is related to Yemen news based on keywords"""
-    if not title:
-        return False
-    
-    title_lower = title.lower()
-    
-    # Check if any keyword exists in the title
-    for keyword in YEMEN_FILTER_KEYWORDS:
-        if keyword.lower() in title_lower:
-            return True
-    
-    return False
 
 app = FastAPI()
 
@@ -425,59 +332,7 @@ async def fetch_all_youtube_channels(db) -> List[dict]:
         all_videos.extend(videos)
     
     # Sort by published date from NEWEST to OLDEST (newest first - across all channels)
-    all_videos.sort(key=lambda x: x['published'])
-    return all_videos
-
-async def fetch_all_yemen_youtube_channels(db) -> List[dict]:
-    """Fetch NEW videos from all Yemen YouTube channels in parallel"""
-    
-    # Get last 10 video IDs for each channel
-    channel_last_videos = {}
-    for channel in YEMEN_YOUTUBE_CHANNELS:
-        last_video_record = db.query(YemenChannelLastVideo).filter(YemenChannelLastVideo.channel_name == channel['name']).first()
-        if last_video_record and last_video_record.last_video_ids:
-            try:
-                channel_last_videos[channel['name']] = json.loads(last_video_record.last_video_ids)
-            except:
-                channel_last_videos[channel['name']] = None
-        else:
-            channel_last_videos[channel['name']] = None
-    
-    # Create tasks for all channels
-    tasks = []
-    for channel in YEMEN_YOUTUBE_CHANNELS:
-        last_video_ids = channel_last_videos.get(channel['name'])
-        is_playlist = channel.get('type') == 'playlist'
-        if last_video_ids:
-            logger.info(f"[Yemen] Checking {channel['name']} for new videos (last {len(last_video_ids)} IDs tracked)...")
-        else:
-            logger.info(f"[Yemen] Checking {channel['name']} for new videos (first run)...")
-        tasks.append(asyncio.to_thread(fetch_youtube_channel_videos, channel['url'], channel['name'], last_video_ids, is_playlist))
-    
-    # Run all tasks in parallel
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    
-    # Combine all results (skip exceptions) and filter by Yemen-related keywords
-    all_videos = []
-    filtered_count = 0
-    for idx, videos in enumerate(results):
-        if isinstance(videos, Exception):
-            logger.error(f"[Yemen] Error in channel fetch for {YEMEN_YOUTUBE_CHANNELS[idx]['name']}: {videos}")
-            continue
-        
-        # Filter videos to only include Yemen-related content
-        for video in videos:
-            if is_yemen_related(video['title']):
-                all_videos.append(video)
-            else:
-                filtered_count += 1
-                logger.debug(f"[Yemen] Filtered out non-Yemen video: {video['title']}")
-    
-    if filtered_count > 0:
-        logger.info(f"[Yemen] Filtered out {filtered_count} non-Yemen related videos")
-    
-    # Sort by published date from NEWEST to OLDEST
-    all_videos.sort(key=lambda x: x['published'])
+    all_videos.sort(key=lambda x: x['published'], reverse=True)
     return all_videos
 
 async def fetch_youtube_feeds():
@@ -592,7 +447,7 @@ async def fetch_youtube_feeds():
         total_count = db.query(NewsItem).count()
         if total_count > 30:
             # Get the IDs of the 30 newest items by published date
-            latest_items = db.query(NewsItem.id).order_by((NewsItem.published)).limit(30).all()
+            latest_items = db.query(NewsItem.id).order_by(desc(NewsItem.published)).limit(30).all()
             ids_to_keep = [i[0] for i in latest_items]
             
             # Delete anything not in that list
@@ -613,133 +468,9 @@ async def fetch_youtube_feeds():
         logger.info("Waiting 3 minutes before next fetch...")
         await asyncio.sleep(180)
 
-async def fetch_yemen_youtube_feeds():
-    """Main function to fetch and store ONLY NEW Yemen YouTube videos from all channels"""
-    first_run = True
-    while True:
-        db = SessionLocal()
-        new_items_found = []
-        
-        try:
-            # Fetch ONLY NEW videos from all Yemen channels
-            videos = await fetch_all_yemen_youtube_channels(db)
-            logger.info(f"[Yemen] Found {len(videos)} NEW videos from all channels combined")
-            
-            # Group videos by channel to track last 10 videos per channel
-            videos_by_channel = {}
-            for video in videos:
-                channel_name = video['source']
-                if channel_name not in videos_by_channel:
-                    videos_by_channel[channel_name] = []
-                videos_by_channel[channel_name].append(video)
-            
-            # Add all new videos to database
-            for video in videos:
-                # Check if video already exists (safety check)
-                exists = db.query(YemenNewsItem).filter(YemenNewsItem.link == video['link']).first()
-                if exists:
-                    continue
-                
-                new_item = YemenNewsItem(
-                    title=video['title'],
-                    link=video['link'],
-                    summary=video.get('summary', ''),
-                    published=video['published'],
-                    source=video['source'],
-                    image_url=video.get('image_url'),
-                    video_id=video.get('video_id')
-                )
-                db.add(new_item)
-                db.commit()
-                
-                item_dict = {
-                    "id": new_item.id,
-                    "title": new_item.title,
-                    "link": new_item.link,
-                    "summary": new_item.summary,
-                    "published": str(new_item.published),
-                    "source": new_item.source,
-                    "image_url": new_item.image_url
-                }
-                new_items_found.append(item_dict)
-                logger.info(f"[Yemen] Added NEW video: {video['title']} from {video['source']} (published: {video['published']})")
-            
-            # Update last 10 videos for each channel
-            for channel_name, channel_videos in videos_by_channel.items():
-                if not channel_videos:
-                    continue
-                
-                # Get existing record
-                last_video_record = db.query(YemenChannelLastVideo).filter(YemenChannelLastVideo.channel_name == channel_name).first()
-                
-                # Get existing last video IDs
-                existing_ids = []
-                if last_video_record and last_video_record.last_video_ids:
-                    try:
-                        existing_ids = json.loads(last_video_record.last_video_ids)
-                    except:
-                        existing_ids = []
-                
-                # Add new video IDs to the beginning (newest first)
-                new_video_ids = [v['video_id'] for v in reversed(channel_videos)]
-                
-                # Combine: new videos + existing videos, keep only first 10
-                combined_ids = new_video_ids + existing_ids
-                seen = set()
-                unique_ids = []
-                for vid_id in combined_ids:
-                    if vid_id not in seen:
-                        seen.add(vid_id)
-                        unique_ids.append(vid_id)
-                
-                final_ids = unique_ids[:10]
-                most_recent_video = channel_videos[-1]
-                
-                if last_video_record:
-                    last_video_record.last_video_ids = json.dumps(final_ids)
-                    last_video_record.last_video_published = most_recent_video['published']
-                    last_video_record.updated_at = datetime.now()
-                    db.commit()
-                    logger.info(f"[Yemen] Updated last {len(final_ids)} videos for {channel_name}")
-                else:
-                    last_video_record = YemenChannelLastVideo(
-                        channel_name=channel_name,
-                        last_video_ids=json.dumps(final_ids),
-                        last_video_published=most_recent_video['published']
-                    )
-                    db.add(last_video_record)
-                    db.commit()
-                    logger.info(f"[Yemen] Set initial {len(final_ids)} videos for {channel_name}")
-        
-        except Exception as e:
-            logger.error(f"[Yemen] Error in fetch_yemen_youtube_feeds: {e}")
-        
-        # Enforce 30 items limit - keep the 30 MOST RECENT videos
-        total_count = db.query(YemenNewsItem).count()
-        if total_count > 30:
-            latest_items = db.query(YemenNewsItem.id).order_by((YemenNewsItem.published)).limit(30).all()
-            ids_to_keep = [i[0] for i in latest_items]
-            db.query(YemenNewsItem).filter(YemenNewsItem.id.not_in(ids_to_keep)).delete(synchronize_session=False)
-            db.commit()
-            logger.info(f"[Yemen] Cleanup: Kept 30 latest videos, removed {total_count - 30} older ones")
-        
-        # Broadcast new items
-        if new_items_found and not first_run:
-            logger.info(f"[Yemen] Broadcasting {len(new_items_found)} new videos")
-            for item in new_items_found:
-                await manager.broadcast(json.dumps({"type": "new_yemen_news", "data": item}))
-        
-        db.close()
-        first_run = False
-        
-        # Check every 3 minutes
-        logger.info("[Yemen] Waiting 3 minutes before next fetch...")
-        await asyncio.sleep(180)
-
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(fetch_youtube_feeds())
-    asyncio.create_task(fetch_yemen_youtube_feeds())
 
 @app.get("/api/news")
 async def get_news(page: int = 1, limit: int = 20):
@@ -748,21 +479,6 @@ async def get_news(page: int = 1, limit: int = 20):
     # Order by published date from NEWEST to OLDEST (newest first on page)
     news = db.query(NewsItem).order_by(desc(NewsItem.published)).offset(skip).limit(limit).all()
     total = db.query(NewsItem).count()
-    db.close()
-    return {
-        "items": news,
-        "total": total,
-        "page": page,
-        "limit": limit
-    }
-
-@app.get("/api/yemen-news")
-async def get_yemen_news(page: int = 1, limit: int = 20):
-    db = SessionLocal()
-    skip = (page - 1) * limit
-    # Order by published date from NEWEST to OLDEST (newest first on page)
-    news = db.query(YemenNewsItem).order_by((YemenNewsItem.published)).offset(skip).limit(limit).all()
-    total = db.query(YemenNewsItem).count()
     db.close()
     return {
         "items": news,
