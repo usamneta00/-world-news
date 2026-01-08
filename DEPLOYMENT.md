@@ -17,7 +17,7 @@
 git add .
 
 # إنشاء commit
-git commit -m "feat: Add Yemen news filter and new design"
+git commit -m "feat: Add Yemen news filter and new design2"
 
 # رفع إلى GitHub
 git push origin main
