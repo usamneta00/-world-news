@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+feedparser
+sqlalchemy
+pydantic
+requests
+beautifulsoup4
+python-multipart
+aiosqlite
+asyncio
+youtube-transcript-api
+openai
+python-dotenv
