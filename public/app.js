@@ -281,30 +281,80 @@ function renderNews() {
 
 function setupWebSocket() {
     let ws;
+    let pingInterval;
+    let reconnectTimeout;
+    
     const connect = () => {
+        // Clear any existing reconnect timeout
+        if (reconnectTimeout) {
+            clearTimeout(reconnectTimeout);
+            reconnectTimeout = null;
+        }
+        
         ws = new WebSocket(WS_URL);
+        
         ws.onopen = () => {
+            console.log('WebSocket connected');
             state.connected = true;
             updateUI();
-        };
-        ws.onmessage = (event) => {
-            const message = JSON.parse(event.data);
-            if (message.type === 'new_news') {
-                const newItem = message.data;
-                const allCurrentLinks = new Set([...state.news.map(n => n.link), ...state.pendingNews.map(n => n.link)]);
-                if (!allCurrentLinks.has(newItem.link)) {
-                    state.pendingNews.unshift(newItem);
-                    state.total++;
-                    updateUI();
+            
+            // Start sending pong every 20 seconds to keep connection alive
+            if (pingInterval) clearInterval(pingInterval);
+            pingInterval = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send('pong');
                 }
+            }, 20000);
+        };
+        
+        ws.onmessage = (event) => {
+            try {
+                const message = JSON.parse(event.data);
+                
+                // Handle ping from server
+                if (message.type === 'ping') {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send('pong');
+                    }
+                    return;
+                }
+                
+                // Handle new news
+                if (message.type === 'new_news') {
+                    const newItem = message.data;
+                    const allCurrentLinks = new Set([...state.news.map(n => n.link), ...state.pendingNews.map(n => n.link)]);
+                    if (!allCurrentLinks.has(newItem.link)) {
+                        state.pendingNews.unshift(newItem);
+                        state.total++;
+                        updateUI();
+                        console.log('New news received:', newItem.title);
+                    }
+                }
+            } catch (e) {
+                console.error('Error parsing WebSocket message:', e);
             }
         };
-        ws.onclose = () => {
+        
+        ws.onclose = (event) => {
+            console.log('WebSocket closed, code:', event.code);
             state.connected = false;
             updateUI();
-            setTimeout(connect, 5000);
+            
+            // Clear ping interval
+            if (pingInterval) {
+                clearInterval(pingInterval);
+                pingInterval = null;
+            }
+            
+            // Reconnect after 3 seconds
+            reconnectTimeout = setTimeout(connect, 3000);
+        };
+        
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
         };
     };
+    
     connect();
 }
 

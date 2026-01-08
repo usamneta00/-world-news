@@ -455,8 +455,8 @@ async def fetch_youtube_feeds():
             db.commit()
             logger.info(f"Cleanup: Kept 30 latest videos, removed {total_count - 30} older ones")
         
-        # Broadcast new items
-        if new_items_found and not first_run:
+        # Broadcast new items (always broadcast if there are new items)
+        if new_items_found:
             logger.info(f"Broadcasting {len(new_items_found)} new videos")
             for item in new_items_found:
                 await manager.broadcast(json.dumps({"type": "new_news", "data": item}))
@@ -492,8 +492,23 @@ async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            await websocket.receive_text()
+            try:
+                # Wait for message with timeout (25 seconds)
+                # This allows us to send ping if no activity
+                message = await asyncio.wait_for(websocket.receive_text(), timeout=25.0)
+                # If client sends "pong", just acknowledge it
+                if message == "pong":
+                    continue
+            except asyncio.TimeoutError:
+                # No message received, send ping to keep connection alive
+                try:
+                    await websocket.send_text('{"type": "ping"}')
+                except:
+                    break
     except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
         manager.disconnect(websocket)
 
 # Serve static files
