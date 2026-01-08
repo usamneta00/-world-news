@@ -18,9 +18,13 @@ import yt_dlp
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Database setup
-SQLALCHEMY_DATABASE_URL = "sqlite:///./world_news.db"
+# Database setup - Use /data for Railway Volume persistence
+import os
+DATA_DIR = os.environ.get('DATA_DIR', '/data' if os.path.exists('/data') else '.')
+DB_PATH = os.path.join(DATA_DIR, 'world_news.db')
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+logger.info(f"Using database at: {DB_PATH}")
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
