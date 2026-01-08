@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,6 +38,7 @@ class NewsItem(Base):
     source = Column(String)
     image_url = Column(String, nullable=True)
     video_id = Column(String, nullable=True)  # YouTube video ID
+    created_at = Column(DateTime, default=datetime.now) # Track when added to our DB
 
 class ChannelLastVideo(Base):
     __tablename__ = "channel_last_video"
@@ -58,6 +59,7 @@ class YemenNewsItem(Base):
     source = Column(String)
     image_url = Column(String, nullable=True)
     video_id = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.now) # Track when added to our DB
 
 class YemenChannelLastVideo(Base):
     __tablename__ = "yemen_channel_last_video"
@@ -66,6 +68,12 @@ class YemenChannelLastVideo(Base):
     last_video_ids = Column(String)  # JSON array of last 10 video IDs
     last_video_published = Column(DateTime)
     updated_at = Column(DateTime, default=datetime.now)
+
+class SystemState(Base):
+    __tablename__ = "system_state"
+    id = Column(Integer, primary_key=True)
+    key = Column(String, unique=True)
+    value = Column(String)
 
 Base.metadata.create_all(bind=engine)
 
@@ -82,10 +90,23 @@ def migrate_database():
             if 'video_id' not in columns:
                 logger.info("Adding video_id column to news table...")
                 conn.execute(text("ALTER TABLE news ADD COLUMN video_id VARCHAR"))
-                # Use conn.commit() if using SQLAlchemy 2.0+ with transaction
                 try: conn.commit() 
                 except: pass 
-                logger.info("Successfully added video_id column")
+            
+            if 'created_at' not in columns:
+                logger.info("Adding created_at column to news table...")
+                conn.execute(text("ALTER TABLE news ADD COLUMN created_at DATETIME"))
+                try: conn.commit() 
+                except: pass 
+
+            # Check for yemen_news columns
+            result = conn.execute(text("PRAGMA table_info(yemen_news)"))
+            yemen_columns = [row[1] for row in result]
+            if 'created_at' not in yemen_columns:
+                logger.info("Adding created_at column to yemen_news table...")
+                conn.execute(text("ALTER TABLE yemen_news ADD COLUMN created_at DATETIME"))
+                try: conn.commit() 
+                except: pass 
             
             # Check if channel_last_video table exists
             result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='channel_last_video'"))
@@ -129,6 +150,13 @@ def migrate_database():
                 logger.info("Creating yemen_channel_last_video table...")
                 YemenChannelLastVideo.__table__.create(engine)
                 logger.info("Successfully created yemen_channel_last_video table")
+            
+            # Check if system_state table exists
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='system_state'"))
+            if not result.fetchone():
+                logger.info("Creating system_state table...")
+                SystemState.__table__.create(engine)
+                logger.info("Successfully created system_state table")
     except Exception as e:
         logger.error(f"Migration error: {e}")
 
@@ -465,6 +493,28 @@ async def fetch_youtube_feeds():
         new_items_found = []
         
         try:
+            # --- Hard Wipe Logic (Midnight Reset) ---
+            today = datetime.now().date().isoformat()
+            last_wipe = db.query(SystemState).filter(SystemState.key == "last_wipe_date").first()
+            
+            if not last_wipe:
+                last_wipe = SystemState(key="last_wipe_date", value=today)
+                db.add(last_wipe)
+                db.commit()
+            elif last_wipe.value != today:
+                logger.info(f"New day detected ({today}). Performing HARD WIPE of all news...")
+                # Clear all news
+                db.query(NewsItem).delete()
+                db.query(YemenNewsItem).delete()
+                # Clear tracking to get fresh videos for the new day
+                db.query(ChannelLastVideo).delete()
+                db.query(YemenChannelLastVideo).delete()
+                
+                last_wipe.value = today
+                db.commit()
+                logger.info("Hard wipe completed. Starting a fresh day.")
+            # ----------------------------------------
+
             # Fetch ONLY NEW videos from all channels (using last_video_ids tracking)
             videos = await fetch_all_youtube_channels(db)
             logger.info(f"Found {len(videos)} NEW videos from all channels combined")
@@ -564,18 +614,6 @@ async def fetch_youtube_feeds():
         
         except Exception as e:
             logger.error(f"Error in fetch_youtube_feeds: {e}")
-        
-        # Enforce 30 items limit - keep the 30 MOST RECENT videos
-        total_count = db.query(NewsItem).count()
-        if total_count > 30:
-            # Get the IDs of the 30 newest items by published date (desc = newest first)
-            latest_items = db.query(NewsItem.id).order_by(desc(NewsItem.published)).limit(30).all()
-            ids_to_keep = [i[0] for i in latest_items]
-            
-            # Delete anything not in that list
-            db.query(NewsItem).filter(NewsItem.id.not_in(ids_to_keep)).delete(synchronize_session=False)
-            db.commit()
-            logger.info(f"Cleanup: Kept 30 latest videos, removed {total_count - 30} older ones")
         
         # Broadcast new items (always broadcast if there are new items)
         if new_items_found:
@@ -688,16 +726,6 @@ async def fetch_yemen_youtube_feeds():
         except Exception as e:
             logger.error(f"[Yemen] Error in fetch_yemen_youtube_feeds: {e}")
         
-        # Enforce 30 items limit for Yemen news
-        total_count = db.query(YemenNewsItem).count()
-        if total_count > 30:
-            # Get the IDs of the 30 newest items by published date (desc = newest first)
-            latest_items = db.query(YemenNewsItem.id).order_by(desc(YemenNewsItem.published)).limit(30).all()
-            ids_to_keep = [i[0] for i in latest_items]
-            db.query(YemenNewsItem).filter(YemenNewsItem.id.not_in(ids_to_keep)).delete(synchronize_session=False)
-            db.commit()
-            logger.info(f"[Yemen] Cleanup: Kept 30 latest videos, removed {total_count - 30} older ones")
-        
         # Broadcast new Yemen items
         if new_items_found:
             logger.info(f"[Yemen] Broadcasting {len(new_items_found)} new Yemen videos")
@@ -720,8 +748,8 @@ async def startup_event():
 async def get_news(page: int = 1, limit: int = 20):
     db = SessionLocal()
     skip = (page - 1) * limit
-    # Order by published date from NEWEST to OLDEST (newest first on page)
-    news = db.query(NewsItem).order_by(desc(NewsItem.published)).offset(skip).limit(limit).all()
+    # Order by created_at DESC (newest added first) and id DESC as tie-breaker
+    news = db.query(NewsItem).order_by(desc(NewsItem.created_at), desc(NewsItem.id)).offset(skip).limit(limit).all()
     total = db.query(NewsItem).count()
     db.close()
     return {
@@ -735,8 +763,8 @@ async def get_news(page: int = 1, limit: int = 20):
 async def get_yemen_news(page: int = 1, limit: int = 20):
     db = SessionLocal()
     skip = (page - 1) * limit
-    # Order by published date from NEWEST to OLDEST (newest first on page)
-    news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.published)).offset(skip).limit(limit).all()
+    # Order by created_at DESC (newest added first) and id DESC as tie-breaker
+    news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at), desc(YemenNewsItem.id)).offset(skip).limit(limit).all()
     total = db.query(YemenNewsItem).count()
     db.close()
     return {
