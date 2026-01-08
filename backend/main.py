@@ -568,8 +568,8 @@ async def fetch_youtube_feeds():
         # Enforce 30 items limit - keep the 30 MOST RECENT videos
         total_count = db.query(NewsItem).count()
         if total_count > 30:
-            # Get the IDs of the 30 newest items by published date
-            latest_items = db.query(NewsItem.id).order_by((NewsItem.published)).limit(30).all()
+            # Get the IDs of the 30 newest items by published date (desc = newest first)
+            latest_items = db.query(NewsItem.id).order_by(desc(NewsItem.published)).limit(30).all()
             ids_to_keep = [i[0] for i in latest_items]
             
             # Delete anything not in that list
@@ -691,7 +691,8 @@ async def fetch_yemen_youtube_feeds():
         # Enforce 30 items limit for Yemen news
         total_count = db.query(YemenNewsItem).count()
         if total_count > 30:
-            latest_items = db.query(YemenNewsItem.id).order_by((YemenNewsItem.published)).limit(30).all()
+            # Get the IDs of the 30 newest items by published date (desc = newest first)
+            latest_items = db.query(YemenNewsItem.id).order_by(desc(YemenNewsItem.published)).limit(30).all()
             ids_to_keep = [i[0] for i in latest_items]
             db.query(YemenNewsItem).filter(YemenNewsItem.id.not_in(ids_to_keep)).delete(synchronize_session=False)
             db.commit()
@@ -720,7 +721,7 @@ async def get_news(page: int = 1, limit: int = 20):
     db = SessionLocal()
     skip = (page - 1) * limit
     # Order by published date from NEWEST to OLDEST (newest first on page)
-    news = db.query(NewsItem).order_by((NewsItem.published)).offset(skip).limit(limit).all()
+    news = db.query(NewsItem).order_by(desc(NewsItem.published)).offset(skip).limit(limit).all()
     total = db.query(NewsItem).count()
     db.close()
     return {
@@ -735,7 +736,7 @@ async def get_yemen_news(page: int = 1, limit: int = 20):
     db = SessionLocal()
     skip = (page - 1) * limit
     # Order by published date from NEWEST to OLDEST (newest first on page)
-    news = db.query(YemenNewsItem).order_by((YemenNewsItem.published)).offset(skip).limit(limit).all()
+    news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.published)).offset(skip).limit(limit).all()
     total = db.query(YemenNewsItem).count()
     db.close()
     return {
@@ -744,6 +745,38 @@ async def get_yemen_news(page: int = 1, limit: int = 20):
         "page": page,
         "limit": limit
     }
+
+@app.get("/api/debug")
+async def debug_info():
+    """Debug endpoint to check database status"""
+    db = SessionLocal()
+    try:
+        world_news_count = db.query(NewsItem).count()
+        yemen_news_count = db.query(YemenNewsItem).count()
+        world_channels_count = db.query(ChannelLastVideo).count()
+        yemen_channels_count = db.query(YemenChannelLastVideo).count()
+        
+        # Get latest news items
+        latest_world = db.query(NewsItem).order_by(desc(NewsItem.published)).limit(3).all()
+        latest_yemen = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.published)).limit(3).all()
+        
+        return {
+            "database_path": DB_PATH,
+            "data_dir": DATA_DIR,
+            "database_exists": os.path.exists(DB_PATH),
+            "database_size_kb": round(os.path.getsize(DB_PATH) / 1024, 2) if os.path.exists(DB_PATH) else 0,
+            "counts": {
+                "world_news": world_news_count,
+                "yemen_news": yemen_news_count,
+                "world_channels_tracked": world_channels_count,
+                "yemen_channels_tracked": yemen_channels_count
+            },
+            "latest_world_news": [{"title": n.title[:50], "published": str(n.published), "source": n.source} for n in latest_world],
+            "latest_yemen_news": [{"title": n.title[:50], "published": str(n.published), "source": n.source} for n in latest_yemen],
+            "active_websocket_connections": len(manager.active_connections)
+        }
+    finally:
+        db.close()
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
