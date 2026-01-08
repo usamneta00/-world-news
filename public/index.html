@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" class="scroll-smooth">
 
 <head>
     <meta charset="UTF-8">
@@ -10,11 +10,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap"
         rel="stylesheet">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
@@ -22,13 +23,28 @@
         tailwind.config = {
             theme: {
                 extend: {
-                    colors: {
-                        brand: '#c00',
-                        dark: '#121212',
-                    },
                     fontFamily: {
                         sans: ['Noto Sans Arabic', 'sans-serif'],
                         serif: ['Playfair Display', 'serif'],
+                    },
+                    colors: {
+                        brand: {
+                            DEFAULT: '#cc0000', // Classic News Red
+                            50: '#fff0f0',
+                            100: '#ffdede',
+                            600: '#cc0000',
+                            700: '#b30000',
+                            900: '#7f0000',
+                        },
+                        yemen: {
+                            DEFAULT: '#15803d', // Green for Yemen Tab
+                            50: '#f0fdf4',
+                        }
+                    },
+                    boxShadow: {
+                        'glass': '0 4px 30px rgba(0, 0, 0, 0.1)',
+                        'subtle': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                        'card': '0 0 0 1px rgba(0,0,0,0.03), 0 2px 8px rgba(0,0,0,0.04)',
                     }
                 }
             }
@@ -36,17 +52,14 @@
     </script>
 
     <style>
-        .news-gradient {
-            background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.9));
+        /* Custom Utilities */
+        body {
+            background-color: #fafafa;
+            color: #1a1a1a;
+            -webkit-font-smoothing: antialiased;
         }
 
-        .line-clamp-2 {
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-
+        /* Smooth Ticker */
         @keyframes ticker {
             0% {
                 transform: translateX(100%);
@@ -58,187 +71,380 @@
         }
 
         .animate-ticker {
-            animation: ticker 60s linear infinite;
+            animation: ticker 45s linear infinite;
         }
 
         .animate-ticker:hover {
             animation-play-state: paused;
         }
 
-        .pulse-red {
-            box-shadow: 0 0 0 0 rgba(204, 0, 0, 0.7);
-            animation: pulse 2s infinite;
+        /* Gradient Overlay for Images */
+        .image-gradient {
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 40%, transparent 100%);
         }
 
-        @keyframes pulse {
+        /* Hide Scrollbar but allow scroll */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Pulse Animation */
+        @keyframes pulse-ring {
             0% {
-                transform: scale(0.95);
+                transform: scale(0.8);
                 box-shadow: 0 0 0 0 rgba(204, 0, 0, 0.7);
             }
 
             70% {
                 transform: scale(1);
-                box-shadow: 0 0 0 10px rgba(204, 0, 0, 0);
+                box-shadow: 0 0 0 6px rgba(204, 0, 0, 0);
             }
 
             100% {
-                transform: scale(0.95);
+                transform: scale(0.8);
                 box-shadow: 0 0 0 0 rgba(204, 0, 0, 0);
             }
+        }
+
+        .pulse-red {
+            animation: pulse-ring 2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+        }
+
+        /* Line Clamp */
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .line-clamp-3 {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
     </style>
 </head>
 
-<body class="bg-[#f8f8f8] text-dark font-sans">
+<body class="selection:bg-brand-100 selection:text-brand-900">
 
-    <!-- Top Bar -->
-    <div class="bg-dark text-white text-[11px] py-2">
-        <div class="container mx-auto px-4 flex justify-between items-center">
-            <div id="current-date">الخميس، 8 يناير 2026</div>
-            <div class="flex gap-4 items-center">
-                <div id="live-indicator" class="hidden flex items-center gap-2 text-brand font-bold">
-                    <span class="w-2 h-2 bg-brand rounded-full pulse-red"></span>
-                    تغطية مباشرة
+    <!-- Top Utility Bar -->
+    <div class="bg-neutral-900 text-neutral-400 text-xs py-1.5 border-b border-neutral-800">
+        <div class="container mx-auto px-4 lg:px-6 flex justify-between items-center h-8">
+            <div class="flex items-center gap-6">
+                <span id="current-date" class="font-medium tracking-tight"></span>
+                <div class="hidden md:flex gap-4">
+                    <a href="#" class="hover:text-white transition-colors">حول</a>
+                    <a href="#" class="hover:text-white transition-colors">اتصل بنا</a>
                 </div>
-                <span>العربية</span>
-                <span class="opacity-50">English</span>
+            </div>
+            <div class="flex items-center gap-5">
+                <div id="live-indicator" class="hidden flex items-center gap-2 text-red-500 font-bold tracking-tight">
+                    <span class="relative flex h-2 w-2">
+                        <span
+                            class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                    </span>
+                    مباشر
+                </div>
+                <div class="flex items-center gap-3 border-r border-neutral-700 pr-3 mr-1">
+                    <span class="text-white cursor-pointer font-medium">العربية</span>
+                    <span class="cursor-pointer hover:text-white transition-colors">English</span>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Header -->
-    <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
-            <button class="md:hidden text-gray-600"><i data-lucide="menu"></i></button>
-            <div class="text-3xl md:text-4xl font-serif font-800 tracking-tighter">
-                العالمية<span class="text-brand">NEWS</span>
+    <!-- Main Header (Sticky & Glass) -->
+    <header
+        class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-neutral-200 transition-all duration-300">
+        <div class="container mx-auto px-4 lg:px-6">
+            <div class="flex justify-between items-center h-20">
+                <!-- Mobile Menu & Search -->
+                <div class="flex md:hidden items-center gap-4">
+                    <button class="text-neutral-600 p-1 hover:bg-neutral-100 rounded-md"><i data-lucide="menu"
+                            class="w-6 h-6"></i></button>
+                    <i data-lucide="search" class="w-5 h-5 text-neutral-500"></i>
+                </div>
+
+                <!-- Logo -->
+                <div class="flex-1 md:flex-none text-center md:text-right">
+                    <a href="/" class="group flex items-center justify-center md:justify-start gap-1">
+                        <span
+                            class="font-serif text-3xl md:text-4xl font-bold tracking-tighter text-neutral-900 group-hover:opacity-90 transition-opacity">
+                            العالمية<span id="logo-accent" class="text-brand">NEWS</span>
+                        </span>
+                    </a>
+                </div>
+
+                <!-- Desktop Search & Social -->
+                <div class="hidden md:flex items-center gap-6">
+                    <div class="relative group">
+                        <input type="text" placeholder="بحث..."
+                            class="bg-neutral-50 border border-neutral-200 text-sm rounded-full py-2 px-4 w-64 focus:outline-none focus:ring-1 focus:ring-brand focus:border-brand transition-all placeholder:text-neutral-400">
+                        <i data-lucide="search"
+                            class="absolute left-3 top-2.5 w-4 h-4 text-neutral-400 group-focus-within:text-brand transition-colors"></i>
+                    </div>
+                    <button
+                        class="bg-black text-white px-5 py-2 rounded-full text-sm font-semibold hover:bg-neutral-800 transition-transform active:scale-95">اشتراك</button>
+                </div>
             </div>
-            <div class="flex items-center gap-4">
-                <i data-lucide="search" class="text-gray-500 cursor-pointer hover:text-brand"></i>
-            </div>
+
+            <!-- Navigation Tabs -->
+            <nav class="flex overflow-x-auto no-scrollbar gap-8 md:gap-10 border-t border-neutral-100 mt-2">
+                <button id="tab-world" onclick="switchTab('world')"
+                    class="relative py-4 text-sm md:text-base font-bold text-brand transition-colors whitespace-nowrap group">
+                    الأخبار العالمية
+                    <span class="absolute bottom-0 right-0 w-full h-0.5 bg-brand transition-all duration-300"></span>
+                </button>
+                <button id="tab-yemen" onclick="switchTab('yemen')"
+                    class="relative py-4 text-sm md:text-base font-medium text-neutral-500 hover:text-yemen transition-colors whitespace-nowrap group">
+                    <span class="flex items-center gap-2">
+                        <span
+                            class="w-1.5 h-1.5 rounded-full bg-yemen opacity-0 group-hover:opacity-100 transition-opacity"></span>
+                        أخبار اليمن
+                    </span>
+                    <span
+                        class="absolute bottom-0 right-0 w-full h-0.5 bg-yemen scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-right"></span>
+                </button>
+                <!-- Static Categories for aesthetic -->
+                <a href="#"
+                    class="hidden md:block py-4 text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors">اقتصاد</a>
+                <a href="#"
+                    class="hidden md:block py-4 text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors">تكنولوجيا</a>
+                <a href="#"
+                    class="hidden md:block py-4 text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors">رياضة</a>
+                <a href="#"
+                    class="hidden md:block py-4 text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors">ثقافة</a>
+            </nav>
         </div>
-        <!-- Navigation -->
-        <nav class="hidden md:block border-t border-gray-100">
-            <div class="container mx-auto px-4">
-                <ul class="flex gap-8 text-sm font-bold text-gray-600">
-                    <li class="py-3 border-b-2 border-brand text-brand cursor-pointer">الرئيسية</li>
-                    <li
-                        class="py-3 border-b-2 border-transparent hover:border-brand hover:text-brand cursor-pointer transition-all">
-                        سياسة</li>
-                    <li
-                        class="py-3 border-b-2 border-transparent hover:border-brand hover:text-brand cursor-pointer transition-all">
-                        اقتصاد</li>
-                    <li
-                        class="py-3 border-b-2 border-transparent hover:border-brand hover:text-brand cursor-pointer transition-all">
-                        رياضة</li>
-                    <li
-                        class="py-3 border-b-2 border-transparent hover:border-brand hover:text-brand cursor-pointer transition-all">
-                        تكنولوجيا</li>
-                </ul>
-            </div>
-        </nav>
     </header>
 
     <!-- Breaking News Ticker -->
-    <div class="bg-white border-b border-gray-200 overflow-hidden flex">
-        <div class="bg-brand text-white px-6 py-2 font-bold text-sm z-10 shadow-lg relative">عاجل</div>
-        <div class="flex-1 overflow-hidden flex items-center bg-gray-50">
-            <p id="ticker-text" class="animate-ticker whitespace-nowrap font-medium text-sm text-gray-800">
-                جارٍ تحميل آخر الأخبار العاجلة...
-            </p>
+    <div class="bg-white border-b border-neutral-200 relative z-40 shadow-subtle">
+        <div class="container mx-auto px-0 flex items-stretch h-10 md:h-12 overflow-hidden">
+            <div id="ticker-label"
+                class="bg-brand text-white text-xs md:text-sm font-bold px-4 md:px-6 flex items-center shrink-0 z-10 shadow-[4px_0_10px_rgba(0,0,0,0.1)]">
+                <span class="animate-pulse ml-2 w-2 h-2 bg-white rounded-full"></span>
+                عاجل
+            </div>
+            <div class="flex-1 relative flex items-center overflow-hidden bg-neutral-50">
+                <div id="ticker-text"
+                    class="animate-ticker whitespace-nowrap flex items-center text-xs md:text-sm font-medium text-neutral-800">
+                    <!-- Ticker Items will be injected here -->
+                    <span class="text-neutral-400 px-4">جارٍ الاتصال بغرفة الأخبار...</span>
+                </div>
+                <!-- Gradients for fade effect on ticker -->
+                <div
+                    class="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-neutral-50 to-transparent pointer-events-none z-10">
+                </div>
+                <div
+                    class="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-neutral-50 to-transparent pointer-events-none z-10">
+                </div>
+            </div>
         </div>
     </div>
 
-    <main class="container mx-auto px-4 py-8">
-        <!-- New News Notification -->
+    <main class="min-h-screen pb-20">
+        <!-- New News Notification (Toast) -->
         <div id="new-news-banner"
-            class="hidden bg-brand text-white text-center py-3 rounded-lg shadow-xl cursor-pointer mb-8 font-bold transform transition hover:scale-[1.01]">
-            هناك أخبار جديدة متاحة - اضغط للتحديث
+            class="hidden fixed top-24 left-1/2 -translate-x-1/2 z-50 bg-neutral-900 text-white px-6 py-3 rounded-full shadow-2xl cursor-pointer hover:bg-black hover:scale-105 transition-all duration-300 flex items-center gap-3 group">
+            <span class="relative flex h-2 w-2">
+                <span
+                    class="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-brand"></span>
+            </span>
+            <span class="text-sm font-bold">تحديثات جديدة متاحة</span>
+            <i data-lucide="refresh-cw"
+                class="w-4 h-4 text-neutral-400 group-hover:text-white group-hover:rotate-180 transition-all duration-500"></i>
         </div>
 
-        <div id="loading-state" class="py-20 text-center">
-            <div class="inline-block w-12 h-12 border-4 border-brand border-t-transparent rounded-full animate-spin">
-            </div>
-            <p class="mt-4 text-gray-500">جلب آخر الأنباء...</p>
-        </div>
+        <div class="container mx-auto px-4 lg:px-6 pt-8 md:pt-12">
 
-        <div id="news-content" class="hidden">
-            <!-- Hero Section -->
-            <section id="hero-section"
-                class="mb-12 group cursor-pointer relative overflow-hidden rounded-xl h-[450px] bg-black">
-                <!-- Will be injected by JS -->
-            </section>
-
-            <!-- Secondary Grid -->
-            <section id="secondary-grid"
-                class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12 border-b border-gray-200 pb-12">
-                <!-- Will be injected by JS -->
-            </section>
-
-            <!-- Main Content + Sidebar -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-12">
-                <div class="lg:col-span-2">
-                    <h3 class="text-xl font-bold border-r-4 border-brand pr-4 mb-8">آخر المستجدات</h3>
-                    <div id="latest-feed" class="space-y-8">
-                        <!-- Will be injected by JS -->
-                    </div>
-
-                    <!-- Pagination -->
-                    <div class="flex justify-center items-center gap-6 mt-16">
-                        <button id="prev-btn"
-                            class="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-30">السابق
-                            <i data-lucide="chevron-left" class="w-4 h-4"></i></button>
-                        <span id="page-info" class="font-bold">صفحة 1</span>
-                        <button id="next-btn"
-                            class="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-30">التالي
-                            <i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+            <!-- Loading State -->
+            <div id="loading-state" class="py-32 flex flex-col items-center justify-center">
+                <div class="relative w-16 h-16">
+                    <div class="absolute top-0 w-16 h-16 border-4 border-neutral-100 rounded-full"></div>
+                    <div
+                        class="absolute top-0 w-16 h-16 border-4 border-brand border-t-transparent rounded-full animate-spin">
                     </div>
                 </div>
+                <p class="mt-6 text-neutral-400 font-medium animate-pulse">جلب آخر الأنباء...</p>
+            </div>
 
-                <!-- Sidebar -->
-                <aside class="space-y-12">
-                    <div class="bg-white p-6 border border-gray-200">
-                        <h3 class="text-lg font-bold border-b-2 border-dark pb-2 mb-6">الأكثر قراءة</h3>
-                        <div id="trending-list" class="space-y-6">
-                            <!-- Will be injected by JS -->
+            <div id="news-content" class="hidden animate-in fade-in duration-700 slide-in-from-bottom-4">
+
+                <!-- Hero Section (Bento Grid Style) -->
+                <section class="grid grid-cols-1 md:grid-cols-4 gap-6 md:gap-8 mb-16">
+                    <!-- Main Hero -->
+                    <div id="hero-main"
+                        class="md:col-span-3 group relative h-[500px] md:h-[600px] rounded-2xl overflow-hidden shadow-card cursor-pointer">
+                        <!-- Injected via JS -->
+                    </div>
+
+                    <!-- Side Hero Column -->
+                    <div id="hero-side" class="hidden md:flex flex-col gap-6 md:col-span-1 h-[600px]">
+                        <!-- Injected via JS -->
+                    </div>
+                </section>
+
+                <!-- Layout: Main Feed + Sidebar -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 border-t border-neutral-200 pt-12">
+
+                    <!-- Main Content (8 cols) -->
+                    <div class="lg:col-span-8">
+                        <div class="flex items-center justify-between mb-10">
+                            <h2 id="section-title"
+                                class="text-2xl font-serif font-bold text-neutral-900 flex items-center gap-3">
+                                <span class="w-8 h-1 bg-brand rounded-full block"></span>
+                                آخر المستجدات
+                            </h2>
+                            <div class="flex gap-2">
+                                <button
+                                    class="p-2 hover:bg-neutral-100 rounded-lg transition-colors text-neutral-500"><i
+                                        data-lucide="grid" class="w-5 h-5"></i></button>
+                                <button
+                                    class="p-2 hover:bg-neutral-100 rounded-lg transition-colors text-neutral-900 bg-neutral-100"><i
+                                        data-lucide="list" class="w-5 h-5"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- Feed List -->
+                        <div id="latest-feed" class="flex flex-col gap-10">
+                            <!-- Injected via JS -->
+                        </div>
+
+                        <!-- Pagination -->
+                        <div class="flex justify-center items-center gap-2 mt-20">
+                            <button id="prev-btn"
+                                class="w-10 h-10 flex items-center justify-center rounded-lg border border-neutral-200 hover:border-brand hover:text-brand disabled:opacity-30 disabled:hover:border-neutral-200 disabled:hover:text-neutral-400 transition-all">
+                                <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                            </button>
+                            <span id="page-info" class="font-mono text-sm font-medium text-neutral-500 px-4">1 /
+                                10</span>
+                            <button id="next-btn"
+                                class="w-10 h-10 flex items-center justify-center rounded-lg border border-neutral-200 hover:border-brand hover:text-brand disabled:opacity-30 disabled:hover:border-neutral-200 disabled:hover:text-neutral-400 transition-all">
+                                <i data-lucide="chevron-left" class="w-5 h-5"></i>
+                            </button>
                         </div>
                     </div>
 
-                    <div class="bg-dark text-white p-8 rounded-2xl relative overflow-hidden group">
-                        <div class="relative z-10">
-                            <h3 class="text-2xl font-bold mb-4">اشترك في نشرتنا</h3>
-                            <p class="text-gray-400 text-sm mb-6">احصل على ملخص يومي لأهم الأنباء العالمية مباشرة في
-                                بريدك.</p>
-                            <input type="email" placeholder="بريدك الإلكتروني"
-                                class="w-full bg-white/10 border border-white/20 rounded-lg py-3 px-4 mb-4 focus:outline-none focus:border-brand transition-all">
-                            <button
-                                class="w-full bg-brand py-3 rounded-lg font-bold hover:bg-red-700 transition-all">اشترك
-                                الآن</button>
+                    <!-- Sidebar (4 cols) -->
+                    <aside class="lg:col-span-4 space-y-12">
+
+                        <!-- Most Read Widget -->
+                        <div class="bg-white rounded-2xl p-8 border border-neutral-100 shadow-card">
+                            <h3 class="text-lg font-bold mb-6 flex items-center gap-2">
+                                <i data-lucide="trending-up" class="w-5 h-5 text-brand"></i>
+                                الأكثر قراءة
+                            </h3>
+                            <div id="trending-list" class="space-y-6">
+                                <!-- Injected via JS -->
+                            </div>
                         </div>
+
+                        <!-- Newsletter Widget -->
+                        <div class="relative overflow-hidden rounded-2xl bg-neutral-900 text-white p-8 text-center">
+                            <div
+                                class="absolute top-0 right-0 w-64 h-64 bg-brand/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2">
+                            </div>
+                            <div class="relative z-10">
+                                <i data-lucide="mail" class="w-8 h-8 text-brand mx-auto mb-4"></i>
+                                <h3 class="text-xl font-bold mb-2">النشرة البريدية</h3>
+                                <p class="text-neutral-400 text-sm mb-6 leading-relaxed">ملخص يومي لأهم الأحداث العالمية
+                                    يصلك كل صباح. بدون إزعاج.</p>
+                                <div class="space-y-3">
+                                    <input type="email" placeholder="example@email.com"
+                                        class="w-full bg-white/10 border border-white/10 rounded-lg py-3 px-4 text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand transition-all placeholder:text-neutral-600">
+                                    <button
+                                        class="w-full bg-brand hover:bg-red-700 text-white font-bold py-3 rounded-lg text-sm transition-colors shadow-lg shadow-brand/30">اشترك
+                                        الآن</button>
+                                </div>
+                                <p class="text-[10px] text-neutral-600 mt-4">باشتراكك أنت توافق على سياسة الخصوصية</p>
+                            </div>
+                        </div>
+
+                        <!-- Ad Placeholder (Modern) -->
                         <div
-                            class="absolute -bottom-10 -left-10 w-40 h-40 bg-brand/10 rounded-full blur-3xl group-hover:bg-brand/20 transition-all">
+                            class="h-64 bg-neutral-100 rounded-2xl flex flex-col items-center justify-center text-neutral-400 border border-dashed border-neutral-300">
+                            <span class="text-xs font-medium tracking-widest uppercase mb-1">إعلان</span>
+                            <span class="text-xs">مساحة إعلانية</span>
                         </div>
-                    </div>
-                </aside>
+
+                    </aside>
+                </div>
             </div>
         </div>
     </main>
 
-    <footer class="bg-dark text-white py-16 mt-20">
-        <div class="container mx-auto px-4 text-center">
-            <div class="text-3xl font-serif font-800 mb-8">العالمية<span class="text-brand">NEWS</span></div>
-            <div class="flex flex-wrap justify-center gap-8 text-sm text-gray-400 mb-12">
-                <a href="#" class="hover:text-white transition-all">من نحن</a>
-                <a href="#" class="hover:text-white transition-all">سياسة الخصوصية</a>
-                <a href="#" class="hover:text-white transition-all">شروط الاستخدام</a>
-                <a href="#" class="hover:text-white transition-all">اتصل بنا</a>
+    <!-- Footer -->
+    <footer class="bg-neutral-950 text-white border-t border-neutral-900 pt-20 pb-10">
+        <div class="container mx-auto px-4 lg:px-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+                <div class="col-span-1 md:col-span-1">
+                    <span class="font-serif text-3xl font-bold tracking-tighter block mb-6">
+                        العالمية<span class="text-brand">NEWS</span>
+                    </span>
+                    <p class="text-neutral-500 text-sm leading-relaxed mb-6">
+                        منصة إخبارية عالمية رائدة تنقل الحدث بدقة وموضوعية. نضع العالم بين يديك لحظة بلحظة.
+                    </p>
+                    <div class="flex gap-4">
+                        <a href="#"
+                            class="w-10 h-10 rounded-full bg-neutral-900 flex items-center justify-center text-neutral-400 hover:bg-brand hover:text-white transition-all"><i
+                                data-lucide="twitter" class="w-4 h-4"></i></a>
+                        <a href="#"
+                            class="w-10 h-10 rounded-full bg-neutral-900 flex items-center justify-center text-neutral-400 hover:bg-brand hover:text-white transition-all"><i
+                                data-lucide="facebook" class="w-4 h-4"></i></a>
+                        <a href="#"
+                            class="w-10 h-10 rounded-full bg-neutral-900 flex items-center justify-center text-neutral-400 hover:bg-brand hover:text-white transition-all"><i
+                                data-lucide="instagram" class="w-4 h-4"></i></a>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="font-bold mb-6 text-sm uppercase tracking-wider text-neutral-300">الأقسام</h4>
+                    <ul class="space-y-4 text-sm text-neutral-500">
+                        <li><a href="#" class="hover:text-brand transition-colors">أخبار العالم</a></li>
+                        <li><a href="#" class="hover:text-brand transition-colors">السياسة</a></li>
+                        <li><a href="#" class="hover:text-brand transition-colors">الاقتصاد</a></li>
+                        <li><a href="#" class="hover:text-brand transition-colors">التكنولوجيا</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-bold mb-6 text-sm uppercase tracking-wider text-neutral-300">الشركة</h4>
+                    <ul class="space-y-4 text-sm text-neutral-500">
+                        <li><a href="#" class="hover:text-white transition-colors">من نحن</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">وظائف</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">للإعلان معنا</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">اتصل بنا</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-bold mb-6 text-sm uppercase tracking-wider text-neutral-300">قانوني</h4>
+                    <ul class="space-y-4 text-sm text-neutral-500">
+                        <li><a href="#" class="hover:text-white transition-colors">شروط الاستخدام</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">سياسة الخصوصية</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">ملفات تعريف الارتباط</a></li>
+                    </ul>
+                </div>
             </div>
-            <p class="text-gray-500 text-xs">© 2026 شبكة العالمية الإخبارية. جميع الحقوق محفوظة.</p>
+            <div class="border-t border-neutral-900 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+                <p class="text-neutral-600 text-xs">© 2026 شبكة العالمية الإخبارية. جميع الحقوق محفوظة.</p>
+                <div class="flex gap-6 text-xs text-neutral-600">
+                    <span>Designed with precision</span>
+                </div>
+            </div>
         </div>
     </footer>
 
+    <!-- JavaScript Logic -->
     <script>
-        // Configuration
+        // --- Logic Configuration ---
         const API_URL = '/api';
         const WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
 
@@ -247,189 +453,316 @@
         let pendingNews = [];
         let totalItems = 0;
 
-        // Initialize Icons
-        lucide.createIcons();
+        let yemenCurrentPage = 1;
+        let yemenNews = [];
+        let yemenPendingNews = [];
+        let yemenTotalItems = 0;
 
-        // Update Date
-        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-        document.getElementById('current-date').innerText = new Date().toLocaleDateString('ar-EG', options);
+        let activeTab = 'world'; // 'world' or 'yemen'
 
-        // Fetch News
+        // --- -
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            initDate();
+            // Start with World news
+            fetchNews(currentPage);
+            connectWS();
+        });
+
+        // --- Helpers ---
+        function initDate() {
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('current-date').innerText = new Date().toLocaleDateString('ar-EG', options);
+        }
+
+        function getThumbnailUrl(videoUrl) {
+            const videoId = videoUrl?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/)?.[1];
+            if (videoId) return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+            // High quality fallback placeholders
+            const placeholders = [
+                'https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=2070',
+                'https://images.unsplash.com/photo-1495020689067-958852a7765e?q=80&w=2069',
+                'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?q=80&w=2070'
+            ];
+            return placeholders[Math.floor(Math.random() * placeholders.length)];
+        }
+
+        function timeAgo(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // --- Tab Switching ---
+        function switchTab(tab) {
+            activeTab = tab;
+            const isWorld = tab === 'world';
+            const accentColor = isWorld ? 'text-brand' : 'text-yemen';
+            const borderColor = isWorld ? 'bg-brand' : 'bg-yemen';
+            const brandName = isWorld ? 'العالمية' : 'أخبار';
+            const brandSuffix = isWorld ? 'NEWS' : 'اليمن';
+            const brandSuffixClass = isWorld ? 'text-brand' : 'text-yemen';
+
+            // Header Logo Update
+            document.querySelector('.text-3xl.md\\:text-4xl').innerHTML = `${brandName}<span class="${brandSuffixClass}">${brandSuffix}</span>`;
+
+            // Tab Styles
+            const tWorld = document.getElementById('tab-world');
+            const tYemen = document.getElementById('tab-yemen');
+
+            if (isWorld) {
+                tWorld.className = 'relative py-4 text-sm md:text-base font-bold text-brand transition-colors whitespace-nowrap group';
+                tWorld.querySelector('span').classList.remove('scale-x-0');
+
+                tYemen.className = 'relative py-4 text-sm md:text-base font-medium text-neutral-500 hover:text-yemen transition-colors whitespace-nowrap group';
+                tYemen.querySelector('.absolute').classList.add('scale-x-0');
+            } else {
+                tYemen.className = 'relative py-4 text-sm md:text-base font-bold text-yemen transition-colors whitespace-nowrap group';
+                tYemen.querySelector('.absolute').classList.remove('scale-x-0'); // Show underline
+                tYemen.querySelector('.absolute').classList.add('scale-x-100');
+
+                tWorld.className = 'relative py-4 text-sm md:text-base font-medium text-neutral-500 hover:text-brand transition-colors whitespace-nowrap group';
+                tWorld.querySelector('span').classList.add('scale-x-0');
+            }
+
+            // Ticker & Section Labels
+            const tickerLabel = document.getElementById('ticker-label');
+            tickerLabel.className = `${isWorld ? 'bg-brand' : 'bg-yemen'} text-white text-xs md:text-sm font-bold px-4 md:px-6 flex items-center shrink-0 z-10 shadow-[4px_0_10px_rgba(0,0,0,0.1)] transition-colors duration-300`;
+            tickerLabel.innerHTML = `<span class="animate-pulse ml-2 w-2 h-2 bg-white rounded-full"></span> ${isWorld ? 'عاجل' : 'اليمن'}`;
+
+            const sectionIndicator = document.querySelector('#section-title span');
+            sectionIndicator.className = `w-8 h-1 ${isWorld ? 'bg-brand' : 'bg-yemen'} rounded-full block transition-colors duration-300`;
+            document.querySelector('#section-title').childNodes[2].textContent = isWorld ? ' آخر المستجدات' : ' آخر أخبار اليمن';
+
+            // Reset Views
+            document.getElementById('new-news-banner').classList.add('hidden');
+
+            // Fetch Data
+            if (isWorld) fetchNews(currentPage);
+            else fetchYemenNews(yemenCurrentPage);
+        }
+
+        // --- Data Fetching ---
         async function fetchNews(page = 1) {
-            document.getElementById('loading-state').classList.remove('hidden');
-            if (page === 1) document.getElementById('news-content').classList.add('hidden');
-
+            setLoading(true);
             try {
+                // Simulation of API call delay for effect
+                // await new Promise(r => setTimeout(r, 600)); 
                 const response = await fetch(`${API_URL}/news?page=${page}&limit=20`);
                 const data = await response.json();
                 allNews = data.items;
                 totalItems = data.total;
                 currentPage = data.page;
-
-                renderUI();
+                renderUI(allNews, 'brand');
             } catch (error) {
-                console.error('Error fetching news:', error);
+                console.error(error);
             } finally {
-                document.getElementById('loading-state').classList.add('hidden');
-                document.getElementById('news-content').classList.remove('hidden');
+                setLoading(false);
+            }
+        }
+
+        async function fetchYemenNews(page = 1) {
+            setLoading(true);
+            try {
+                const response = await fetch(`${API_URL}/yemen-news?page=${page}&limit=20`);
+                const data = await response.json();
+                yemenNews = data.items;
+                yemenTotalItems = data.total;
+                yemenCurrentPage = data.page;
+                renderUI(yemenNews, 'yemen');
+            } catch (error) {
+                console.error(error);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function setLoading(isLoading) {
+            const loader = document.getElementById('loading-state');
+            const content = document.getElementById('news-content');
+            if (isLoading && (currentPage === 1 || yemenCurrentPage === 1)) {
+                loader.classList.remove('hidden');
+                content.classList.add('hidden');
+            } else {
+                loader.classList.add('hidden');
+                content.classList.remove('hidden');
                 lucide.createIcons();
             }
         }
 
-        function getThumbnailUrl(videoUrl) {
-            // Extract video ID and create thumbnail URL
-            const videoId = videoUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/)?.[1];
-            if (videoId) {
-                return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
-            }
-            return 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=2070';
-        }
+        // --- Rendering Logic (The Beautifier) ---
+        function renderUI(newsItems, themeColor) {
+            if (!newsItems || newsItems.length === 0) return;
 
-        function renderUI() {
-            if (allNews.length === 0) return;
+            const colorClass = themeColor === 'brand' ? 'text-brand' : 'text-yemen';
+            const bgClass = themeColor === 'brand' ? 'bg-brand' : 'bg-yemen';
+            const hoverText = themeColor === 'brand' ? 'group-hover:text-brand' : 'group-hover:text-yemen';
 
             // 1. Ticker
-            const tickerItems = allNews.slice(0, 10).map(n => `<span class="inline-block px-4 underline decoration-brand/30 hover:text-brand cursor-pointer">${n.title}</span>`).join(' <span class="text-brand font-bold mx-2">/</span> ');
-            document.getElementById('ticker-text').innerHTML = tickerItems;
+            const tickerHTML = newsItems.slice(0, 10).map(n =>
+                `<a href="${n.link}" target="_blank" class="inline-flex items-center mx-6 hover:${colorClass} transition-colors cursor-pointer group">
+                    <span class="w-1.5 h-1.5 rounded-full ${bgClass} ml-2 opacity-60 group-hover:opacity-100"></span>
+                    ${n.title}
+                </a>`
+            ).join('');
+            document.getElementById('ticker-text').innerHTML = tickerHTML;
 
-            // 2. Hero Section
-            const hero = allNews[0];
-            const heroThumbnail = hero.image_url || getThumbnailUrl(hero.link);
-            document.getElementById('hero-section').innerHTML = `
-                <a href="${hero.link}" target="_blank">
-                    <img src="${heroThumbnail}" class="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700">
-                    <div class="absolute inset-0 news-gradient flex flex-col justify-end p-8 md:p-12">
-                        <span class="bg-brand text-white text-xs font-bold px-3 py-1 mb-4 w-fit uppercase">${hero.source}</span>
-                        <h2 class="text-3xl md:text-5xl font-serif text-white font-bold leading-tight max-w-4xl">${hero.title}</h2>
-                    </div>
-                </a>
-            `;
+            // 2. Main Hero (First item)
+            const hero = newsItems[0];
+            const heroImg = hero.image_url || getThumbnailUrl(hero.link);
 
-            // 3. Secondary Grid (next 3 items)
-            const secondary = allNews.slice(1, 4);
-            document.getElementById('secondary-grid').innerHTML = secondary.map(item => {
-                const thumb = item.image_url || getThumbnailUrl(item.link);
-                return `
-                <a href="${item.link}" target="_blank" class="group">
-                    <div class="aspect-video overflow-hidden rounded-lg mb-4 bg-gray-200">
-                        <img src="${thumb}" class="w-full h-full object-cover group-hover:scale-110 transition-all duration-500">
-                    </div>
-                    <span class="text-brand text-xs font-bold uppercase mb-2 block">${item.source}</span>
-                    <h3 class="text-lg font-bold group-hover:text-brand transition-colors">${item.title}</h3>
-                </a>
-            `;
-            }).join('');
-
-            // 4. Latest Feed (rest of news)
-            const latest = allNews.slice(4);
-            document.getElementById('latest-feed').innerHTML = latest.map(item => {
-                const thumb = item.image_url || getThumbnailUrl(item.link);
-                return `
-                <div class="flex gap-6 items-start border-b border-gray-100 pb-8 last:border-0">
-                    <div class="flex-1">
-                        <span class="text-brand text-xs font-bold uppercase mb-1 block">${item.source}</span>
-                        <a href="${item.link}" target="_blank"><h3 class="text-xl font-bold mb-3 hover:text-brand transition-all">${item.title}</h3></a>
-                        <p class="text-gray-500 text-sm line-clamp-2 mb-4 leading-relaxed">${item.summary || ''}</p>
-                        <div class="flex items-center gap-4 text-xs text-gray-400 font-medium">
-                            <span class="flex items-center gap-1"><i data-lucide="clock" class="w-3 h-3"></i> ${new Date(item.published).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>
+            document.getElementById('hero-main').innerHTML = `
+                <a href="${hero.link}" target="_blank" class="block w-full h-full">
+                    <img src="${heroImg}" class="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt="${hero.title}">
+                    <div class="absolute inset-0 image-gradient flex flex-col justify-end p-6 md:p-10">
+                        <div class="transform translate-y-0 transition-transform duration-500">
+                            <span class="${bgClass} text-white text-[10px] md:text-xs font-bold px-2 py-1 rounded mb-4 inline-block tracking-wider uppercase">${hero.source}</span>
+                            <h2 class="text-3xl md:text-5xl font-serif text-white font-bold leading-[1.1] md:leading-tight mb-3 drop-shadow-lg max-w-4xl tracking-tight">${hero.title}</h2>
+                            <p class="text-neutral-200 text-sm md:text-base line-clamp-2 max-w-2xl opacity-90 leading-relaxed font-light">${hero.summary || ''}</p>
+                            <div class="flex items-center gap-3 mt-4 text-xs text-neutral-300 font-medium">
+                                <span class="flex items-center gap-1"><i data-lucide="clock" class="w-3 h-3"></i> ${timeAgo(hero.published)}</span>
+                            </div>
                         </div>
                     </div>
-                    <div class="w-32 h-24 md:w-48 md:h-32 rounded-lg overflow-hidden shrink-0">
-                        <img src="${thumb}" class="w-full h-full object-cover">
-                    </div>
-                </div>
+                </a>
             `;
+
+            // 3. Hero Side Column (Items 1 & 2)
+            const sideHTML = newsItems.slice(1, 3).map(item => {
+                const img = item.image_url || getThumbnailUrl(item.link);
+                return `
+                    <a href="${item.link}" target="_blank" class="group relative flex-1 rounded-2xl overflow-hidden shadow-card">
+                        <img src="${img}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110">
+                        <div class="absolute inset-0 bg-black/40 group-hover:bg-black/50 transition-colors"></div>
+                        <div class="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent">
+                            <span class="${colorClass} text-xs font-bold uppercase mb-1 block tracking-wider">${item.source}</span>
+                            <h3 class="text-lg font-bold text-white leading-tight">${item.title}</h3>
+                        </div>
+                    </a>
+                `;
             }).join('');
+            document.getElementById('hero-side').innerHTML = sideHTML;
 
-            // 5. Trending Sidebar
-            document.getElementById('trending-list').innerHTML = allNews.slice(0, 6).map((item, idx) => `
-                <div class="flex gap-4 group cursor-pointer">
-                    <span class="text-3xl font-serif font-bold text-gray-200 group-hover:text-brand transition-colors">0${idx + 1}</span>
-                    <p class="text-sm font-bold leading-snug group-hover:text-brand transition-all line-clamp-2">${item.title}</p>
-                </div>
+            // 4. Main Feed (Remaining items)
+            const feedHTML = newsItems.slice(3).map(item => {
+                const img = item.image_url || getThumbnailUrl(item.link);
+                return `
+                <article class="group flex flex-col md:flex-row gap-6 md:gap-8 items-start pb-10 border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50 p-4 -mx-4 rounded-xl transition-colors">
+                    <div class="w-full md:w-64 h-48 rounded-xl overflow-hidden shrink-0 shadow-sm relative">
+                        <img src="${img}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy">
+                        <div class="absolute top-2 right-2 bg-white/90 backdrop-blur text-[10px] font-bold px-2 py-1 rounded shadow-sm text-neutral-700">${item.source}</div>
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3 mb-2 text-xs font-medium text-neutral-400">
+                            <span class="${colorClass} uppercase tracking-wider font-bold">أخبار</span>
+                            <span class="w-1 h-1 bg-neutral-300 rounded-full"></span>
+                            <span class="flex items-center gap-1"><i data-lucide="clock" class="w-3 h-3"></i> ${timeAgo(item.published)}</span>
+                        </div>
+                        <a href="${item.link}" target="_blank">
+                            <h3 class="text-xl md:text-2xl font-bold text-neutral-900 mb-3 leading-snug ${hoverText} transition-colors tracking-tight font-serif">${item.title}</h3>
+                        </a>
+                        <p class="text-neutral-500 text-sm md:text-base leading-relaxed line-clamp-2 mb-4 font-light">${item.summary || 'انقر لقراءة التفاصيل الكاملة لهذا الخبر...'}</p>
+                        
+                        <div class="flex gap-3">
+                            <button class="text-xs font-bold text-neutral-900 flex items-center gap-1 hover:gap-2 transition-all group/btn">
+                                اقرأ المزيد <i data-lucide="arrow-left" class="w-3 h-3 ${colorClass}"></i>
+                            </button>
+                            <button class="text-neutral-400 hover:text-neutral-600"><i data-lucide="bookmark" class="w-4 h-4"></i></button>
+                            <button class="text-neutral-400 hover:text-neutral-600"><i data-lucide="share-2" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+                </article>
+                `;
+            }).join('');
+            document.getElementById('latest-feed').innerHTML = feedHTML;
+
+            // 5. Trending Widget (Recycle top 5 for demo)
+            const trendingHTML = newsItems.slice(0, 5).map((item, idx) => `
+                <a href="${item.link}" target="_blank" class="flex gap-4 group items-start">
+                    <span class="text-3xl font-serif font-bold text-neutral-200 ${hoverText} transition-colors -mt-2">0${idx + 1}</span>
+                    <div>
+                        <span class="text-[10px] font-bold text-neutral-400 uppercase mb-1 block">${item.source}</span>
+                        <h4 class="text-sm font-bold text-neutral-800 leading-snug group-hover:text-neutral-600 transition-colors line-clamp-2">${item.title}</h4>
+                    </div>
+                </a>
             `).join('');
+            document.getElementById('trending-list').innerHTML = trendingHTML;
 
-            // Pagination Controls
-            const totalPages = Math.ceil(totalItems / 20);
-            document.getElementById('page-info').innerText = `صفحة ${currentPage} من ${totalPages || 1}`;
-            document.getElementById('prev-btn').disabled = currentPage === 1;
-            document.getElementById('next-btn').disabled = currentPage >= totalPages;
+            updatePagination();
+            lucide.createIcons();
         }
 
-        // WebSockets for Real-time
+        function updatePagination() {
+            const current = activeTab === 'world' ? currentPage : yemenCurrentPage;
+            const total = activeTab === 'world' ? totalItems : yemenTotalItems;
+            const totalPages = Math.ceil(total / 20) || 1;
+
+            document.getElementById('page-info').textContent = `${current} / ${totalPages}`;
+            document.getElementById('prev-btn').disabled = current === 1;
+            document.getElementById('next-btn').disabled = current >= totalPages;
+        }
+
+        // --- WebSocket ---
         function connectWS() {
             try {
                 const ws = new WebSocket(WS_URL);
-                let pingInterval;
-                
+
                 ws.onopen = () => {
-                    console.log('WebSocket connected to:', WS_URL);
                     document.getElementById('live-indicator').classList.remove('hidden');
-                    // Send pong every 20 seconds to keep connection alive
-                    pingInterval = setInterval(() => {
-                        if (ws.readyState === WebSocket.OPEN) {
-                            ws.send('pong');
-                        }
-                    }, 20000);
+                    setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send('pong'); }, 20000);
                 };
+
                 ws.onmessage = (event) => {
-                    try {
-                        const message = JSON.parse(event.data);
-                        // Handle ping from server
-                        if (message.type === 'ping') {
-                            ws.send('pong');
-                            return;
-                        }
-                        if (message.type === 'new_news') {
-                            pendingNews.push(message.data);
-                            document.getElementById('new-news-banner').innerText = `هناك ${pendingNews.length} أخبار جديدة - اضغط للتحديث`;
-                            document.getElementById('new-news-banner').classList.remove('hidden');
-                            console.log('New news received:', message.data.title);
-                        }
-                    } catch (e) {
-                        console.error('Error parsing message:', e);
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'ping') { ws.send('pong'); return; }
+
+                    if ((msg.type === 'new_news' && activeTab === 'world') ||
+                        (msg.type === 'new_yemen_news' && activeTab === 'yemen')) {
+
+                        const targetList = activeTab === 'world' ? pendingNews : yemenPendingNews;
+                        targetList.push(msg.data);
+
+                        const banner = document.getElementById('new-news-banner');
+                        banner.querySelector('span.text-sm').textContent = `هناك ${targetList.length} أخبار جديدة`;
+                        banner.classList.remove('hidden');
                     }
                 };
+
                 ws.onclose = () => {
-                    console.log('WebSocket disconnected, reconnecting...');
                     document.getElementById('live-indicator').classList.add('hidden');
-                    if (pingInterval) clearInterval(pingInterval);
                     setTimeout(connectWS, 3000);
                 };
-                ws.onerror = (error) => {
-                    console.error('WebSocket error:', error);
-                };
-            } catch (e) {
-                console.error('WebSocket setup error:', e);
-                setTimeout(connectWS, 5000);
-            }
+            } catch (e) { console.error(e); }
         }
 
-        // Event Listeners
-        document.getElementById('new-news-banner').onclick = () => {
-            allNews = [...pendingNews, ...allNews].slice(0, 20);
-            pendingNews = [];
-            document.getElementById('new-news-banner').classList.add('hidden');
-            renderUI();
+        // --- Event Listeners ---
+        document.getElementById('new-news-banner').onclick = function () {
+            if (activeTab === 'world') {
+                allNews = [...pendingNews, ...allNews];
+                pendingNews = [];
+                renderUI(allNews, 'brand');
+            } else {
+                yemenNews = [...yemenPendingNews, ...yemenNews];
+                yemenPendingNews = [];
+                renderUI(yemenNews, 'yemen');
+            }
+            this.classList.add('hidden');
             window.scrollTo({ top: 0, behavior: 'smooth' });
-            lucide.createIcons();
         };
 
         document.getElementById('prev-btn').onclick = () => {
-            if (currentPage > 1) {
-                fetchNews(currentPage - 1);
+            const isWorld = activeTab === 'world';
+            const curr = isWorld ? currentPage : yemenCurrentPage;
+            if (curr > 1) {
+                if (isWorld) fetchNews(curr - 1); else fetchYemenNews(curr - 1);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             }
         };
 
         document.getElementById('next-btn').onclick = () => {
-            fetchNews(currentPage + 1);
+            const isWorld = activeTab === 'world';
+            if (isWorld) fetchNews(currentPage + 1); else fetchYemenNews(yemenCurrentPage + 1);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         };
-
-        // Initial Load
-        fetchNews();
-        connectWS();
 
     </script>
 </body>
