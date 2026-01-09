@@ -728,7 +728,7 @@ async def get_news(page: int = 1, limit: int = 20):
     db = SessionLocal()
     skip = (page - 1) * limit
     # Order by created_at DESC (newest added first) and id DESC as tie-breaker
-    news = db.query(NewsItem).order_by(desc(NewsItem.created_at), desc(NewsItem.id)).offset(skip).limit(limit).all()
+    news = db.query(NewsItem).order_by((NewsItem.created_at), (NewsItem.id)).offset(skip).limit(limit).all()
     total = db.query(NewsItem).count()
     db.close()
     return {
@@ -743,7 +743,7 @@ async def get_yemen_news(page: int = 1, limit: int = 20):
     db = SessionLocal()
     skip = (page - 1) * limit
     # Order by created_at DESC (newest added first) and id DESC as tie-breaker
-    news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at), desc(YemenNewsItem.id)).offset(skip).limit(limit).all()
+    news = db.query(YemenNewsItem).order_by((YemenNewsItem.created_at), (YemenNewsItem.id)).offset(skip).limit(limit).all()
     total = db.query(YemenNewsItem).count()
     db.close()
     return {
@@ -764,8 +764,8 @@ async def debug_info():
         yemen_channels_count = db.query(YemenChannelLastVideo).count()
         
         # Get latest news items
-        latest_world = db.query(NewsItem).order_by(desc(NewsItem.published)).limit(3).all()
-        latest_yemen = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.published)).limit(3).all()
+        latest_world = db.query(NewsItem).order_by((NewsItem.published)).limit(3).all()
+        latest_yemen = db.query(YemenNewsItem).order_by((YemenNewsItem.published)).limit(3).all()
         
         return {
             "database_path": DB_PATH,
