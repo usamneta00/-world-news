@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -320,7 +320,7 @@ def fetch_youtube_channel_videos(channel_url: str, channel_name: str, last_video
             'quiet': True,
             'no_warnings': True,
             'extract_flat': True,
-            'playlistend': 50,  # Check up to 50 videos
+            'playlistend': 100,  # Check up to 100 videos
             'ignoreerrors': True,
         }
         
@@ -382,10 +382,6 @@ def fetch_youtube_channel_videos(channel_url: str, channel_name: str, last_video
                                 'summary': f"فيديو جديد من {channel_name}"
                             })
                             
-                            # If no last_video_ids, we're in first run - collect first 5 videos
-                            if not last_video_ids_set and len(videos) >= 5:
-                                logger.info(f"First run for {channel_name}, collected 5 videos")
-                                break
                                 
             except Exception as e:
                 logger.error(f"Error extracting info from {channel_name}: {e}")
@@ -442,9 +438,6 @@ def fetch_youtube_channel_videos(channel_url: str, channel_name: str, last_video
                                         'summary': f"فيديو جديد من {channel_name}"
                                     })
                                     
-                                    # If no last_video_ids, we're in first run - collect first 5 videos
-                                    if not last_video_ids_set and len(videos) >= 5:
-                                        break
                     except Exception as e2:
                         logger.error(f"RSS fallback also failed for {channel_name}: {e2}")
         
@@ -456,7 +449,7 @@ def fetch_youtube_channel_videos(channel_url: str, channel_name: str, last_video
 async def fetch_all_youtube_channels(db) -> List[dict]:
     """Fetch NEW videos from all YouTube channels/playlists in parallel, sorted from oldest to newest"""
     
-    # Get last 5 video IDs for each channel
+    # Get last 100 video IDs for each channel
     channel_last_videos = {}
     for channel in YOUTUBE_CHANNELS:
         last_video_record = db.query(ChannelLastVideo).filter(ChannelLastVideo.channel_name == channel['name']).first()
@@ -498,7 +491,7 @@ async def fetch_all_youtube_channels(db) -> List[dict]:
 async def fetch_all_yemen_youtube_channels(db) -> List[dict]:
     """Fetch NEW videos from all Yemen YouTube channels, filtered for Yemen-related content"""
     
-    # Get last 5 video IDs for each channel
+    # Get last 100 video IDs for each channel
     channel_last_videos = {}
     for channel in YEMEN_YOUTUBE_CHANNELS:
         last_video_record = db.query(YemenChannelLastVideo).filter(YemenChannelLastVideo.channel_name == channel['name']).first()
@@ -631,7 +624,7 @@ def fetch_press_articles(source_url: str, source_name: str, last_article_links: 
                 })
         
         # Process found articles
-        for article_data in article_links[:30]:  # Limit to 30 articles per source
+        for article_data in article_links[:100]:  # Limit to 100 articles per source
             link = article_data['link']
             
             # Skip if already known
@@ -664,9 +657,6 @@ def fetch_press_articles(source_url: str, source_name: str, last_article_links: 
             })
             
             # Limit articles per run
-            if not last_links_set and len(articles) >= 5:
-                logger.info(f"[Press] First run for {source_name}, collected 5 articles")
-                break
         
     except Exception as e:
         logger.error(f"[Press] Error fetching {source_name}: {e}")
@@ -785,7 +775,7 @@ async def fetch_youtube_feeds():
                 # Since videos are sorted oldest to newest, reverse them to get newest first
                 new_video_ids = [v['video_id'] for v in reversed(channel_videos)]
                 
-                # Combine: new videos + existing videos, keep only first 5
+                # Combine: new videos + existing videos
                 combined_ids = new_video_ids + existing_ids
                 # Remove duplicates while preserving order
                 seen = set()
@@ -795,8 +785,8 @@ async def fetch_youtube_feeds():
                         seen.add(vid_id)
                         unique_ids.append(vid_id)
                 
-                # Keep only last 5
-                final_ids = unique_ids[:5]
+                # Keep only last 100
+                final_ids = unique_ids[:100]
                 
                 # Get the most recent video's publish date
                 most_recent_video = channel_videos[-1]  # Last in list = newest (since sorted oldest to newest)
@@ -886,7 +876,7 @@ async def fetch_yemen_youtube_feeds():
                 new_items_found.append(item_dict)
                 logger.info(f"[Yemen] Added NEW video: {video['title'][:50]}... from {video['source']}")
             
-            # Update last 5 videos for each channel (track ALL fetched videos, not just Yemen-related)
+            # Update last 100 videos for each channel (track ALL fetched videos, not just Yemen-related)
             # We need to update tracking for all channels even if their videos weren't Yemen-related
             for channel in YEMEN_YOUTUBE_CHANNELS:
                 channel_name = channel['name']
@@ -913,7 +903,7 @@ async def fetch_yemen_youtube_feeds():
                         seen.add(vid_id)
                         unique_ids.append(vid_id)
                 
-                final_ids = unique_ids[:5]
+                final_ids = unique_ids[:100]
                 most_recent_video = channel_videos[-1]
                 
                 if last_video_record:
@@ -996,7 +986,7 @@ async def fetch_press_feeds():
                 new_items_found.append(item_dict)
                 logger.info(f"[Press] Added NEW article: {article['title'][:50]}... from {article['source']}")
             
-            # Update last 10 articles for each source
+            # Update last 100 articles for each source
             for source_name, source_articles in articles_by_source.items():
                 if not source_articles:
                     continue
@@ -1022,7 +1012,7 @@ async def fetch_press_feeds():
                         seen.add(link)
                         unique_links.append(link)
                 
-                final_links = unique_links[:10]
+                final_links = unique_links[:100]
                 
                 if last_record:
                     last_record.last_article_links = json.dumps(final_links)
