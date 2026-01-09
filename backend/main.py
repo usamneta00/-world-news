@@ -296,7 +296,7 @@ def fetch_newspaper_articles(source_url: str, source_name: str, last_article_ids
     }
     
     try:
-        response = requests.get(source_url, headers=headers, timeout=30)
+        response = requests.get(source_url, headers=headers, timeout=15)
         response.raise_for_status()
         soup = BeautifulSoup(response.content, 'html.parser')
         
@@ -327,17 +327,8 @@ def fetch_newspaper_articles(source_url: str, source_name: str, last_article_ids
                         full_url = urljoin(source_url, href)
                         # Filter out non-article links
                         parsed = urlparse(full_url)
-                        # We allow /tag/ and /category/ as some sites use them for relative article paths
-                        # But we filter out common non-article links, social media, and site policies
-                        junk_patterns = [
-                            '/video/', '/videos/', '/live/', '/author/', '/search/', 
-                            '/newsletter/', '/podcast/', '/apps/', '/ad-choices/', 
-                            '/cookie-policy/', '/privacy-policy/', '/terms/', '/help/', 
-                            'facebook.com', 'twitter.com', 'linkedin.com', 'instagram.com', 
-                            '#', 'javascript:', 'mailto:'
-                        ]
                         if (parsed.scheme in ['http', 'https'] and 
-                            not any(x in full_url.lower() for x in junk_patterns)):
+                            not any(x in full_url.lower() for x in ['/video/', '/videos/', '/live/', '/author/', '/tag/', '/category/', '/search/', '#', 'javascript:', 'mailto:'])):
                             if full_url not in found_links:
                                 found_links.add(full_url)
                                 # Get title from link text or parent element
@@ -358,20 +349,15 @@ def fetch_newspaper_articles(source_url: str, source_name: str, last_article_ids
             except Exception:
                 continue
         
-        if article_links:
-            logger.info(f"[Newspaper] Found {len(article_links)} potential articles for {source_name}")
-        else:
-            logger.warning(f"[Newspaper] No articles found for {source_name} using standard selectors")
-        
         # Process found articles
-        for article_data in article_links[:100]:  # Increased from 50 to 100
+        for article_data in article_links[:50]:  # Check up to 50 articles
             article_url = article_data['url']
             article_id = generate_article_id(article_url)
             
             # If we have last_article_ids, check if we've seen this article
             if last_article_ids_set and article_id in last_article_ids_set:
-                logger.info(f"[Newspaper] Found known article {article_id[:8]} for {source_name}, skipping")
-                continue # Changed from break to continue to check other links on the page
+                logger.info(f"[Newspaper] Found known article {article_id[:8]} for {source_name}, stopping")
+                break
             
             title = article_data['title']
             if not title or len(title) < 10:
