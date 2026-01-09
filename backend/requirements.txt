@@ -7,3 +7,5 @@ aiosqlite
 asyncio
 python-dateutil
 yt-dlp
+requests
+beautifulsoup4

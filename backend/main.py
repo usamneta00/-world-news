@@ -13,6 +13,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
 import yt_dlp
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin, urlparse
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)
@@ -67,6 +70,25 @@ class YemenChannelLastVideo(Base):
     channel_name = Column(String, unique=True)
     last_video_ids = Column(String)  # JSON array of last 5 video IDs
     last_video_published = Column(DateTime)
+    updated_at = Column(DateTime, default=datetime.now)
+
+# Press News Tables (International Newspapers)
+class PressNewsItem(Base):
+    __tablename__ = "press_news"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String)
+    link = Column(String, unique=True)
+    summary = Column(String)
+    published = Column(DateTime)
+    source = Column(String)
+    image_url = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+
+class PressSourceLastArticle(Base):
+    __tablename__ = "press_source_last_article"
+    id = Column(Integer, primary_key=True, index=True)
+    source_name = Column(String, unique=True)
+    last_article_links = Column(String)  # JSON array of last 10 article links
     updated_at = Column(DateTime, default=datetime.now)
 
 class SystemState(Base):
@@ -157,6 +179,20 @@ def migrate_database():
                 logger.info("Creating system_state table...")
                 SystemState.__table__.create(engine)
                 logger.info("Successfully created system_state table")
+            
+            # Check if press_news table exists
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='press_news'"))
+            if not result.fetchone():
+                logger.info("Creating press_news table...")
+                PressNewsItem.__table__.create(engine)
+                logger.info("Successfully created press_news table")
+            
+            # Check if press_source_last_article table exists
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='press_source_last_article'"))
+            if not result.fetchone():
+                logger.info("Creating press_source_last_article table...")
+                PressSourceLastArticle.__table__.create(engine)
+                logger.info("Successfully created press_source_last_article table")
     except Exception as e:
         logger.error(f"Migration error: {e}")
 
@@ -219,6 +255,26 @@ def is_yemen_related(title: str) -> bool:
         if keyword in title or keyword.lower() in title_lower:
             return True
     return False
+
+# International Press Sources List
+PRESS_SOURCES = [
+    {"url": "https://www.cbsnews.com/israel-gaza-conflict/", "name": "CBS News", "selector": "article"},
+    {"url": "https://www.haaretz.com/", "name": "Haaretz", "selector": "article"},
+    {"url": "https://www.nytimes.com/section/world/middleeast", "name": "New York Times", "selector": "article"},
+    {"url": "https://www.ft.com/middle-east", "name": "Financial Times", "selector": "article"},
+    {"url": "https://www.washingtonpost.com/world/middle-east/", "name": "Washington Post", "selector": "article"},
+    {"url": "https://www.bbc.co.uk/news/world/middle_east", "name": "BBC News", "selector": "article"},
+    {"url": "https://www.theguardian.com/world/middleeast", "name": "The Guardian", "selector": "article"},
+    {"url": "https://foreignpolicy.com/tag/middle-east-and-north-africa/", "name": "Foreign Policy", "selector": "article"},
+    {"url": "https://edition.cnn.com/world/middle-east", "name": "CNN", "selector": "article"},
+    {"url": "https://apnews.com/hub/middle-east", "name": "Associated Press", "selector": "article"},
+    {"url": "https://www.aljazeera.com/middle-east/", "name": "Al Jazeera", "selector": "article"},
+    {"url": "https://www.axios.com/world", "name": "Axios", "selector": "article"},
+    {"url": "https://www.seattletimes.com/nation-world/world/", "name": "Seattle Times", "selector": "article"},
+    {"url": "https://www.reuters.com/world/middle-east/", "name": "Reuters", "selector": "article"},
+    {"url": "https://news.un.org/en/focus-topic/middle-east", "name": "UN News", "selector": "article"},
+    {"url": "https://www.ynetnews.com/category/3083", "name": "Ynet News", "selector": "article"},
+]
 
 app = FastAPI()
 
@@ -485,6 +541,178 @@ async def fetch_all_yemen_youtube_channels(db) -> List[dict]:
     all_videos.sort(key=lambda x: x['published'], reverse=True)
     return all_videos
 
+def fetch_press_articles(source_url: str, source_name: str, last_article_links: Optional[List[str]] = None) -> List[dict]:
+    """Fetch NEW articles from a press source website"""
+    articles = []
+    last_links_set = set(last_article_links) if last_article_links else set()
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Connection': 'keep-alive',
+    }
+    
+    try:
+        response = requests.get(source_url, headers=headers, timeout=15)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Find article links based on common patterns
+        article_links = []
+        
+        # Common selectors for news articles
+        selectors = [
+            'article a[href]',
+            'a[href*="/article/"]',
+            'a[href*="/news/"]',
+            'a[href*="/story/"]',
+            'a[href*="/world/"]',
+            'a[href*="/middle-east/"]',
+            'a[href*="/middleeast/"]',
+            '.story-card a[href]',
+            '.article-card a[href]',
+            '.headline a[href]',
+            'h2 a[href]',
+            'h3 a[href]',
+            '.card a[href]',
+            '.teaser a[href]',
+        ]
+        
+        seen_links = set()
+        base_url = f"{urlparse(source_url).scheme}://{urlparse(source_url).netloc}"
+        
+        for selector in selectors:
+            for link in soup.select(selector):
+                href = link.get('href')
+                if not href:
+                    continue
+                
+                # Make absolute URL
+                if href.startswith('/'):
+                    href = urljoin(base_url, href)
+                elif not href.startswith('http'):
+                    continue
+                
+                # Skip non-article links
+                if any(skip in href.lower() for skip in ['#', 'javascript:', 'mailto:', '/video/', '/live/', '/podcast/', '/author/', '/tag/', '/category/', '/search/', 'login', 'signup', 'subscribe']):
+                    continue
+                
+                # Must be from the same domain
+                if urlparse(href).netloc != urlparse(base_url).netloc:
+                    continue
+                
+                if href in seen_links:
+                    continue
+                seen_links.add(href)
+                
+                # Get title from link or parent
+                title = link.get_text(strip=True)
+                if not title or len(title) < 20:
+                    # Try to find title in parent or sibling elements
+                    parent = link.find_parent(['article', 'div', 'li', 'section'])
+                    if parent:
+                        h_tag = parent.find(['h1', 'h2', 'h3', 'h4'])
+                        if h_tag:
+                            title = h_tag.get_text(strip=True)
+                
+                if not title or len(title) < 20:
+                    continue
+                
+                # Clean title
+                title = ' '.join(title.split())
+                if len(title) > 300:
+                    title = title[:300] + '...'
+                
+                article_links.append({
+                    'link': href,
+                    'title': title,
+                    'element': link
+                })
+        
+        # Process found articles
+        for article_data in article_links[:30]:  # Limit to 30 articles per source
+            link = article_data['link']
+            
+            # Skip if already known
+            if last_links_set and link in last_links_set:
+                logger.info(f"[Press] Found known article for {source_name}, skipping")
+                continue
+            
+            title = article_data['title']
+            
+            # Try to find image
+            image_url = None
+            parent = article_data['element'].find_parent(['article', 'div', 'li', 'section'])
+            if parent:
+                img = parent.find('img')
+                if img:
+                    img_src = img.get('src') or img.get('data-src') or img.get('data-lazy-src')
+                    if img_src:
+                        if img_src.startswith('/'):
+                            image_url = urljoin(base_url, img_src)
+                        elif img_src.startswith('http'):
+                            image_url = img_src
+            
+            articles.append({
+                'title': title,
+                'link': link,
+                'image_url': image_url,
+                'source': source_name,
+                'published': datetime.now(),
+                'summary': f"مقال من {source_name}"
+            })
+            
+            # Limit articles per run
+            if not last_links_set and len(articles) >= 5:
+                logger.info(f"[Press] First run for {source_name}, collected 5 articles")
+                break
+        
+    except Exception as e:
+        logger.error(f"[Press] Error fetching {source_name}: {e}")
+    
+    return articles
+
+async def fetch_all_press_sources(db) -> List[dict]:
+    """Fetch NEW articles from all press sources in parallel"""
+    
+    # Get last article links for each source
+    source_last_articles = {}
+    for source in PRESS_SOURCES:
+        last_record = db.query(PressSourceLastArticle).filter(PressSourceLastArticle.source_name == source['name']).first()
+        if last_record and last_record.last_article_links:
+            try:
+                source_last_articles[source['name']] = json.loads(last_record.last_article_links)
+            except:
+                source_last_articles[source['name']] = None
+        else:
+            source_last_articles[source['name']] = None
+    
+    # Create tasks for all sources
+    tasks = []
+    for source in PRESS_SOURCES:
+        last_links = source_last_articles.get(source['name'])
+        if last_links:
+            logger.info(f"[Press] Checking {source['name']} for new articles (tracking {len(last_links)} links)...")
+        else:
+            logger.info(f"[Press] Checking {source['name']} for new articles (first run)...")
+        tasks.append(asyncio.to_thread(fetch_press_articles, source['url'], source['name'], last_links))
+    
+    # Run all tasks in parallel
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    # Combine all results
+    all_articles = []
+    for idx, articles in enumerate(results):
+        if isinstance(articles, Exception):
+            logger.error(f"[Press] Error in source fetch for {PRESS_SOURCES[idx]['name']}: {articles}")
+            continue
+        all_articles.extend(articles)
+    
+    # Sort by published date from NEWEST to OLDEST
+    all_articles.sort(key=lambda x: x['published'], reverse=True)
+    return all_articles
+
 async def fetch_youtube_feeds():
     """Main function to fetch and store ONLY NEW YouTube videos from all channels"""
     first_run = True
@@ -718,10 +946,119 @@ async def fetch_yemen_youtube_feeds():
         logger.info("[Yemen] Waiting 5 minutes before next fetch...")
         await asyncio.sleep(300)
 
+async def fetch_press_feeds():
+    """Main function to fetch and store ONLY NEW press articles from all sources"""
+    first_run = True
+    while True:
+        db = SessionLocal()
+        new_items_found = []
+        
+        try:
+            # Fetch ONLY NEW articles from all press sources
+            articles = await fetch_all_press_sources(db)
+            logger.info(f"[Press] Found {len(articles)} NEW articles from all sources combined")
+            
+            # Group articles by source to track last articles per source
+            articles_by_source = {}
+            for article in articles:
+                source_name = article['source']
+                if source_name not in articles_by_source:
+                    articles_by_source[source_name] = []
+                articles_by_source[source_name].append(article)
+            
+            # Add all new articles to database
+            for article in articles:
+                # Check if article already exists (safety check)
+                exists = db.query(PressNewsItem).filter(PressNewsItem.link == article['link']).first()
+                if exists:
+                    continue
+                
+                new_item = PressNewsItem(
+                    title=article['title'],
+                    link=article['link'],
+                    summary=article.get('summary', ''),
+                    published=article['published'],
+                    source=article['source'],
+                    image_url=article.get('image_url')
+                )
+                db.add(new_item)
+                db.commit()
+                
+                item_dict = {
+                    "id": new_item.id,
+                    "title": new_item.title,
+                    "link": new_item.link,
+                    "summary": new_item.summary,
+                    "published": str(new_item.published),
+                    "source": new_item.source,
+                    "image_url": new_item.image_url
+                }
+                new_items_found.append(item_dict)
+                logger.info(f"[Press] Added NEW article: {article['title'][:50]}... from {article['source']}")
+            
+            # Update last 10 articles for each source
+            for source_name, source_articles in articles_by_source.items():
+                if not source_articles:
+                    continue
+                
+                last_record = db.query(PressSourceLastArticle).filter(PressSourceLastArticle.source_name == source_name).first()
+                
+                existing_links = []
+                if last_record and last_record.last_article_links:
+                    try:
+                        existing_links = json.loads(last_record.last_article_links)
+                    except:
+                        existing_links = []
+                
+                # Add new article links to the beginning
+                new_links = [a['link'] for a in reversed(source_articles)]
+                
+                # Combine: new links + existing links, keep only first 10
+                combined_links = new_links + existing_links
+                seen = set()
+                unique_links = []
+                for link in combined_links:
+                    if link not in seen:
+                        seen.add(link)
+                        unique_links.append(link)
+                
+                final_links = unique_links[:10]
+                
+                if last_record:
+                    last_record.last_article_links = json.dumps(final_links)
+                    last_record.updated_at = datetime.now()
+                    db.commit()
+                    logger.info(f"[Press] Updated last {len(final_links)} articles for {source_name}")
+                else:
+                    last_record = PressSourceLastArticle(
+                        source_name=source_name,
+                        last_article_links=json.dumps(final_links)
+                    )
+                    db.add(last_record)
+                    db.commit()
+                    logger.info(f"[Press] Set initial {len(final_links)} articles for {source_name}")
+        
+        except Exception as e:
+            logger.error(f"[Press] Error in fetch_press_feeds: {e}")
+        
+        # Broadcast new press items
+        if new_items_found:
+            logger.info(f"[Press] Broadcasting {len(new_items_found)} new press articles")
+            for item in new_items_found:
+                await manager.broadcast(json.dumps({"type": "new_press_news", "data": item}))
+        
+        db.close()
+        first_run = False
+        
+        # Check every 10 minutes for press articles (longer interval to be polite to websites)
+        logger.info("[Press] Waiting 10 minutes before next fetch...")
+        await asyncio.sleep(600)
+
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(fetch_youtube_feeds())
     asyncio.create_task(fetch_yemen_youtube_feeds())
+    asyncio.create_task(fetch_press_feeds())
 
 @app.get("/api/news")
 async def get_news(page: int = 1, limit: int = 20):
@@ -753,6 +1090,21 @@ async def get_yemen_news(page: int = 1, limit: int = 20):
         "limit": limit
     }
 
+@app.get("/api/press-news")
+async def get_press_news(page: int = 1, limit: int = 20):
+    db = SessionLocal()
+    skip = (page - 1) * limit
+    # Order by created_at DESC (newest added first) and id DESC as tie-breaker
+    news = db.query(PressNewsItem).order_by((PressNewsItem.created_at), (PressNewsItem.id)).offset(skip).limit(limit).all()
+    total = db.query(PressNewsItem).count()
+    db.close()
+    return {
+        "items": news,
+        "total": total,
+        "page": page,
+        "limit": limit
+    }
+
 @app.get("/api/debug")
 async def debug_info():
     """Debug endpoint to check database status"""
@@ -760,12 +1112,15 @@ async def debug_info():
     try:
         world_news_count = db.query(NewsItem).count()
         yemen_news_count = db.query(YemenNewsItem).count()
+        press_news_count = db.query(PressNewsItem).count()
         world_channels_count = db.query(ChannelLastVideo).count()
         yemen_channels_count = db.query(YemenChannelLastVideo).count()
+        press_sources_count = db.query(PressSourceLastArticle).count()
         
         # Get latest news items
         latest_world = db.query(NewsItem).order_by((NewsItem.published)).limit(3).all()
         latest_yemen = db.query(YemenNewsItem).order_by((YemenNewsItem.published)).limit(3).all()
+        latest_press = db.query(PressNewsItem).order_by((PressNewsItem.published)).limit(3).all()
         
         return {
             "database_path": DB_PATH,
@@ -775,11 +1130,14 @@ async def debug_info():
             "counts": {
                 "world_news": world_news_count,
                 "yemen_news": yemen_news_count,
+                "press_news": press_news_count,
                 "world_channels_tracked": world_channels_count,
-                "yemen_channels_tracked": yemen_channels_count
+                "yemen_channels_tracked": yemen_channels_count,
+                "press_sources_tracked": press_sources_count
             },
             "latest_world_news": [{"title": n.title[:50], "published": str(n.published), "source": n.source} for n in latest_world],
             "latest_yemen_news": [{"title": n.title[:50], "published": str(n.published), "source": n.source} for n in latest_yemen],
+            "latest_press_news": [{"title": n.title[:50], "published": str(n.published), "source": n.source} for n in latest_press],
             "active_websocket_connections": len(manager.active_connections)
         }
     finally:
@@ -792,8 +1150,10 @@ async def clear_all_news():
     try:
         db.query(NewsItem).delete()
         db.query(YemenNewsItem).delete()
+        db.query(PressNewsItem).delete()
         db.query(ChannelLastVideo).delete()
         db.query(YemenChannelLastVideo).delete()
+        db.query(PressSourceLastArticle).delete()
         db.commit()
         logger.info("Manual database clear performed. All news and tracking data deleted.")
         return {"message": "All news and tracking data have been cleared successfully."}
