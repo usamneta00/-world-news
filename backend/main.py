@@ -544,9 +544,9 @@ async def fetch_newspaper_feeds():
         db.close()
         first_run = False
         
-        # Check every 10 minutes for newspapers (less frequent than YouTube)
-        logger.info("[Newspaper] Waiting 10 minutes before next fetch...")
-        await asyncio.sleep(600)
+        # Check every 20 minutes for newspapers (less frequent than YouTube)
+        logger.info("[Newspaper] Waiting 20 minutes before next fetch...")
+        await asyncio.sleep(1200)
 
 app = FastAPI()
 
