@@ -455,34 +455,40 @@ async def fetch_newspaper_feeds():
             
             # Add all new articles to database
             for article in articles:
-                # Check if article already exists (safety check)
-                exists = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.link == article['link']).first()
-                if exists:
-                    continue
-                
-                new_item = NewspaperNewsItem(
-                    title=article['title'],
-                    link=article['link'],
-                    summary=article.get('summary', ''),
-                    published=article['published'],
-                    source=article['source'],
-                    image_url=article.get('image_url'),
-                    article_id=article.get('article_id')
-                )
-                db.add(new_item)
-                db.commit()
-                
-                item_dict = {
-                    "id": new_item.id,
-                    "title": new_item.title,
-                    "link": new_item.link,
-                    "summary": new_item.summary,
-                    "published": str(new_item.published),
-                    "source": new_item.source,
-                    "image_url": new_item.image_url
-                }
-                new_items_found.append(item_dict)
-                logger.info(f"[Newspaper] Added NEW article: {article['title'][:50]}... from {article['source']}")
+                try:
+                    # Check if article already exists (safety check)
+                    exists = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.link == article['link']).first()
+                    if exists:
+                        logger.debug(f"[Newspaper] Article already exists: {article['link'][:50]}...")
+                        continue
+                    
+                    new_item = NewspaperNewsItem(
+                        title=article['title'],
+                        link=article['link'],
+                        summary=article.get('summary', ''),
+                        published=article['published'],
+                        source=article['source'],
+                        image_url=article.get('image_url'),
+                        article_id=article.get('article_id')
+                    )
+                    db.add(new_item)
+                    db.commit()
+                    db.refresh(new_item)  # Refresh to get the ID
+                    
+                    item_dict = {
+                        "id": new_item.id,
+                        "title": new_item.title,
+                        "link": new_item.link,
+                        "summary": new_item.summary,
+                        "published": str(new_item.published),
+                        "source": new_item.source,
+                        "image_url": new_item.image_url
+                    }
+                    new_items_found.append(item_dict)
+                    logger.info(f"[Newspaper] ✓ SAVED to DB (ID: {new_item.id}): {article['title'][:50]}... from {article['source']}")
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"[Newspaper] ✗ FAILED to save article: {article['title'][:50]}... Error: {e}")
             
             # Update last 5 articles for each source
             for source_name, source_articles in articles_by_source.items():
@@ -830,34 +836,39 @@ async def fetch_youtube_feeds():
             
             # Add all new videos to database
             for video in videos:
-                # Check if video already exists (safety check)
-                exists = db.query(NewsItem).filter(NewsItem.link == video['link']).first()
-                if exists:
-                    continue
-                
-                new_item = NewsItem(
-                    title=video['title'],
-                    link=video['link'],
-                    summary=video.get('summary', ''),
-                    published=video['published'],
-                    source=video['source'],
-                    image_url=video.get('image_url'),
-                    video_id=video.get('video_id')
-                )
-                db.add(new_item)
-                db.commit()
-                
-                item_dict = {
-                    "id": new_item.id,
-                    "title": new_item.title,
-                    "link": new_item.link,
-                    "summary": new_item.summary,
-                    "published": str(new_item.published),
-                    "source": new_item.source,
-                    "image_url": new_item.image_url
-                }
-                new_items_found.append(item_dict)
-                logger.info(f"Added NEW video: {video['title']} from {video['source']} (published: {video['published']})")
+                try:
+                    # Check if video already exists (safety check)
+                    exists = db.query(NewsItem).filter(NewsItem.link == video['link']).first()
+                    if exists:
+                        continue
+                    
+                    new_item = NewsItem(
+                        title=video['title'],
+                        link=video['link'],
+                        summary=video.get('summary', ''),
+                        published=video['published'],
+                        source=video['source'],
+                        image_url=video.get('image_url'),
+                        video_id=video.get('video_id')
+                    )
+                    db.add(new_item)
+                    db.commit()
+                    db.refresh(new_item)
+                    
+                    item_dict = {
+                        "id": new_item.id,
+                        "title": new_item.title,
+                        "link": new_item.link,
+                        "summary": new_item.summary,
+                        "published": str(new_item.published),
+                        "source": new_item.source,
+                        "image_url": new_item.image_url
+                    }
+                    new_items_found.append(item_dict)
+                    logger.info(f"✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"✗ FAILED to save video: {video['title'][:50]}... Error: {e}")
             
             # Update last 5 videos for each channel
             for channel_name, channel_videos in videos_by_channel.items():
@@ -951,34 +962,39 @@ async def fetch_yemen_youtube_feeds():
             
             # Add all new videos to database
             for video in videos:
-                # Check if video already exists (safety check)
-                exists = db.query(YemenNewsItem).filter(YemenNewsItem.link == video['link']).first()
-                if exists:
-                    continue
-                
-                new_item = YemenNewsItem(
-                    title=video['title'],
-                    link=video['link'],
-                    summary=video.get('summary', ''),
-                    published=video['published'],
-                    source=video['source'],
-                    image_url=video.get('image_url'),
-                    video_id=video.get('video_id')
-                )
-                db.add(new_item)
-                db.commit()
-                
-                item_dict = {
-                    "id": new_item.id,
-                    "title": new_item.title,
-                    "link": new_item.link,
-                    "summary": new_item.summary,
-                    "published": str(new_item.published),
-                    "source": new_item.source,
-                    "image_url": new_item.image_url
-                }
-                new_items_found.append(item_dict)
-                logger.info(f"[Yemen] Added NEW video: {video['title'][:50]}... from {video['source']}")
+                try:
+                    # Check if video already exists (safety check)
+                    exists = db.query(YemenNewsItem).filter(YemenNewsItem.link == video['link']).first()
+                    if exists:
+                        continue
+                    
+                    new_item = YemenNewsItem(
+                        title=video['title'],
+                        link=video['link'],
+                        summary=video.get('summary', ''),
+                        published=video['published'],
+                        source=video['source'],
+                        image_url=video.get('image_url'),
+                        video_id=video.get('video_id')
+                    )
+                    db.add(new_item)
+                    db.commit()
+                    db.refresh(new_item)
+                    
+                    item_dict = {
+                        "id": new_item.id,
+                        "title": new_item.title,
+                        "link": new_item.link,
+                        "summary": new_item.summary,
+                        "published": str(new_item.published),
+                        "source": new_item.source,
+                        "image_url": new_item.image_url
+                    }
+                    new_items_found.append(item_dict)
+                    logger.info(f"[Yemen] ✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"[Yemen] ✗ FAILED to save video: {video['title'][:50]}... Error: {e}")
             
             # Update last 5 videos for each channel (track ALL fetched videos, not just Yemen-related)
             # We need to update tracking for all channels even if their videos weren't Yemen-related
@@ -1051,7 +1067,7 @@ async def get_news(page: int = 1, limit: int = 20):
     db = SessionLocal()
     skip = (page - 1) * limit
     # Order by created_at DESC (newest added first) and id DESC as tie-breaker
-    news = db.query(NewsItem).order_by((NewsItem.created_at), (NewsItem.id)).offset(skip).limit(limit).all()
+    news = db.query(NewsItem).order_by(desc(NewsItem.created_at), desc(NewsItem.id)).offset(skip).limit(limit).all()
     total = db.query(NewsItem).count()
     db.close()
     return {
@@ -1066,7 +1082,7 @@ async def get_yemen_news(page: int = 1, limit: int = 20):
     db = SessionLocal()
     skip = (page - 1) * limit
     # Order by created_at DESC (newest added first) and id DESC as tie-breaker
-    news = db.query(YemenNewsItem).order_by((YemenNewsItem.created_at), (YemenNewsItem.id)).offset(skip).limit(limit).all()
+    news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at), desc(YemenNewsItem.id)).offset(skip).limit(limit).all()
     total = db.query(YemenNewsItem).count()
     db.close()
     return {
@@ -1081,7 +1097,7 @@ async def get_newspaper_news(page: int = 1, limit: int = 20):
     db = SessionLocal()
     skip = (page - 1) * limit
     # Order by created_at DESC (newest added first) and id DESC as tie-breaker
-    news = db.query(NewspaperNewsItem).order_by((NewspaperNewsItem.created_at), (NewspaperNewsItem.id)).offset(skip).limit(limit).all()
+    news = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at), desc(NewspaperNewsItem.id)).offset(skip).limit(limit).all()
     total = db.query(NewspaperNewsItem).count()
     db.close()
     return {
@@ -1104,9 +1120,9 @@ async def debug_info():
         newspaper_sources_count = db.query(NewspaperLastArticle).count()
         
         # Get latest news items
-        latest_world = db.query(NewsItem).order_by((NewsItem.published)).limit(3).all()
-        latest_yemen = db.query(YemenNewsItem).order_by((YemenNewsItem.published)).limit(3).all()
-        latest_newspaper = db.query(NewspaperNewsItem).order_by((NewspaperNewsItem.published)).limit(3).all()
+        latest_world = db.query(NewsItem).order_by(desc(NewsItem.created_at)).limit(3).all()
+        latest_yemen = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(3).all()
+        latest_newspaper = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(3).all()
         
         return {
             "database_path": DB_PATH,
