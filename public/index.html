@@ -40,9 +40,9 @@
                             DEFAULT: '#15803d', // Green for Yemen Tab
                             50: '#f0fdf4',
                         },
-                        press: {
-                            DEFAULT: '#1d4ed8', // Blue for Press Tab
-                            50: '#eff6ff',
+                        newspaper: {
+                            DEFAULT: '#7c3aed', // Purple for Newspaper Tab
+                            50: '#f5f3ff',
                         }
                     },
                     boxShadow: {
@@ -222,15 +222,15 @@
                     <span
                         class="absolute bottom-0 right-0 w-full h-0.5 bg-yemen scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-right"></span>
                 </button>
-                <button id="tab-press" onclick="switchTab('press')"
-                    class="relative py-4 text-sm md:text-base font-medium text-neutral-500 hover:text-press transition-colors whitespace-nowrap group">
+                <button id="tab-newspaper" onclick="switchTab('newspaper')"
+                    class="relative py-4 text-sm md:text-base font-medium text-neutral-500 hover:text-newspaper transition-colors whitespace-nowrap group">
                     <span class="flex items-center gap-2">
                         <span
-                            class="w-1.5 h-1.5 rounded-full bg-press opacity-0 group-hover:opacity-100 transition-opacity"></span>
+                            class="w-1.5 h-1.5 rounded-full bg-newspaper opacity-0 group-hover:opacity-100 transition-opacity"></span>
                         الصحف العالمية
                     </span>
                     <span
-                        class="absolute bottom-0 right-0 w-full h-0.5 bg-press scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-right"></span>
+                        class="absolute bottom-0 right-0 w-full h-0.5 bg-newspaper scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-right"></span>
                 </button>
                 <!-- Static Categories for aesthetic -->
                 <a href="#"
@@ -482,12 +482,12 @@
         let yemenPendingNews = [];
         let yemenTotalItems = 0;
 
-        let pressCurrentPage = 1;
-        let pressNews = [];
-        let pressPendingNews = [];
-        let pressTotalItems = 0;
+        let newspaperCurrentPage = 1;
+        let newspaperNews = [];
+        let newspaperPendingNews = [];
+        let newspaperTotalItems = 0;
 
-        let activeTab = 'world'; // 'world', 'yemen', or 'press'
+        let activeTab = 'world'; // 'world', 'yemen', or 'newspaper'
 
         // --- -
         document.addEventListener('DOMContentLoaded', () => {
@@ -526,7 +526,7 @@
             activeTab = tab;
             const isWorld = tab === 'world';
             const isYemen = tab === 'yemen';
-            const isPress = tab === 'press';
+            const isNewspaper = tab === 'newspaper';
             
             let accentColor, borderColor, brandName, brandSuffix, brandSuffixClass, tickerText, sectionText;
             
@@ -547,11 +547,11 @@
                 tickerText = 'اليمن';
                 sectionText = ' آخر أخبار اليمن';
             } else {
-                accentColor = 'text-press';
-                borderColor = 'bg-press';
+                accentColor = 'text-newspaper';
+                borderColor = 'bg-newspaper';
                 brandName = 'الصحف';
                 brandSuffix = 'العالمية';
-                brandSuffixClass = 'text-press';
+                brandSuffixClass = 'text-newspaper';
                 tickerText = 'صحافة';
                 sectionText = ' آخر أخبار الصحف العالمية';
             }
@@ -562,7 +562,7 @@
             // Tab Styles
             const tWorld = document.getElementById('tab-world');
             const tYemen = document.getElementById('tab-yemen');
-            const tPress = document.getElementById('tab-press');
+            const tNewspaper = document.getElementById('tab-newspaper');
 
             // Reset all tabs
             tWorld.className = 'relative py-4 text-sm md:text-base font-medium text-neutral-500 hover:text-brand transition-colors whitespace-nowrap group';
@@ -571,8 +571,8 @@
             tYemen.className = 'relative py-4 text-sm md:text-base font-medium text-neutral-500 hover:text-yemen transition-colors whitespace-nowrap group';
             tYemen.querySelector('.absolute').classList.add('scale-x-0');
             
-            tPress.className = 'relative py-4 text-sm md:text-base font-medium text-neutral-500 hover:text-press transition-colors whitespace-nowrap group';
-            tPress.querySelector('.absolute').classList.add('scale-x-0');
+            tNewspaper.className = 'relative py-4 text-sm md:text-base font-medium text-neutral-500 hover:text-newspaper transition-colors whitespace-nowrap group';
+            tNewspaper.querySelector('.absolute').classList.add('scale-x-0');
 
             // Activate selected tab
             if (isWorld) {
@@ -583,9 +583,9 @@
                 tYemen.querySelector('.absolute').classList.remove('scale-x-0');
                 tYemen.querySelector('.absolute').classList.add('scale-x-100');
             } else {
-                tPress.className = 'relative py-4 text-sm md:text-base font-bold text-press transition-colors whitespace-nowrap group';
-                tPress.querySelector('.absolute').classList.remove('scale-x-0');
-                tPress.querySelector('.absolute').classList.add('scale-x-100');
+                tNewspaper.className = 'relative py-4 text-sm md:text-base font-bold text-newspaper transition-colors whitespace-nowrap group';
+                tNewspaper.querySelector('.absolute').classList.remove('scale-x-0');
+                tNewspaper.querySelector('.absolute').classList.add('scale-x-100');
             }
 
             // Ticker & Section Labels
@@ -603,7 +603,7 @@
             // Fetch Data
             if (isWorld) fetchNews(currentPage);
             else if (isYemen) fetchYemenNews(yemenCurrentPage);
-            else fetchPressNews(pressCurrentPage);
+            else fetchNewspaperNews(newspaperCurrentPage);
         }
 
         // --- Data Fetching ---
@@ -641,15 +641,15 @@
             }
         }
 
-        async function fetchPressNews(page = 1) {
+        async function fetchNewspaperNews(page = 1) {
             setLoading(true);
             try {
-                const response = await fetch(`${API_URL}/press-news?page=${page}&limit=20`);
+                const response = await fetch(`${API_URL}/newspaper-news?page=${page}&limit=20`);
                 const data = await response.json();
-                pressNews = data.items;
-                pressTotalItems = data.total;
-                pressCurrentPage = data.page;
-                renderUI(pressNews, 'press');
+                newspaperNews = data.items;
+                newspaperTotalItems = data.total;
+                newspaperCurrentPage = data.page;
+                renderUI(newspaperNews, 'newspaper');
             } catch (error) {
                 console.error(error);
             } finally {
@@ -660,7 +660,7 @@
         function setLoading(isLoading) {
             const loader = document.getElementById('loading-state');
             const content = document.getElementById('news-content');
-            if (isLoading && (currentPage === 1 || yemenCurrentPage === 1 || pressCurrentPage === 1)) {
+            if (isLoading && (currentPage === 1 || yemenCurrentPage === 1 || newspaperCurrentPage === 1)) {
                 loader.classList.remove('hidden');
                 content.classList.add('hidden');
             } else {
@@ -690,20 +690,9 @@
                 return;
             }
 
-            let colorClass, bgClass, hoverText;
-            if (themeColor === 'brand') {
-                colorClass = 'text-brand';
-                bgClass = 'bg-brand';
-                hoverText = 'group-hover:text-brand';
-            } else if (themeColor === 'yemen') {
-                colorClass = 'text-yemen';
-                bgClass = 'bg-yemen';
-                hoverText = 'group-hover:text-yemen';
-            } else {
-                colorClass = 'text-press';
-                bgClass = 'bg-press';
-                hoverText = 'group-hover:text-press';
-            }
+            const colorClass = themeColor === 'brand' ? 'text-brand' : (themeColor === 'yemen' ? 'text-yemen' : 'text-newspaper');
+            const bgClass = themeColor === 'brand' ? 'bg-brand' : (themeColor === 'yemen' ? 'bg-yemen' : 'bg-newspaper');
+            const hoverText = themeColor === 'brand' ? 'group-hover:text-brand' : (themeColor === 'yemen' ? 'group-hover:text-yemen' : 'group-hover:text-newspaper');
 
             // 1. Ticker
             const tickerHTML = newsItems.slice(0, 10).map(n =>
@@ -825,8 +814,8 @@
                 current = yemenCurrentPage;
                 total = yemenTotalItems;
             } else {
-                current = pressCurrentPage;
-                total = pressTotalItems;
+                current = newspaperCurrentPage;
+                total = newspaperTotalItems;
             }
             const totalPages = Math.ceil(total / 20) || 1;
 
@@ -851,12 +840,12 @@
 
                     if ((msg.type === 'new_news' && activeTab === 'world') ||
                         (msg.type === 'new_yemen_news' && activeTab === 'yemen') ||
-                        (msg.type === 'new_press_news' && activeTab === 'press')) {
+                        (msg.type === 'new_newspaper_news' && activeTab === 'newspaper')) {
 
                         let targetList;
                         if (activeTab === 'world') targetList = pendingNews;
                         else if (activeTab === 'yemen') targetList = yemenPendingNews;
-                        else targetList = pressPendingNews;
+                        else targetList = newspaperPendingNews;
                         
                         targetList.push(msg.data);
 
@@ -884,9 +873,9 @@
                 yemenPendingNews = [];
                 renderUI(yemenNews, 'yemen');
             } else {
-                pressNews = [...pressPendingNews, ...pressNews];
-                pressPendingNews = [];
-                renderUI(pressNews, 'press');
+                newspaperNews = [...newspaperPendingNews, ...newspaperNews];
+                newspaperPendingNews = [];
+                renderUI(newspaperNews, 'newspaper');
             }
             this.classList.add('hidden');
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -896,12 +885,12 @@
             let curr;
             if (activeTab === 'world') curr = currentPage;
             else if (activeTab === 'yemen') curr = yemenCurrentPage;
-            else curr = pressCurrentPage;
+            else curr = newspaperCurrentPage;
             
             if (curr > 1) {
                 if (activeTab === 'world') fetchNews(curr - 1);
                 else if (activeTab === 'yemen') fetchYemenNews(curr - 1);
-                else fetchPressNews(curr - 1);
+                else fetchNewspaperNews(curr - 1);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             }
         };
@@ -909,7 +898,7 @@
         document.getElementById('next-btn').onclick = () => {
             if (activeTab === 'world') fetchNews(currentPage + 1);
             else if (activeTab === 'yemen') fetchYemenNews(yemenCurrentPage + 1);
-            else fetchPressNews(pressCurrentPage + 1);
+            else fetchNewspaperNews(newspaperCurrentPage + 1);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         };
 
@@ -930,8 +919,8 @@
                         yemenCurrentPage = 1;
                         fetchYemenNews(1);
                     } else {
-                        pressCurrentPage = 1;
-                        fetchPressNews(1);
+                        newspaperCurrentPage = 1;
+                        fetchNewspaperNews(1);
                     }
                 } else {
                     alert('خطأ: ' + (result.error || 'حدث خطأ أثناء الحذف'));
