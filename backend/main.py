@@ -44,7 +44,7 @@ class ChannelLastVideo(Base):
     __tablename__ = "channel_last_video"
     id = Column(Integer, primary_key=True, index=True)
     channel_name = Column(String, unique=True)
-    last_video_ids = Column(String)  # JSON array of last 10 video IDs
+    last_video_ids = Column(String)  # JSON array of last 5 video IDs
     last_video_published = Column(DateTime)  # Most recent video's publish date
     updated_at = Column(DateTime, default=datetime.now)
 
@@ -65,7 +65,7 @@ class YemenChannelLastVideo(Base):
     __tablename__ = "yemen_channel_last_video"
     id = Column(Integer, primary_key=True, index=True)
     channel_name = Column(String, unique=True)
-    last_video_ids = Column(String)  # JSON array of last 10 video IDs
+    last_video_ids = Column(String)  # JSON array of last 5 video IDs
     last_video_published = Column(DateTime)
     updated_at = Column(DateTime, default=datetime.now)
 
@@ -253,7 +253,7 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 def fetch_youtube_channel_videos(channel_url: str, channel_name: str, last_video_ids: Optional[List[str]] = None, is_playlist: bool = False) -> List[dict]:
-    """Fetch NEW videos from a YouTube channel/playlist - only videos newer than any in last_video_ids (last 10)"""
+    """Fetch NEW videos from a YouTube channel/playlist - only videos newer than any in last_video_ids (last 5)"""
     videos = []
     
     # Convert to set for faster lookup
@@ -326,9 +326,9 @@ def fetch_youtube_channel_videos(channel_url: str, channel_name: str, last_video
                                 'summary': f"فيديو جديد من {channel_name}"
                             })
                             
-                            # If no last_video_ids, we're in first run - collect first 10 videos
-                            if not last_video_ids_set and len(videos) >= 10:
-                                logger.info(f"First run for {channel_name}, collected 10 videos")
+                            # If no last_video_ids, we're in first run - collect first 5 videos
+                            if not last_video_ids_set and len(videos) >= 5:
+                                logger.info(f"First run for {channel_name}, collected 5 videos")
                                 break
                                 
             except Exception as e:
@@ -386,8 +386,8 @@ def fetch_youtube_channel_videos(channel_url: str, channel_name: str, last_video
                                         'summary': f"فيديو جديد من {channel_name}"
                                     })
                                     
-                                    # If no last_video_ids, we're in first run - collect first 10 videos
-                                    if not last_video_ids_set and len(videos) >= 10:
+                                    # If no last_video_ids, we're in first run - collect first 5 videos
+                                    if not last_video_ids_set and len(videos) >= 5:
                                         break
                     except Exception as e2:
                         logger.error(f"RSS fallback also failed for {channel_name}: {e2}")
@@ -400,13 +400,13 @@ def fetch_youtube_channel_videos(channel_url: str, channel_name: str, last_video
 async def fetch_all_youtube_channels(db) -> List[dict]:
     """Fetch NEW videos from all YouTube channels/playlists in parallel, sorted from oldest to newest"""
     
-    # Get last 10 video IDs for each channel
+    # Get last 5 video IDs for each channel
     channel_last_videos = {}
     for channel in YOUTUBE_CHANNELS:
         last_video_record = db.query(ChannelLastVideo).filter(ChannelLastVideo.channel_name == channel['name']).first()
         if last_video_record and last_video_record.last_video_ids:
             try:
-                # Parse JSON array of last 10 video IDs
+                # Parse JSON array of last 5 video IDs
                 channel_last_videos[channel['name']] = json.loads(last_video_record.last_video_ids)
             except:
                 channel_last_videos[channel['name']] = None
@@ -442,7 +442,7 @@ async def fetch_all_youtube_channels(db) -> List[dict]:
 async def fetch_all_yemen_youtube_channels(db) -> List[dict]:
     """Fetch NEW videos from all Yemen YouTube channels, filtered for Yemen-related content"""
     
-    # Get last 10 video IDs for each channel
+    # Get last 5 video IDs for each channel
     channel_last_videos = {}
     for channel in YEMEN_YOUTUBE_CHANNELS:
         last_video_record = db.query(YemenChannelLastVideo).filter(YemenChannelLastVideo.channel_name == channel['name']).first()
@@ -493,33 +493,12 @@ async def fetch_youtube_feeds():
         new_items_found = []
         
         try:
-            # --- Hard Wipe Logic (Midnight Reset) ---
-            today = datetime.now().date().isoformat()
-            last_wipe = db.query(SystemState).filter(SystemState.key == "last_wipe_date").first()
-            
-            if not last_wipe:
-                last_wipe = SystemState(key="last_wipe_date", value=today)
-                db.add(last_wipe)
-                db.commit()
-            elif last_wipe.value != today:
-                logger.info(f"New day detected ({today}). Performing HARD WIPE of all news...")
-                # Clear all news
-                db.query(NewsItem).delete()
-                db.query(YemenNewsItem).delete()
-                # Clear tracking to get fresh videos for the new day
-                db.query(ChannelLastVideo).delete()
-                db.query(YemenChannelLastVideo).delete()
-                
-                last_wipe.value = today
-                db.commit()
-                logger.info("Hard wipe completed. Starting a fresh day.")
-            # ----------------------------------------
 
             # Fetch ONLY NEW videos from all channels (using last_video_ids tracking)
             videos = await fetch_all_youtube_channels(db)
             logger.info(f"Found {len(videos)} NEW videos from all channels combined")
             
-            # Group videos by channel to track last 10 videos per channel
+            # Group videos by channel to track last 5 videos per channel
             videos_by_channel = {}
             for video in videos:
                 channel_name = video['source']
@@ -558,7 +537,7 @@ async def fetch_youtube_feeds():
                 new_items_found.append(item_dict)
                 logger.info(f"Added NEW video: {video['title']} from {video['source']} (published: {video['published']})")
             
-            # Update last 10 videos for each channel
+            # Update last 5 videos for each channel
             for channel_name, channel_videos in videos_by_channel.items():
                 if not channel_videos:
                     continue
@@ -578,7 +557,7 @@ async def fetch_youtube_feeds():
                 # Since videos are sorted oldest to newest, reverse them to get newest first
                 new_video_ids = [v['video_id'] for v in reversed(channel_videos)]
                 
-                # Combine: new videos + existing videos, keep only first 10
+                # Combine: new videos + existing videos, keep only first 5
                 combined_ids = new_video_ids + existing_ids
                 # Remove duplicates while preserving order
                 seen = set()
@@ -588,8 +567,8 @@ async def fetch_youtube_feeds():
                         seen.add(vid_id)
                         unique_ids.append(vid_id)
                 
-                # Keep only last 10
-                final_ids = unique_ids[:10]
+                # Keep only last 5
+                final_ids = unique_ids[:5]
                 
                 # Get the most recent video's publish date
                 most_recent_video = channel_videos[-1]  # Last in list = newest (since sorted oldest to newest)
@@ -624,9 +603,9 @@ async def fetch_youtube_feeds():
         db.close()
         first_run = False
         
-        # Check every 3 minutes as requested
-        logger.info("Waiting 3 minutes before next fetch...")
-        await asyncio.sleep(180)
+        # Check every 5 minutes as requested
+        logger.info("Waiting 5 minutes before next fetch...")
+        await asyncio.sleep(300)
 
 async def fetch_yemen_youtube_feeds():
     """Main function to fetch and store ONLY NEW Yemen-related YouTube videos"""
@@ -640,7 +619,7 @@ async def fetch_yemen_youtube_feeds():
             videos = await fetch_all_yemen_youtube_channels(db)
             logger.info(f"[Yemen] Found {len(videos)} NEW Yemen-related videos from all channels combined")
             
-            # Group videos by channel to track last 10 videos per channel
+            # Group videos by channel to track last 5 videos per channel
             videos_by_channel = {}
             for video in videos:
                 channel_name = video['source']
@@ -679,7 +658,7 @@ async def fetch_yemen_youtube_feeds():
                 new_items_found.append(item_dict)
                 logger.info(f"[Yemen] Added NEW video: {video['title'][:50]}... from {video['source']}")
             
-            # Update last 10 videos for each channel (track ALL fetched videos, not just Yemen-related)
+            # Update last 5 videos for each channel (track ALL fetched videos, not just Yemen-related)
             # We need to update tracking for all channels even if their videos weren't Yemen-related
             for channel in YEMEN_YOUTUBE_CHANNELS:
                 channel_name = channel['name']
@@ -706,7 +685,7 @@ async def fetch_yemen_youtube_feeds():
                         seen.add(vid_id)
                         unique_ids.append(vid_id)
                 
-                final_ids = unique_ids[:10]
+                final_ids = unique_ids[:5]
                 most_recent_video = channel_videos[-1]
                 
                 if last_video_record:
@@ -735,9 +714,9 @@ async def fetch_yemen_youtube_feeds():
         db.close()
         first_run = False
         
-        # Check every 3 minutes
-        logger.info("[Yemen] Waiting 3 minutes before next fetch...")
-        await asyncio.sleep(180)
+        # Check every 5 minutes
+        logger.info("[Yemen] Waiting 5 minutes before next fetch...")
+        await asyncio.sleep(300)
 
 @app.on_event("startup")
 async def startup_event():
@@ -803,6 +782,25 @@ async def debug_info():
             "latest_yemen_news": [{"title": n.title[:50], "published": str(n.published), "source": n.source} for n in latest_yemen],
             "active_websocket_connections": len(manager.active_connections)
         }
+    finally:
+        db.close()
+
+@app.post("/api/clear-all")
+async def clear_all_news():
+    """Clear all news items and tracking data from the database"""
+    db = SessionLocal()
+    try:
+        db.query(NewsItem).delete()
+        db.query(YemenNewsItem).delete()
+        db.query(ChannelLastVideo).delete()
+        db.query(YemenChannelLastVideo).delete()
+        db.commit()
+        logger.info("Manual database clear performed. All news and tracking data deleted.")
+        return {"message": "All news and tracking data have been cleared successfully."}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error clearing database: {e}")
+        return {"error": str(e)}, 500
     finally:
         db.close()
 
