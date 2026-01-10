@@ -954,8 +954,8 @@ async def fetch_youtube_feeds():
         first_run = False
         
         # Check every 5 minutes as requested
-        logger.info("Waiting 5 minutes before next fetch...")
-        await asyncio.sleep(300)
+        logger.info("Waiting 3 minutes before next fetch...")
+        await asyncio.sleep(180)
 
 async def fetch_yemen_youtube_feeds():
     """Main function to fetch and store ONLY NEW Yemen-related YouTube videos"""
