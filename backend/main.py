@@ -1070,8 +1070,8 @@ async def fetch_yemen_youtube_feeds():
         first_run = False
         
         # Check every 5 minutes
-        logger.info("[Yemen] Waiting 5 minutes before next fetch...")
-        await asyncio.sleep(300)
+        logger.info("[Yemen] Waiting 20 minutes before next fetch...")
+        await asyncio.sleep(1200)
 
 @app.on_event("startup")
 async def startup_event():
