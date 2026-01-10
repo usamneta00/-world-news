@@ -219,6 +219,16 @@ YOUTUBE_CHANNELS = [
     {"url": "https://www.youtube.com/@BBCNews/videos", "name": "BBC News", "type": "channel"},
     {"url": "https://www.youtube.com/@ForbesBreakingNews/videos", "name": "Forbes Breaking News", "type": "channel"},
     {"url": "https://www.youtube.com/@FoxNews/videos", "name": "Fox News", "type": "channel"},
+    {"url": "https://www.youtube.com/@NBCNews/videos", "name": "NBC News", "type": "channel"},
+    {"url": "https://www.youtube.com/@markets/videos", "name": "Bloomberg Markets", "type": "channel"},
+    {"url": "https://www.youtube.com/@euronews/videos", "name": "Euronews", "type": "channel"},
+    {"url": "https://www.youtube.com/@trtworld/videos", "name": "TRT World", "type": "channel"},
+    {"url": "https://www.youtube.com/@WION/videos", "name": "WION", "type": "channel"},
+    {"url": "https://www.youtube.com/@channelnewsasia/videos", "name": "Channel News Asia", "type": "channel"},
+    {"url": "https://www.youtube.com/@globalnews/videos", "name": "Global News", "type": "channel"},
+    {"url": "https://www.youtube.com/@TheAtlantic/videos", "name": "The Atlantic", "type": "channel"},
+    {"url": "https://www.youtube.com/@breakingpoints/videos", "name": "Breaking Points", "type": "channel"},
+    {"url": "https://www.youtube.com/@cfr/videos", "name": "CFR", "type": "channel"},
 ]
 
 # Yemen YouTube Channels List
@@ -238,6 +248,8 @@ YEMEN_YOUTUBE_CHANNELS = [
     {"url": "https://www.youtube.com/@aljoumhouriyaTV/videos", "name": "الجمهورية", "type": "channel"},
     {"url": "https://www.youtube.com/@mns777/videos", "name": "MNS", "type": "channel"},
     {"url": "https://www.youtube.com/@yementvyem/videos", "name": "اليمن TV", "type": "channel"},
+    {"url": "https://www.youtube.com/@TVyemenshabab/videos", "name": "قناة يمن شباب", "type": "channel"},
+    {"url": "https://www.youtube.com/@AsharqNews/videos", "name": "الشرق للأخبار", "type": "channel"},
 ]
 
 # World Newspapers Sources List
@@ -258,6 +270,11 @@ NEWSPAPER_SOURCES = [
     {"url": "https://www.reuters.com/world/middle-east/", "name": "Reuters", "type": "newspaper"},
     {"url": "https://news.un.org/en/focus-topic/middle-east", "name": "UN News", "type": "newspaper"},
     {"url": "https://www.ynetnews.com/category/3083", "name": "Ynet News", "type": "newspaper"},
+    {"url": "https://www.bloomberg.com/middleeast", "name": "Bloomberg Middle East", "type": "newspaper"},
+    {"url": "https://www.politico.com/news/middle-east", "name": "Politico", "type": "newspaper"},
+    {"url": "https://www.independent.co.uk/news/world/middle-east", "name": "The Independent", "type": "newspaper"},
+    {"url": "https://www.jpost.com/middle-east", "name": "Jerusalem Post", "type": "newspaper"},
+    {"url": "https://www.middleeasteye.net/", "name": "Middle East Eye", "type": "newspaper"},
 ]
 
 # Yemen news filter keywords
