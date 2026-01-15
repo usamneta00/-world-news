@@ -1,54 +1,60 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl" class="dark">
+<html lang="en" class="dark scroll-smooth">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yemen Soft | أرشيف الفواتير الذكي</title>
-    
+    <title>NEXUS | Global Intelligence</title>
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@200;300;400;500;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Cormorant+Garamond:ital,wght@1,500;1,600&display=swap" rel="stylesheet">
-    
-    <!-- Tailwind & Icons -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+
+    <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <!-- Configuration -->
+
+    <!-- Three.js Import Map -->
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+        }
+    }
+    </script>
+
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Tajawal', 'sans-serif'],
-                        display: ['"Plus Jakarta Sans"', 'sans-serif'],
+                        serif: ['"Playfair Display"', 'serif'],
+                        sans: ['"Inter"', 'sans-serif'],
                         mono: ['"JetBrains Mono"', 'monospace'],
-                        serif: ['"Cormorant Garamond"', 'serif'],
                     },
                     colors: {
-                        brand: {
-                            500: '#E11D48', // Red/Rose tone for Yemen Soft
-                            600: '#BE123C',
-                        },
-                        dark: {
-                            900: '#09090b', // Zinc 950
-                            800: '#18181b', // Zinc 900
-                            700: '#27272a', // Zinc 800
+                        obsidian: '#050505',
+                        paper: '#f0f0f0',
+                        neon: {
+                            blue: '#2dd4bf',
+                            accent: '#3b82f6'
                         }
                     },
                     animation: {
-                        'fade-in': 'fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-                        'slide-up': 'slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                        'ticker': 'ticker 40s linear infinite',
+                        'spin-slow': 'spin 12s linear infinite',
                     },
                     keyframes: {
-                        fadeIn: {
-                            '0%': { opacity: 0 },
-                            '100%': { opacity: 1 },
-                        },
-                        slideUp: {
-                            '0%': { opacity: 0, transform: 'translateY(20px)' },
-                            '100%': { opacity: 1, transform: 'translateY(0)' },
+                        ticker: {
+                            '0%': { transform: 'translateX(0)' },
+                            '100%': { transform: 'translateX(-100%)' },
                         }
                     }
                 }
@@ -57,609 +63,578 @@
     </script>
 
     <style>
-        :root {
-            --bg-grid: rgba(255, 255, 255, 0.03);
-        }
-        
         body {
-            background-color: #09090b;
-            color: #e4e4e7;
+            margin: 0;
             overflow-x: hidden;
         }
 
-        /* Background Pattern */
-        .bg-grid-pattern {
-            background-size: 40px 40px;
-            background-image: linear-gradient(to right, var(--bg-grid) 1px, transparent 1px),
-                              linear-gradient(to bottom, var(--bg-grid) 1px, transparent 1px);
-            mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
-        }
-
         /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #52525b; }
-
-        /* Glass Cards */
-        .glass-panel {
-            background: rgba(24, 24, 27, 0.6);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        ::-webkit-scrollbar {
+            width: 6px;
         }
 
-        /* Image Viewer Specifics */
-        .viewer-container {
-            overflow: hidden;
-            cursor: grab;
-            background-image: 
-                linear-gradient(45deg, #18181b 25%, transparent 25%), 
-                linear-gradient(-45deg, #18181b 25%, transparent 25%), 
-                linear-gradient(45deg, transparent 75%, #18181b 75%), 
-                linear-gradient(-45deg, transparent 75%, #18181b 75%);
-            background-size: 20px 20px;
-            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
-            background-color: #0f0f11;
-        }
-        
-        .viewer-container:active {
-            cursor: grabbing;
-        }
-
-        .transform-layer {
-            transform-origin: 0 0;
-            transition: transform 0.1s ease-out;
-            will-change: transform;
-        }
-
-        /* Range Slider Styling */
-        input[type=range] {
-            -webkit-appearance: none;
+        ::-webkit-scrollbar-track {
             background: transparent;
         }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            height: 16px;
-            width: 16px;
-            border-radius: 50%;
-            background: #fff;
-            cursor: pointer;
-            margin-top: -6px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
-        }
-        input[type=range]::-webkit-slider-runnable-track {
-            width: 100%;
-            height: 4px;
-            cursor: pointer;
-            background: #3f3f46;
-            border-radius: 2px;
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(100, 100, 100, 0.3);
+            border-radius: 3px;
         }
 
-        /* Badge Pulse */
-        .badge-pulse {
-            box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.7);
-            animation: pulse-red 2s infinite;
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
         }
-        @keyframes pulse-red {
-            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.7); }
-            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(225, 29, 72, 0); }
-            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(225, 29, 72, 0); }
+
+        .dark .glass-panel {
+            background: rgba(5, 5, 5, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .light .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        /* Canvas Z-Index */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+            pointer-events: none;
+            transition: opacity 1s ease;
+        }
+
+        /* Image Hover Zoom */
+        .img-zoom-container {
+            overflow: hidden;
+        }
+
+        .img-zoom-container img {
+            transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .group:hover .img-zoom-container img {
+            transform: scale(1.05);
+        }
+
+        /* Smooth Theme Transition */
+        body,
+        .glass-panel,
+        h1,
+        h2,
+        h3,
+        p,
+        span,
+        div {
+            transition: background-color 0.5s ease, color 0.5s ease, border-color 0.5s ease;
         }
     </style>
 </head>
-<body class="flex flex-col h-screen overflow-hidden">
 
-    <!-- Top Navigation -->
-    <header class="h-16 border-b border-white/5 bg-dark-900/80 backdrop-blur-md flex items-center justify-between px-6 z-50 relative">
-        <div class="flex items-center gap-4">
-            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-600 to-brand-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
-                <i data-lucide="layers" class="text-white w-5 h-5"></i>
-            </div>
-            <div class="flex flex-col">
-                <h1 class="text-base font-bold text-white tracking-tight leading-none">Yemen Soft</h1>
-                <span class="text-[10px] text-zinc-500 uppercase tracking-[0.2em] font-medium mt-1">Intelligent Archive</span>
-            </div>
-        </div>
+<body
+    class="bg-paper dark:bg-obsidian text-neutral-900 dark:text-neutral-200 antialiased selection:bg-neon-blue selection:text-black transition-colors duration-500">
 
-        <nav class="hidden md:flex items-center gap-1 bg-zinc-900/50 p-1 rounded-full border border-white/5">
-            <button class="px-4 py-1.5 rounded-full text-xs font-medium text-white bg-white/10 shadow-sm transition-all">الكل</button>
-            <button class="px-4 py-1.5 rounded-full text-xs font-medium text-zinc-400 hover:text-white transition-all">أونكس برو</button>
-            <button class="px-4 py-1.5 rounded-full text-xs font-medium text-zinc-400 hover:text-white transition-all">المتكامل</button>
-        </nav>
+    <!-- 3D Background -->
+    <div id="canvas-container" class="fixed inset-0 z-0 opacity-40 dark:opacity-60"></div>
 
-        <div class="flex items-center gap-4">
-            <div class="relative hidden lg:block">
-                <i data-lucide="search" class="w-3.5 h-3.5 text-zinc-500 absolute top-1/2 -translate-y-1/2 right-3"></i>
-                <input type="text" placeholder="بحث برقم الفاتورة..." class="bg-zinc-900 border border-white/10 rounded-full h-9 pl-4 pr-9 text-xs w-64 focus:outline-none focus:border-brand-500/50 transition-all text-white placeholder-zinc-600">
-            </div>
-            <button class="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center hover:bg-zinc-200 transition-colors">
-                <i data-lucide="plus" class="w-4 h-4"></i>
-            </button>
-        </div>
-    </header>
-
-    <div class="flex flex-1 overflow-hidden relative">
-        <!-- Sidebar -->
-        <aside class="w-64 border-l border-white/5 bg-dark-900 hidden md:flex flex-col justify-between py-6 z-40">
-            <div class="px-4 space-y-1">
-                <p class="px-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4">القائمة الرئيسية</p>
-                
-                <a href="#" class="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/5 text-white border border-white/5">
-                    <i data-lucide="layout-grid" class="w-4 h-4 text-brand-500"></i>
-                    <span class="text-sm font-medium">لوحة المعلومات</span>
-                </a>
-                <a href="#" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-all">
-                    <i data-lucide="file-clock" class="w-4 h-4"></i>
-                    <span class="text-sm font-medium">الأرشيف اليومي</span>
-                </a>
-                <a href="#" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-all">
-                    <i data-lucide="history" class="w-4 h-4"></i>
-                    <span class="text-sm font-medium">السجل التاريخي</span>
-                </a>
-            </div>
-
-            <div class="px-6">
-                <div class="glass-panel p-4 rounded-2xl relative overflow-hidden group">
-                    <div class="absolute top-0 right-0 w-20 h-20 bg-brand-500/20 blur-[40px] rounded-full group-hover:bg-brand-500/30 transition-all"></div>
-                    <div class="relative z-10">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="text-xs font-medium text-white">المساحة المستخدمة</span>
-                            <span class="text-[10px] text-zinc-400 font-mono">75%</span>
-                        </div>
-                        <div class="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                            <div class="h-full bg-brand-500 w-3/4 rounded-full"></div>
-                        </div>
-                        <p class="text-[10px] text-zinc-500 mt-2">تمت أرشفة 1,240 فاتورة هذا الشهر</p>
-                    </div>
-                </div>
-            </div>
-        </aside>
-
-        <!-- Main Content -->
-        <main class="flex-1 overflow-y-auto relative bg-dark-900">
-            <div class="absolute inset-0 bg-grid-pattern pointer-events-none opacity-40"></div>
-            
-            <div class="p-8 max-w-7xl mx-auto space-y-8 relative z-10">
-                
-                <!-- Stats Row -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 animate-slide-up">
-                    <!-- Stat 1 -->
-                    <div class="glass-panel p-5 rounded-2xl flex flex-col justify-between h-32 hover:border-white/20 transition-all group">
-                        <div class="flex justify-between items-start">
-                            <span class="text-zinc-500 text-xs font-medium uppercase tracking-wider">إجمالي الفواتير</span>
-                            <i data-lucide="file-stack" class="w-4 h-4 text-zinc-600 group-hover:text-white transition-colors"></i>
-                        </div>
-                        <div>
-                            <span class="text-2xl font-bold text-white font-display">12,405</span>
-                            <div class="flex items-center gap-1 mt-1 text-[10px] text-emerald-400">
-                                <i data-lucide="trending-up" class="w-3 h-3"></i>
-                                <span>+12% عن الشهر الماضي</span>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Stat 2 -->
-                    <div class="glass-panel p-5 rounded-2xl flex flex-col justify-between h-32 hover:border-white/20 transition-all group">
-                        <div class="flex justify-between items-start">
-                            <span class="text-zinc-500 text-xs font-medium uppercase tracking-wider">قيد المعالجة</span>
-                            <i data-lucide="loader-2" class="w-4 h-4 text-zinc-600 group-hover:text-brand-500 transition-colors"></i>
-                        </div>
-                        <div>
-                            <span class="text-2xl font-bold text-white font-display">45</span>
-                            <div class="flex items-center gap-1 mt-1 text-[10px] text-zinc-400">
-                                <span>تحديث تلقائي</span>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Stat 3 -->
-                    <div class="glass-panel p-5 rounded-2xl flex flex-col justify-between h-32 hover:border-white/20 transition-all group">
-                        <div class="flex justify-between items-start">
-                            <span class="text-zinc-500 text-xs font-medium uppercase tracking-wider">المبلغ الإجمالي</span>
-                            <i data-lucide="dollar-sign" class="w-4 h-4 text-zinc-600 group-hover:text-emerald-400 transition-colors"></i>
-                        </div>
-                        <div>
-                            <span class="text-2xl font-bold text-white font-display">2.4M</span>
-                            <div class="flex items-center gap-1 mt-1 text-[10px] text-zinc-400">
-                                <span>ريال يمني</span>
-                            </div>
-                        </div>
-                    </div>
-                     <!-- Action -->
-                     <div class="p-1 rounded-2xl border border-dashed border-white/10 flex items-center justify-center h-32 cursor-pointer hover:bg-white/5 transition-all group" onclick="document.getElementById('uploadTrigger').click()">
-                        <div class="text-center">
-                            <div class="w-10 h-10 rounded-full bg-brand-500/10 flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
-                                <i data-lucide="upload-cloud" class="w-5 h-5 text-brand-500"></i>
-                            </div>
-                            <span class="text-xs font-medium text-zinc-400">رفع فاتورة جديدة</span>
-                            <input type="file" id="uploadTrigger" class="hidden">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Recent Invoices Grid -->
-                <div class="space-y-4 animate-slide-up" style="animation-delay: 0.1s;">
-                    <div class="flex items-center justify-between">
-                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
-                            <span class="w-1 h-5 bg-brand-500 rounded-full"></span>
-                            أحدث العمليات
-                        </h2>
-                        <div class="flex gap-2">
-                            <button class="p-2 hover:bg-white/5 rounded-lg transition-colors"><i data-lucide="filter" class="w-4 h-4 text-zinc-400"></i></button>
-                            <button class="p-2 hover:bg-white/5 rounded-lg transition-colors"><i data-lucide="arrow-down-wide-narrow" class="w-4 h-4 text-zinc-400"></i></button>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="invoicesGrid">
-                        <!-- Invoice Cards will be injected via JS -->
-                    </div>
-                </div>
-
-            </div>
-        </main>
-    </div>
-
-    <!-- Advanced Invoice Viewer Modal (Hidden by default) -->
-    <div id="invoiceViewer" class="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl hidden opacity-0 transition-opacity duration-300">
-        <div class="h-full flex flex-col">
-            <!-- Modal Header -->
-            <div class="h-16 border-b border-white/10 flex items-center justify-between px-6 bg-dark-900/50">
-                <div class="flex items-center gap-4">
-                    <button onclick="closeViewer()" class="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors">
-                        <i data-lucide="arrow-right" class="w-4 h-4 text-white"></i>
-                    </button>
-                    <div>
-                        <h3 class="text-sm font-bold text-white font-mono" id="viewerTitle">INV-2023-001</h3>
-                        <p class="text-[10px] text-zinc-400">تمت المعالجة: <span id="viewerDate" class="text-zinc-300">2023-10-15 10:30 AM</span></p>
-                    </div>
-                    <div class="h-4 w-[1px] bg-white/10 mx-2"></div>
-                    <div class="flex gap-1">
-                        <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-brand-500/20 text-brand-500 border border-brand-500/20">أونكس برو</span>
-                        <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/10">مكتمل</span>
-                    </div>
-                </div>
-
-                <div class="flex items-center gap-3">
-                    <button class="px-4 py-2 rounded-lg bg-white text-black text-xs font-bold hover:bg-zinc-200 transition-colors flex items-center gap-2">
-                        <i data-lucide="download" class="w-3 h-3"></i> تصدير JSON
-                    </button>
-                </div>
-            </div>
-
-            <!-- Split View Content -->
-            <div class="flex-1 flex overflow-hidden">
-                
-                <!-- Left: Image Viewer (Interactive) -->
-                <div class="w-2/3 relative bg-zinc-950 flex flex-col border-l border-white/10">
-                    <!-- Toolbar -->
-                    <div class="absolute top-4 left-1/2 -translate-x-1/2 z-20 glass-panel px-4 py-2 rounded-full flex items-center gap-4 shadow-2xl">
-                        <button onclick="zoomOut()" class="hover:text-brand-500 transition-colors"><i data-lucide="minus" class="w-4 h-4"></i></button>
-                        <input type="range" id="zoomRange" min="0.5" max="3" step="0.1" value="1" class="w-24 accent-brand-500" oninput="updateZoom(this.value)">
-                        <button onclick="zoomIn()" class="hover:text-brand-500 transition-colors"><i data-lucide="plus" class="w-4 h-4"></i></button>
-                        <div class="w-[1px] h-4 bg-white/20"></div>
-                        <button onclick="resetZoom()" class="text-xs font-medium hover:text-white text-zinc-400 transition-colors">إعادة ضبط</button>
-                    </div>
-
-                    <!-- Viewport -->
-                    <div class="flex-1 overflow-hidden relative viewer-container" id="imageContainer">
-                        <div id="imageWrapper" class="w-full h-full flex items-center justify-center transform-layer">
-                            <img id="viewerImage" src="" class="max-w-none shadow-2xl pointer-events-none select-none transition-shadow duration-300 hover:shadow-brand-500/10" style="max-height: 80vh;" alt="Invoice Original">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Right: Extracted Data -->
-                <div class="w-1/3 bg-dark-900 border-r border-white/5 overflow-y-auto">
-                    <div class="p-6">
-                        <div class="flex items-center justify-between mb-6">
-                            <h4 class="text-xs font-bold text-zinc-500 uppercase tracking-widest">البيانات المستخرجة</h4>
-                            <i data-lucide="bot" class="w-4 h-4 text-brand-500"></i>
-                        </div>
-
-                        <!-- Data Fields -->
-                        <div class="space-y-6" id="viewerData">
-                            <!-- Injected JS Data -->
-                        </div>
-                    </div>
-                </div>
-
-            </div>
+    <!-- Ticker Tape -->
+    <div
+        class="fixed top-0 w-full h-10 bg-neutral-900 text-white z-50 flex items-center overflow-hidden border-b border-white/10 text-xs font-mono tracking-widest">
+        <div class="bg-neon-accent h-full px-4 flex items-center font-bold z-10 shrink-0">LIVE FEED</div>
+        <div class="whitespace-nowrap animate-ticker flex items-center gap-12 px-4 opacity-80">
+            <span>MARKETS UP 2.4% GLOBALLY</span>
+            <span>::</span>
+            <span>SPACEX LAUNCH SUCCESSFUL</span>
+            <span>::</span>
+            <span>NEW CLIMATE ACCORD SIGNED IN PARIS</span>
+            <span>::</span>
+            <span>QUANTUM COMPUTING BREAKTHROUGH ANNOUNCED</span>
+            <span>::</span>
+            <span>AI REGULATION SUMMIT BEGINS</span>
+            <span>::</span>
+            <span>GLOBAL ENERGY CONSUMPTION DROPS</span>
         </div>
     </div>
 
-    <script>
-        lucide.createIcons();
+    <!-- Navigation -->
+    <nav class="fixed top-10 w-full z-40 glass-panel border-b-0 border-t-0">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <button id="menu-btn"
+                    class="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors">
+                    <i data-lucide="menu" class="w-5 h-5"></i>
+                </button>
+                <a href="#" class="flex items-center gap-2 group">
+                    <div class="w-3 h-3 bg-neon-blue rounded-full animate-pulse"></div>
+                    <span class="font-serif text-2xl font-bold tracking-tight">NEXUS</span>
+                </a>
+            </div>
 
-        // Sample Data simulating API response
-        const invoices = [
-            {
-                id: 'INV-00892',
-                system: 'أونكس برو',
-                type: 'فاتورة مبيعات',
-                amount: '45,200.00',
-                currency: 'YER',
-                date: '2023-11-20',
-                time: '09:41 AM',
-                image: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&q=80&w=1000',
-                data: {
-                    'رقم الفاتورة': '00892',
-                    'اسم العميل': 'شركة الأفق للتجارة',
-                    'التاريخ': '20/11/2023',
-                    'المستودع': 'الرئيسي - صنعاء',
-                    'إجمالي المبلغ': '45,200',
-                    'الضريبة': '0.00',
-                    'الصافي': '45,200'
-                },
-                items: [
-                    { name: 'جهاز كمبيوتر ديل', qty: 2, price: '20,000', total: '40,000' },
-                    { name: 'ماوس لاسلكي', qty: 4, price: '1,300', total: '5,200' }
-                ]
-            },
-            {
-                id: 'INV-00893',
-                system: 'المتكامل',
-                type: 'سند قبض',
-                amount: '120,000.00',
-                currency: 'YER',
-                date: '2023-11-21',
-                time: '11:15 AM',
-                image: 'https://images.unsplash.com/photo-1634733988685-a91a649bf449?auto=format&fit=crop&q=80&w=1000',
-                data: {
-                    'رقم السند': '89322',
-                    'استلمنا من': 'مؤسسة البناء الحديث',
-                    'مبلغ وقدره': 'مائة وعشرون ألف ريال',
-                    'وذلك مقابل': 'دفعة من الحساب'
-                },
-                items: []
-            },
-            {
-                id: 'INV-00894',
-                system: 'أونكس برو',
-                type: 'فاتورة مشتريات',
-                amount: '8,500.00',
-                currency: 'USD',
-                date: '2023-11-22',
-                time: '02:30 PM',
-                image: 'https://images.unsplash.com/photo-1589665172071-6948391f5b53?auto=format&fit=crop&q=80&w=1000',
-                data: {
-                    'رقم المرجع': 'REF-99',
-                    'المورد': 'Tech Solutions Global',
-                    'الإجمالي': '$8,500.00'
-                },
-                items: [
-                    { name: 'Server Rack 42U', qty: 1, price: '8,500', total: '8,500' }
-                ]
-            }
-        ];
+            <div class="hidden md:flex items-center gap-8 text-xs font-mono tracking-widest uppercase">
+                <a href="#" class="hover:text-neon-accent transition-colors">World</a>
+                <a href="#" class="hover:text-neon-accent transition-colors">Science</a>
+                <a href="#" class="hover:text-neon-accent transition-colors">Tech</a>
+                <a href="#" class="hover:text-neon-accent transition-colors">Culture</a>
+            </div>
 
-        // Init Grid
-        const grid = document.getElementById('invoicesGrid');
-        invoices.forEach((inv, index) => {
-            const card = document.createElement('div');
-            card.className = `glass-panel rounded-xl overflow-hidden hover:border-brand-500/50 transition-all duration-300 group cursor-pointer animate-fade-in`;
-            card.style.animationDelay = `${index * 0.1}s`;
-            card.onclick = () => openViewer(inv);
-            
-            card.innerHTML = `
-                <div class="h-32 bg-zinc-800 relative overflow-hidden">
-                    <img src="https://hoirqrkdgbmvpwutwuwj.supabase.co/storage/v1/object/public/assets/assets/917d6f93-fb36-439a-8c48-884b67b35381_1600w.jpg" class="w-full h-full object-cover opacity-60 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500 grayscale group-hover:grayscale-0">
-                    <div class="absolute top-3 left-3">
-                        <span class="px-2 py-1 bg-black/60 backdrop-blur text-[10px] text-white rounded border border-white/10 font-mono">${inv.id}</span>
+            <div class="flex items-center gap-4">
+                <button id="theme-toggle"
+                    class="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors group">
+                    <i data-lucide="sun"
+                        class="w-4 h-4 hidden dark:block group-hover:rotate-90 transition-transform"></i>
+                    <i data-lucide="moon"
+                        class="w-4 h-4 block dark:hidden group-hover:-rotate-12 transition-transform"></i>
+                </button>
+                <button
+                    class="px-5 py-2 border border-neutral-300 dark:border-neutral-700 rounded-full text-xs font-medium hover:bg-neutral-900 hover:text-white dark:hover:bg-white dark:hover:text-black transition-all">
+                    SUBSCRIBE
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="relative z-10 pt-32 pb-24 px-4 sm:px-6">
+
+        <!-- Hero Section -->
+        <section class="max-w-7xl mx-auto mb-24">
+            <div
+                class="grid grid-cols-1 lg:grid-cols-12 gap-1 bg-neutral-200 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-800">
+
+                <!-- Hero Article -->
+                <div
+                    class="lg:col-span-8 group relative bg-white dark:bg-neutral-900 overflow-hidden cursor-pointer img-zoom-container min-h-[500px] lg:min-h-[600px]">
+                    <img src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop"
+                        class="absolute inset-0 w-full h-full object-cover opacity-90 dark:opacity-70"
+                        alt="Earth from space">
+                    <div
+                        class="absolute inset-0 bg-gradient-to-t from-paper via-transparent to-transparent dark:from-obsidian dark:via-transparent dark:to-transparent opacity-90">
                     </div>
-                    <div class="absolute inset-0 bg-gradient-to-t from-zinc-900 to-transparent"></div>
-                </div>
-                <div class="p-4 relative">
-                    <div class="absolute -top-6 right-4 w-10 h-10 bg-zinc-800 rounded-lg border border-white/10 flex items-center justify-center shadow-lg group-hover:bg-brand-600 group-hover:border-brand-500 transition-colors z-10">
-                        <i data-lucide="file-text" class="w-5 h-5 text-zinc-400 group-hover:text-white"></i>
-                    </div>
-                    
-                    <div class="flex justify-between items-start mb-2">
-                        <div>
-                            <p class="text-white font-bold text-sm">${inv.type}</p>
-                            <p class="text-[10px] text-zinc-500 mt-0.5">${inv.system}</p>
+
+                    <div class="absolute bottom-0 left-0 w-full p-8 md:p-12">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span
+                                class="px-2 py-1 bg-neon-accent text-white text-[10px] font-mono uppercase tracking-wider">Analysis</span>
+                            <span class="text-neutral-600 dark:text-neutral-400 text-xs font-mono">34.0522° N, 118.2437°
+                                W</span>
                         </div>
-                    </div>
-                    
-                    <div class="flex items-end justify-between mt-4 pt-4 border-t border-white/5">
-                        <div>
-                            <p class="text-[10px] text-zinc-500 mb-1">المبلغ الإجمالي</p>
-                            <p class="text-emerald-400 font-mono font-medium">${inv.amount} <span class="text-[10px] text-zinc-600">${inv.currency}</span></p>
-                        </div>
-                        <div class="text-left">
-                            <p class="text-[10px] text-zinc-500 mb-1">التاريخ</p>
-                            <p class="text-zinc-300 text-xs font-mono">${inv.date}</p>
+                        <h1
+                            class="font-serif text-4xl md:text-6xl font-medium leading-tight mb-4 text-neutral-900 dark:text-white max-w-3xl">
+                            The Great Filter: Are We Alone in the Cosmic Ocean?
+                        </h1>
+                        <p
+                            class="text-neutral-700 dark:text-neutral-300 max-w-xl text-lg font-light leading-relaxed mb-6">
+                            New data from the James Webb Telescope challenges our understanding of exoplanet
+                            atmospheres, suggesting biological signatures may be rarer than predicted.
+                        </p>
+                        <div
+                            class="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-neutral-900 dark:text-white group-hover:text-neon-accent transition-colors">
+                            Read Full Story <i data-lucide="arrow-right" class="w-4 h-4"></i>
                         </div>
                     </div>
                 </div>
-            `;
-            grid.appendChild(card);
-        });
 
-        // ---------------------------------------------------------
-        // IMAGE VIEWER & ZOOM LOGIC
-        // ---------------------------------------------------------
-        
-        let scale = 1;
-        let panning = false;
-        let pointX = 0;
-        let pointY = 0;
-        let startX = 0;
-        let startY = 0;
-        const wrapper = document.getElementById('imageWrapper');
-        const container = document.getElementById('imageContainer');
-        const zoomRange = document.getElementById('zoomRange');
+                <!-- Side Feed -->
+                <div class="lg:col-span-4 flex flex-col gap-px bg-neutral-200 dark:bg-neutral-800">
 
-        function setTransform() {
-            wrapper.style.transform = `translate(${pointX}px, ${pointY}px) scale(${scale})`;
-        }
+                    <!-- Item 1 -->
+                    <article
+                        class="flex-1 bg-white dark:bg-neutral-900 p-8 flex flex-col justify-center group hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="text-[10px] font-mono text-neon-accent uppercase">Tech</span>
+                            <span class="text-[10px] font-mono text-neutral-400">12m ago</span>
+                        </div>
+                        <h2 class="font-serif text-2xl font-medium mb-3 group-hover:text-neon-accent transition-colors">
+                            Neuralink receives FDA approval for advanced vision restoration trials.</h2>
+                        <div
+                            class="mt-auto pt-4 border-t border-dashed border-neutral-200 dark:border-neutral-800 flex justify-between items-center text-xs text-neutral-500">
+                            <span>Dr. Sarah Chen</span>
+                            <i data-lucide="share-2" class="w-3 h-3 hover:text-black dark:hover:text-white"></i>
+                        </div>
+                    </article>
 
-        function updateZoom(val) {
-            scale = parseFloat(val);
-            setTransform();
-        }
+                    <!-- Item 2 -->
+                    <article
+                        class="flex-1 bg-white dark:bg-neutral-900 p-8 flex flex-col justify-center group hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="text-[10px] font-mono text-neon-accent uppercase">Economy</span>
+                            <span class="text-[10px] font-mono text-neutral-400">45m ago</span>
+                        </div>
+                        <h2 class="font-serif text-2xl font-medium mb-3 group-hover:text-neon-accent transition-colors">
+                            Global crypto markets stabilize as regulatory frameworks solidify in the EU.</h2>
+                        <div
+                            class="mt-auto pt-4 border-t border-dashed border-neutral-200 dark:border-neutral-800 flex justify-between items-center text-xs text-neutral-500">
+                            <span>Marcus Vane</span>
+                            <i data-lucide="share-2" class="w-3 h-3 hover:text-black dark:hover:text-white"></i>
+                        </div>
+                    </article>
 
-        function zoomIn() {
-            if (scale < 3) {
-                scale += 0.2;
-                zoomRange.value = scale;
-                setTransform();
-            }
-        }
+                    <!-- Item 3 -->
+                    <article
+                        class="flex-1 bg-white dark:bg-neutral-900 p-8 flex flex-col justify-center group hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="text-[10px] font-mono text-neon-accent uppercase">Environment</span>
+                            <span class="text-[10px] font-mono text-neutral-400">1h ago</span>
+                        </div>
+                        <h2 class="font-serif text-2xl font-medium mb-3 group-hover:text-neon-accent transition-colors">
+                            Vertical farming output surpasses traditional yields in major urban centers.</h2>
+                        <div
+                            class="mt-auto pt-4 border-t border-dashed border-neutral-200 dark:border-neutral-800 flex justify-between items-center text-xs text-neutral-500">
+                            <span>Eco Watch</span>
+                            <i data-lucide="share-2" class="w-3 h-3 hover:text-black dark:hover:text-white"></i>
+                        </div>
+                    </article>
 
-        function zoomOut() {
-            if (scale > 0.5) {
-                scale -= 0.2;
-                zoomRange.value = scale;
-                setTransform();
-            }
-        }
+                </div>
+            </div>
+        </section>
 
-        function resetZoom() {
-            scale = 1;
-            pointX = 0;
-            pointY = 0;
-            zoomRange.value = 1;
-            setTransform();
-        }
+        <!-- Bento Grid Section -->
+        <section class="max-w-7xl mx-auto">
+            <div class="flex items-end justify-between mb-10 border-b border-neutral-200 dark:border-neutral-800 pb-4">
+                <h3 class="font-serif text-3xl italic">Trending Intelligence</h3>
+                <div class="flex gap-2 text-neutral-400">
+                    <button class="hover:text-black dark:hover:text-white"><i data-lucide="layout-grid"
+                            class="w-5 h-5"></i></button>
+                    <button class="hover:text-black dark:hover:text-white"><i data-lucide="list"
+                            class="w-5 h-5"></i></button>
+                </div>
+            </div>
 
-        // Mouse Drag Logic
-        container.onmousedown = function (e) {
-            e.preventDefault();
-            startX = e.clientX - pointX;
-            startY = e.clientY - pointY;
-            panning = true;
-            container.style.cursor = 'grabbing';
-        }
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
-        container.onmouseup = function (e) {
-            panning = false;
-            container.style.cursor = 'grab';
-        }
-
-        container.onmouseleave = function (e) {
-            panning = false;
-            container.style.cursor = 'grab';
-        }
-
-        container.onmousemove = function (e) {
-            e.preventDefault();
-            if (!panning) return;
-            pointX = (e.clientX - startX);
-            pointY = (e.clientY - startY);
-            setTransform();
-        }
-
-        // Wheel Zoom
-        container.onwheel = function (e) {
-            e.preventDefault();
-            const xs = (e.clientX - pointX) / scale;
-            const ys = (e.clientY - pointY) / scale;
-            const delta = -e.deltaY;
-            
-            (delta > 0) ? (scale *= 1.1) : (scale /= 1.1);
-            
-            // Constraints
-            if (scale < 0.5) scale = 0.5;
-            if (scale > 4) scale = 4;
-
-            // Recalculate position to zoom towards mouse
-            // pointX = e.clientX - xs * scale;
-            // pointY = e.clientY - ys * scale;
-            // Kept simple for stability, just zoom:
-            
-            zoomRange.value = scale;
-            setTransform();
-        }
-
-
-        // ---------------------------------------------------------
-        // MODAL LOGIC
-        // ---------------------------------------------------------
-
-        function openViewer(inv) {
-            const modal = document.getElementById('invoiceViewer');
-            const img = document.getElementById('viewerImage');
-            const dataContainer = document.getElementById('viewerData');
-            
-            // Set Content
-            img.src = inv.image;
-            document.getElementById('viewerTitle').innerText = inv.id;
-            document.getElementById('viewerDate').innerText = `${inv.date} ${inv.time}`;
-            
-            // Render Data Fields
-            let dataHtml = '';
-            
-            // Main Fields
-            dataHtml += '<div class="grid grid-cols-1 gap-4">';
-            for (const [key, value] of Object.entries(inv.data)) {
-                dataHtml += `
-                    <div class="bg-white/5 p-3 rounded-lg border border-white/5 hover:border-brand-500/30 transition-colors">
-                        <label class="block text-[10px] text-zinc-500 mb-1">${key}</label>
-                        <span class="text-sm text-white font-medium block">${value}</span>
+                <!-- Card 1 -->
+                <div
+                    class="glass-panel p-6 rounded-sm group cursor-pointer hover:border-neutral-400 dark:hover:border-neutral-600 transition-all duration-300">
+                    <div class="aspect-video mb-4 overflow-hidden rounded-sm">
+                        <img src="https://images.unsplash.com/photo-1614728263952-84ea256f9679?q=80&w=2008&auto=format&fit=crop"
+                            class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
+                            alt="Cybersecurity">
                     </div>
-                `;
-            }
-            dataHtml += '</div>';
+                    <div class="flex items-center gap-2 mb-2">
+                        <div class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
+                        <span class="text-[10px] font-mono uppercase text-neutral-500 tracking-wider">Security</span>
+                    </div>
+                    <h4 class="font-serif text-xl leading-snug mb-2 group-hover:text-neon-blue transition-colors">
+                        Zero-Day exploit found in major satellite infrastructure.</h4>
+                    <p class="text-sm text-neutral-500 dark:text-neutral-400 line-clamp-3 leading-relaxed">Security
+                        researchers have identified a critical vulnerability in legacy orbital communications protocols.
+                    </p>
+                </div>
 
-            // Items Table if exists
-            if (inv.items && inv.items.length > 0) {
-                dataHtml += `
-                    <div class="mt-8">
-                        <h5 class="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                            <i data-lucide="list" class="w-3 h-3"></i> الأصناف
-                        </h5>
-                        <div class="border border-white/10 rounded-lg overflow-hidden">
-                            <table class="w-full text-xs">
-                                <thead class="bg-white/5">
-                                    <tr>
-                                        <th class="p-3 text-right text-zinc-400 font-normal">الصنف</th>
-                                        <th class="p-3 text-center text-zinc-400 font-normal">الكمية</th>
-                                        <th class="p-3 text-left text-zinc-400 font-normal">الإجمالي</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-white/5 bg-black/20">
-                                    ${inv.items.map(item => `
-                                        <tr>
-                                            <td class="p-3 text-white">${item.name}</td>
-                                            <td class="p-3 text-center text-zinc-400 font-mono">${item.qty}</td>
-                                            <td class="p-3 text-left text-brand-400 font-mono">${item.total}</td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
+                <!-- Card 2 -->
+                <div
+                    class="glass-panel p-6 rounded-sm group cursor-pointer hover:border-neutral-400 dark:hover:border-neutral-600 transition-all duration-300">
+                    <div class="aspect-video mb-4 overflow-hidden rounded-sm">
+                        <img src="https://hoirqrkdgbmvpwutwuwj.supabase.co/storage/v1/object/public/assets/assets/917d6f93-fb36-439a-8c48-884b67b35381_1600w.jpg"
+                            class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
+                            alt="Finance">
+                    </div>
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-[10px] font-mono uppercase text-neutral-500 tracking-wider">Markets</span>
+                    </div>
+                    <h4 class="font-serif text-xl leading-snug mb-2 group-hover:text-neon-blue transition-colors">The
+                        end of cash? Nordic countries reach 98% digital transactions.</h4>
+                    <p class="text-sm text-neutral-500 dark:text-neutral-400 line-clamp-3 leading-relaxed">A detailed
+                        look at the socioeconomic impact of a purely digital currency ecosystem.</p>
+                </div>
+
+                <!-- Card 3 -->
+                <div
+                    class="glass-panel p-6 rounded-sm group cursor-pointer hover:border-neutral-400 dark:hover:border-neutral-600 transition-all duration-300 lg:col-span-2 flex flex-col md:flex-row gap-6">
+                    <div class="w-full md:w-1/2 aspect-video md:aspect-auto overflow-hidden rounded-sm">
+                        <img src="https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=2070&auto=format&fit=crop"
+                            class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
+                            alt="Robotics">
+                    </div>
+                    <div class="w-full md:w-1/2 flex flex-col justify-center">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span
+                                class="text-[10px] font-mono uppercase text-neutral-500 tracking-wider">Robotics</span>
+                        </div>
+                        <h4 class="font-serif text-2xl leading-snug mb-3 group-hover:text-neon-blue transition-colors">
+                            Automated Labor Force: The Ethics of Android Citizenship.</h4>
+                        <p class="text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed mb-4">As bipedal robots
+                            enter the workforce in logistics and healthcare, legislators struggle to define their rights
+                            and liabilities.</p>
+                        <button
+                            class="text-xs font-bold uppercase tracking-widest flex items-center gap-2 group/btn self-start">
+                            Read Deep Dive <i data-lucide="arrow-right"
+                                class="w-3 h-3 group-hover/btn:translate-x-1 transition-transform"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Card 4 Text Only -->
+                <div
+                    class="glass-panel p-6 rounded-sm group cursor-pointer hover:border-neutral-400 dark:hover:border-neutral-600 transition-all duration-300 border-t-4 border-t-neon-blue">
+                    <span
+                        class="text-[10px] font-mono uppercase text-neutral-500 tracking-wider block mb-4">Opinion</span>
+                    <h4 class="font-serif text-2xl leading-tight mb-4 group-hover:text-neon-blue transition-colors">"We
+                        are building the mind of God, and we have no idea how it thinks."</h4>
+                    <p class="text-sm text-neutral-500 dark:text-neutral-400 italic mb-6">— Dr. Aris Thorne on AGI</p>
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full bg-neutral-300 dark:bg-neutral-700 overflow-hidden">
+                            <img src="https://i.pravatar.cc/100?img=11" alt="Author">
+                        </div>
+                        <div class="text-[10px] font-mono leading-tight">
+                            <div class="font-bold">By Elena Cross</div>
+                            <div class="text-neutral-500">Senior Editor</div>
                         </div>
                     </div>
-                `;
-            }
+                </div>
 
-            dataContainer.innerHTML = dataHtml;
+                <!-- Card 5 -->
+                <div
+                    class="glass-panel p-6 rounded-sm group cursor-pointer hover:border-neutral-400 dark:hover:border-neutral-600 transition-all duration-300">
+                    <div class="aspect-video mb-4 overflow-hidden rounded-sm relative">
+                        <img src="https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=2070&auto=format&fit=crop"
+                            class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
+                            alt="Chip">
+                        <div class="absolute top-2 right-2 bg-black text-white p-1 rounded"><i data-lucide="play"
+                                class="w-3 h-3"></i></div>
+                    </div>
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-[10px] font-mono uppercase text-neutral-500 tracking-wider">Hardware</span>
+                    </div>
+                    <h4 class="font-serif text-xl leading-snug mb-2 group-hover:text-neon-blue transition-colors">The
+                        1nm Chip Race heats up.</h4>
+                    <p class="text-sm text-neutral-500 dark:text-neutral-400 line-clamp-3 leading-relaxed">TSMC and
+                        Intel unveil roadmaps for the angstrom era of computing.</p>
+                </div>
 
-            // Show Modal
-            modal.classList.remove('hidden');
-            // Small delay for fade in
-            setTimeout(() => {
-                modal.classList.remove('opacity-0');
-            }, 10);
-            
-            resetZoom();
-            lucide.createIcons();
+                <!-- Card 6 -->
+                <div
+                    class="glass-panel p-6 rounded-sm group cursor-pointer hover:border-neutral-400 dark:hover:border-neutral-600 transition-all duration-300">
+                    <div class="aspect-video mb-4 overflow-hidden rounded-sm">
+                        <img src="https://images.unsplash.com/photo-1507413245164-6160d8298b31?q=80&w=2070&auto=format&fit=crop"
+                            class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
+                            alt="Space">
+                    </div>
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-[10px] font-mono uppercase text-neutral-500 tracking-wider">Cosmos</span>
+                    </div>
+                    <h4 class="font-serif text-xl leading-snug mb-2 group-hover:text-neon-blue transition-colors">Lunar
+                        Base Alpha construction begins.</h4>
+                    <p class="text-sm text-neutral-500 dark:text-neutral-400 line-clamp-3 leading-relaxed">The first
+                        permanent human settlement on the moon breaks ground.</p>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Newsletter / Footer Area -->
+        <section class="max-w-7xl mx-auto mt-24 border-t border-neutral-200 dark:border-neutral-800 pt-16">
+            <div class="grid md:grid-cols-2 gap-12 items-center">
+                <div>
+                    <h3 class="font-serif text-4xl mb-4">Join the Nexus.</h3>
+                    <p class="text-neutral-600 dark:text-neutral-400 font-light max-w-md mb-8">
+                        Daily intelligence briefings on the intersection of technology, science, and global culture. No
+                        noise, just signal.
+                    </p>
+                    <form class="flex gap-2 max-w-sm">
+                        <input type="email" placeholder="email@address.com"
+                            class="bg-transparent border-b border-neutral-400 dark:border-neutral-600 py-2 w-full focus:outline-none focus:border-neon-blue transition-colors text-sm">
+                        <button
+                            class="text-sm font-bold uppercase tracking-widest hover:text-neon-blue transition-colors">Subscribe</button>
+                    </form>
+                </div>
+                <div
+                    class="grid grid-cols-2 sm:grid-cols-3 gap-8 text-xs text-neutral-500 dark:text-neutral-500 uppercase tracking-widest font-mono">
+                    <div class="flex flex-col gap-4">
+                        <span class="text-black dark:text-white font-bold">Sections</span>
+                        <a href="#" class="hover:text-neon-blue">Politics</a>
+                        <a href="#" class="hover:text-neon-blue">Technology</a>
+                        <a href="#" class="hover:text-neon-blue">Markets</a>
+                        <a href="#" class="hover:text-neon-blue">Science</a>
+                    </div>
+                    <div class="flex flex-col gap-4">
+                        <span class="text-black dark:text-white font-bold">Company</span>
+                        <a href="#" class="hover:text-neon-blue">About</a>
+                        <a href="#" class="hover:text-neon-blue">Careers</a>
+                        <a href="#" class="hover:text-neon-blue">Press</a>
+                        <a href="#" class="hover:text-neon-blue">Contact</a>
+                    </div>
+                    <div class="flex flex-col gap-4">
+                        <span class="text-black dark:text-white font-bold">Legal</span>
+                        <a href="#" class="hover:text-neon-blue">Privacy</a>
+                        <a href="#" class="hover:text-neon-blue">Terms</a>
+                        <a href="#" class="hover:text-neon-blue">Cookies</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-between items-center mt-20 text-[10px] font-mono text-neutral-400 uppercase">
+                <span>© 2024 NEXUS INTELLIGENCE</span>
+                <div class="flex gap-4">
+                    <span>London</span>
+                    <span>New York</span>
+                    <span>Tokyo</span>
+                    <span>Mars Base 1</span>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Three.js Background Script -->
+    <script type="module">
+        import * as THREE from 'three';
+
+        // Config
+        const CONFIG = {
+            particleCount: 1500,
+            radius: 40,
+            rotationSpeed: 0.0005
+        };
+
+        // State
+        const STATE = {
+            isDark: document.documentElement.classList.contains('dark'),
+            mouseX: 0,
+            mouseY: 0
+        };
+
+        // Scene Setup
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 100;
+
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        // Particles - Globe Shape
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(CONFIG.particleCount * 3);
+        const sizes = new Float32Array(CONFIG.particleCount);
+
+        for (let i = 0; i < CONFIG.particleCount; i++) {
+            // Spherical distribution
+            const phi = Math.acos(-1 + (2 * i) / CONFIG.particleCount);
+            const theta = Math.sqrt(CONFIG.particleCount * Math.PI) * phi;
+
+            const r = CONFIG.radius + (Math.random() - 0.5) * 5; // slight variance
+
+            positions[i * 3] = r * Math.cos(theta) * Math.sin(phi);
+            positions[i * 3 + 1] = r * Math.sin(theta) * Math.sin(phi);
+            positions[i * 3 + 2] = r * Math.cos(phi);
+
+            sizes[i] = Math.random() * 2;
         }
 
-        function closeViewer() {
-            const modal = document.getElementById('invoiceViewer');
-            modal.classList.add('opacity-0');
-            setTimeout(() => {
-                modal.classList.add('hidden');
-            }, 300);
-        }
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
-        // Close on escape
-        document.addEventListener('keydown', function(event) {
-            if (event.key === "Escape") {
-                closeViewer();
-            }
+        // Material
+        const getMaterial = (isDark) => {
+            const color = isDark ? new THREE.Color(0x3b82f6) : new THREE.Color(0x1a1a1a);
+            return new THREE.PointsMaterial({
+                color: color,
+                size: 0.8,
+                transparent: true,
+                opacity: isDark ? 0.6 : 0.3,
+                sizeAttenuation: true
+            });
+        };
+
+        let material = getMaterial(STATE.isDark);
+        const particles = new THREE.Points(geometry, material);
+        scene.add(particles);
+
+        // Connections (Lines) - Only connect close particles for a "network" look
+        // For performance, we'll use a simplified Wireframe or just dots. 
+        // Let's add a second geometry for a surrounding mesh ring to look cool.
+        const ringGeo = new THREE.TorusGeometry(60, 0.2, 16, 100);
+        const ringMat = new THREE.MeshBasicMaterial({
+            color: STATE.isDark ? 0x2dd4bf : 0x000000,
+            transparent: true,
+            opacity: 0.1,
+            wireframe: true
+        });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = Math.PI / 2;
+        scene.add(ring);
+
+
+        // Interaction & Animation
+        document.addEventListener('mousemove', (e) => {
+            STATE.mouseX = (e.clientX - window.innerWidth / 2) * 0.001;
+            STATE.mouseY = (e.clientY - window.innerHeight / 2) * 0.001;
         });
 
+        const animate = () => {
+            requestAnimationFrame(animate);
+
+            // Rotate Globe
+            particles.rotation.y += CONFIG.rotationSpeed;
+            particles.rotation.x += CONFIG.rotationSpeed * 0.2;
+
+            // Mouse Influence
+            particles.rotation.y += STATE.mouseX * 0.05;
+            particles.rotation.x += STATE.mouseY * 0.05;
+
+            // Rotate Ring
+            ring.rotation.z -= CONFIG.rotationSpeed * 2;
+            ring.rotation.x = (Math.PI / 2) + (STATE.mouseY * 0.5);
+
+            renderer.render(scene, camera);
+        };
+
+        animate();
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Theme Toggle Logic
+        const toggleBtn = document.getElementById('theme-toggle');
+
+        const updateTheme = () => {
+            const html = document.documentElement;
+            STATE.isDark = html.classList.contains('dark');
+
+            // Update Three.js materials
+            const targetColor = STATE.isDark ? new THREE.Color(0x3b82f6) : new THREE.Color(0x1a1a1a);
+            const targetRingColor = STATE.isDark ? new THREE.Color(0x2dd4bf) : new THREE.Color(0x000000);
+            const targetOpacity = STATE.isDark ? 0.6 : 0.3;
+
+            // Simple transition
+            particles.material.color = targetColor;
+            particles.material.opacity = targetOpacity;
+            ring.material.color = targetRingColor;
+        };
+
+        toggleBtn.addEventListener('click', () => {
+            const html = document.documentElement;
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                html.classList.add('light');
+            } else {
+                html.classList.remove('light');
+                html.classList.add('dark');
+            }
+            updateTheme();
+        });
+
+        // Icon Init
         lucide.createIcons();
     </script>
 </body>
+
 </html>
+
+اريد ان يكون التصميم مشابه لما هو فوق للاخبار
