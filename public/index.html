@@ -42,8 +42,10 @@
                             50: '#f0fdf4',
                         },
                         newspaper: {
-                            DEFAULT: '#7c3aed', // Purple for Newspaper Tab
-                            50: '#f5f3ff',
+                            DEFAULT: '#1e40af', // Premium Royal Blue (Global News Standard)
+                            50: '#eff6ff',
+                            700: '#1d4ed8',
+                            gold: '#b45309' // Accurate Gold accent
                         },
                         dark: {
                             bg: '#0a0a0a',
@@ -920,10 +922,10 @@
                                 <a href="javascript:void(0)" onclick="openReader(${item.id}, 'newspaper')">
                                     <h3 class="text-2xl md:text-3xl font-serif font-bold text-neutral-900 dark:text-white mb-4 leading-tight group-hover:text-newspaper transition-colors decoration-newspaper/20 underline-offset-8 group-hover:underline">${item.title}</h3>
                                 </a>
-                                <p class="text-neutral-600 dark:text-neutral-400 text-base leading-loose line-clamp-3 mb-6 font-light italic border-r-2 border-neutral-100 dark:border-neutral-800 pr-4">${item.summary || 'انقر لقراءة التحليل الكامل لهذا الخبر في المصدر الأصلي...'}</p>
+                                <p class="text-neutral-600 dark:text-neutral-400 text-base leading-loose line-clamp-3 mb-6 font-light italic border-r-2 border-newspaper pr-4">${item.summary || 'انقر لقراءة التحليل الكامل لهذا الخبر في المصدر الأصلي...'}</p>
                                 
                                 <div class="flex items-center justify-between">
-                                    <button onclick="openReader(${item.id}, 'newspaper')" class="inline-flex items-center gap-2 text-xs font-black text-newspaper hover:gap-4 transition-all uppercase tracking-widest">
+                                    <button onclick="openReader(${item.id}, 'newspaper')" class="inline-flex items-center gap-2 text-xs font-black text-newspaper hover:text-newspaper-700 transition-all uppercase tracking-widest border-b-2 border-newspaper/20 pb-1">
                                         قراءة سريعة <i data-lucide="arrow-left" class="w-4 h-4"></i>
                                     </button>
                                     <div class="flex gap-4">
