@@ -16,7 +16,8 @@ import yt_dlp
 import requests
 from bs4 import BeautifulSoup
 import hashlib
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, quote
+import html
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)
@@ -229,6 +230,7 @@ YOUTUBE_CHANNELS = [
     {"url": "https://www.youtube.com/@TheAtlantic/videos", "name": "The Atlantic", "type": "channel"},
     {"url": "https://www.youtube.com/@breakingpoints/videos", "name": "Breaking Points", "type": "channel"},
     {"url": "https://www.youtube.com/@cfr/videos", "name": "CFR", "type": "channel"},
+    {"url": "https://www.youtube.com/@MiddleEastEye/videos", "name": "Middle East Eye", "type": "channel"},
 ]
 
 # Yemen YouTube Channels List
@@ -250,6 +252,7 @@ YEMEN_YOUTUBE_CHANNELS = [
     {"url": "https://www.youtube.com/@yementvyem/videos", "name": "اليمن TV", "type": "channel"},
     {"url": "https://www.youtube.com/@TVyemenshabab/videos", "name": "قناة يمن شباب", "type": "channel"},
     {"url": "https://www.youtube.com/@AsharqNews/videos", "name": "الشرق للأخبار", "type": "channel"},
+    {"url": "https://www.youtube.com/@Yementdy/videos", "name": "اليمن اليوم", "type": "channel"},
 ]
 
 # World Newspapers Sources List
@@ -300,6 +303,26 @@ def generate_article_id(url: str) -> str:
     """Generate a unique ID for an article based on its URL"""
     return hashlib.md5(url.encode()).hexdigest()[:16]
 
+def translate_to_arabic(text: str) -> str:
+    """Translate English text to Arabic using Google Translate free API"""
+    if not text or any(char in text for char in 'أبتثجحخدذرزسشصضطظعغفقكلمنهوي'): # Skip if already has Arabic chars
+        return text
+    
+    try:
+        # Using the unofficial but widely used Google Translate API endpoint
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ar&dt=t&q={quote(text)}"
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers, timeout=5)
+        
+        if response.status_code == 200:
+            result = response.json()
+            translated_text = "".join([segment[0] for segment in result[0] if segment[0]])
+            return translated_text
+        return text
+    except Exception as e:
+        logger.error(f"Translation error: {e}")
+        return text
+
 def fetch_newspaper_articles(source_url: str, source_name: str, last_article_ids: Optional[List[str]] = None) -> List[dict]:
     """Fetch NEW articles from a newspaper website"""
     articles = []
@@ -307,13 +330,15 @@ def fetch_newspaper_articles(source_url: str, source_name: str, last_article_ids
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
         'Connection': 'keep-alive',
     }
     
     try:
-        response = requests.get(source_url, headers=headers, timeout=15)
+        response = requests.get(source_url, headers=headers, timeout=25)
         response.raise_for_status()
         soup = BeautifulSoup(response.content, 'html.parser')
         
@@ -390,14 +415,22 @@ def fetch_newspaper_articles(source_url: str, source_name: str, last_article_ids
             except:
                 pass
             
+            # Try to get a better summary from the specific article if possible
+            # Note: In a production environment, we might want to do this asynchronously
+            article_summary = f"مقال جديد من {source_name} يتناول آخر المستجدات الإخبارية. انقر لمتابعة التفاصيل والتحليلات الكاملة."
+            
+            # Translate Title and Summary
+            translated_title = translate_to_arabic(title)
+            translated_summary = translate_to_arabic(article_summary)
+            
             articles.append({
                 'article_id': article_id,
-                'title': title[:500],  # Limit title length
+                'title': translated_title[:500],
                 'link': article_url,
                 'image_url': image_url,
                 'source': source_name,
                 'published': datetime.now(),
-                'summary': f"مقال من {source_name}"
+                'summary': translated_summary
             })
             
             # If no last_article_ids, we're in first run - collect first 5 articles
@@ -663,12 +696,12 @@ def fetch_youtube_channel_videos(channel_url: str, channel_name: str, last_video
                             
                             videos.append({
                                 'video_id': video_id,
-                                'title': title,
+                                'title': translate_to_arabic(title),
                                 'link': url,
                                 'image_url': thumbnail,
                                 'source': channel_name,
                                 'published': published,
-                                'summary': f"فيديو جديد من {channel_name}"
+                                'summary': translate_to_arabic(f"فيديو جديد من {channel_name}")
                             })
                             
                             # If no last_video_ids, we're in first run - collect first 5 videos
@@ -723,12 +756,12 @@ def fetch_youtube_channel_videos(channel_url: str, channel_name: str, last_video
                                     
                                     videos.append({
                                         'video_id': video_id,
-                                        'title': title,
+                                        'title': translate_to_arabic(title),
                                         'link': link,
                                         'image_url': thumbnail,
                                         'source': channel_name,
                                         'published': published,
-                                        'summary': f"فيديو جديد من {channel_name}"
+                                        'summary': translate_to_arabic(f"فيديو جديد من {channel_name}")
                                     })
                                     
                                     # If no last_video_ids, we're in first run - collect first 5 videos

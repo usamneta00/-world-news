@@ -21,6 +21,7 @@
 
     <script>
         tailwind.config = {
+            darkMode: 'class',
             theme: {
                 extend: {
                     fontFamily: {
@@ -43,12 +44,19 @@
                         newspaper: {
                             DEFAULT: '#7c3aed', // Purple for Newspaper Tab
                             50: '#f5f3ff',
+                        },
+                        dark: {
+                            bg: '#0a0a0a',
+                            card: '#141414',
+                            border: '#1f1f1f',
+                            text: '#e5e5e5'
                         }
                     },
                     boxShadow: {
                         'glass': '0 4px 30px rgba(0, 0, 0, 0.1)',
                         'subtle': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                         'card': '0 0 0 1px rgba(0,0,0,0.03), 0 2px 8px rgba(0,0,0,0.04)',
+                        'dark-card': '0 0 0 1px rgba(255,255,255,0.05), 0 4px 12px rgba(0,0,0,0.5)',
                     }
                 }
             }
@@ -61,6 +69,12 @@
             background-color: #fafafa;
             color: #1a1a1a;
             -webkit-font-smoothing: antialiased;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .dark body {
+            background-color: #0a0a0a;
+            color: #e5e5e5;
         }
 
         /* Smooth Ticker */
@@ -136,10 +150,10 @@
     </style>
 </head>
 
-<body class="selection:bg-brand-100 selection:text-brand-900">
+<body class="selection:bg-brand-100 selection:text-brand-900 transition-colors duration-300">
 
     <!-- Top Utility Bar -->
-    <div class="bg-neutral-900 text-neutral-400 text-xs py-1.5 border-b border-neutral-800">
+    <div class="bg-neutral-900 text-neutral-400 text-xs py-1.5 border-b border-neutral-800 dark:bg-black">
         <div class="container mx-auto px-4 lg:px-6 flex justify-between items-center h-8">
             <div class="flex items-center gap-6">
                 <span id="current-date" class="font-medium tracking-tight"></span>
@@ -162,6 +176,12 @@
                     </span>
                     مباشر
                 </div>
+                <!-- Dark Mode Toggle -->
+                <button onclick="toggleDarkMode()" id="dark-mode-toggle"
+                    class="p-1.5 rounded-full bg-neutral-800 hover:bg-neutral-700 text-neutral-400 transition-all border border-neutral-700">
+                    <i data-lucide="moon" class="w-4 h-4 block dark:hidden"></i>
+                    <i data-lucide="sun" class="w-4 h-4 hidden dark:block"></i>
+                </button>
                 <div class="flex items-center gap-3 border-r border-neutral-700 pr-3 mr-1">
                     <span class="text-white cursor-pointer font-medium">العربية</span>
                     <span class="cursor-pointer hover:text-white transition-colors">English</span>
@@ -172,7 +192,7 @@
 
     <!-- Main Header (Sticky & Glass) -->
     <header
-        class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-neutral-200 transition-all duration-300">
+        class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-neutral-200 transition-all duration-300 dark:bg-neutral-950/90 dark:border-neutral-800">
         <div class="container mx-auto px-4 lg:px-6">
             <div class="flex justify-between items-center h-20">
                 <!-- Mobile Menu & Search -->
@@ -186,7 +206,7 @@
                 <div class="flex-1 md:flex-none text-center md:text-right">
                     <a href="/" class="group flex items-center justify-center md:justify-start gap-1">
                         <span
-                            class="font-serif text-3xl md:text-4xl font-bold tracking-tighter text-neutral-900 group-hover:opacity-90 transition-opacity">
+                            class="font-serif text-3xl md:text-4xl font-bold tracking-tighter text-neutral-900 group-hover:opacity-90 transition-opacity dark:text-white">
                             العالمية<span id="logo-accent" class="text-brand">NEWS</span>
                         </span>
                     </a>
@@ -196,7 +216,7 @@
                 <div class="hidden md:flex items-center gap-6">
                     <div class="relative group">
                         <input type="text" placeholder="بحث..."
-                            class="bg-neutral-50 border border-neutral-200 text-sm rounded-full py-2 px-4 w-64 focus:outline-none focus:ring-1 focus:ring-brand focus:border-brand transition-all placeholder:text-neutral-400">
+                            class="bg-neutral-50 border border-neutral-200 text-sm rounded-full py-2 px-4 w-64 focus:outline-none focus:ring-1 focus:ring-brand focus:border-brand transition-all placeholder:text-neutral-400 dark:bg-neutral-900 dark:border-neutral-800 dark:text-white">
                         <i data-lucide="search"
                             class="absolute left-3 top-2.5 w-4 h-4 text-neutral-400 group-focus-within:text-brand transition-colors"></i>
                     </div>
@@ -246,25 +266,26 @@
     </header>
 
     <!-- Breaking News Ticker -->
-    <div class="bg-white border-b border-neutral-200 relative z-40 shadow-subtle">
+    <div
+        class="bg-white border-b border-neutral-200 relative z-40 shadow-subtle dark:bg-neutral-950 dark:border-neutral-800">
         <div class="container mx-auto px-0 flex items-stretch h-10 md:h-12 overflow-hidden">
             <div id="ticker-label"
                 class="bg-brand text-white text-xs md:text-sm font-bold px-4 md:px-6 flex items-center shrink-0 z-10 shadow-[4px_0_10px_rgba(0,0,0,0.1)]">
                 <span class="animate-pulse ml-2 w-2 h-2 bg-white rounded-full"></span>
                 عاجل
             </div>
-            <div class="flex-1 relative flex items-center overflow-hidden bg-neutral-50">
+            <div class="flex-1 relative flex items-center overflow-hidden bg-neutral-50 dark:bg-neutral-900/50">
                 <div id="ticker-text"
-                    class="animate-ticker whitespace-nowrap flex items-center text-xs md:text-sm font-medium text-neutral-800">
+                    class="animate-ticker whitespace-nowrap flex items-center text-xs md:text-sm font-medium text-neutral-800 dark:text-neutral-200">
                     <!-- Ticker Items will be injected here -->
                     <span class="text-neutral-400 px-4">جارٍ الاتصال بغرفة الأخبار...</span>
                 </div>
                 <!-- Gradients for fade effect on ticker -->
                 <div
-                    class="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-neutral-50 to-transparent pointer-events-none z-10">
+                    class="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-neutral-50 to-transparent pointer-events-none z-10 dark:from-neutral-900">
                 </div>
                 <div
-                    class="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-neutral-50 to-transparent pointer-events-none z-10">
+                    class="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-neutral-50 to-transparent pointer-events-none z-10 dark:from-neutral-900">
                 </div>
             </div>
         </div>
@@ -319,13 +340,14 @@
                 </section>
 
                 <!-- Layout: Main Feed + Sidebar -->
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 border-t border-neutral-200 pt-12">
+                <div
+                    class="grid grid-cols-1 lg:grid-cols-12 gap-12 border-t border-neutral-200 pt-12 dark:border-neutral-800">
 
                     <!-- Main Content (8 cols) -->
                     <div class="lg:col-span-8">
                         <div class="flex items-center justify-between mb-10">
                             <h2 id="section-title"
-                                class="text-2xl font-serif font-bold text-neutral-900 flex items-center gap-3">
+                                class="text-2xl font-serif font-bold text-neutral-900 flex items-center gap-3 dark:text-white">
                                 <span class="w-8 h-1 bg-brand rounded-full block"></span>
                                 آخر المستجدات
                             </h2>
@@ -363,8 +385,9 @@
                     <aside class="lg:col-span-4 space-y-12">
 
                         <!-- Most Read Widget -->
-                        <div class="bg-white rounded-2xl p-8 border border-neutral-100 shadow-card">
-                            <h3 class="text-lg font-bold mb-6 flex items-center gap-2">
+                        <div
+                            class="bg-white rounded-2xl p-8 border border-neutral-100 shadow-card dark:bg-neutral-900 dark:border-neutral-800 dark:shadow-dark-card">
+                            <h3 class="text-lg font-bold mb-6 flex items-center gap-2 dark:text-white">
                                 <i data-lucide="trending-up" class="w-5 h-5 text-brand"></i>
                                 الأكثر قراءة
                             </h3>
@@ -396,7 +419,7 @@
 
                         <!-- Ad Placeholder (Modern) -->
                         <div
-                            class="h-64 bg-neutral-100 rounded-2xl flex flex-col items-center justify-center text-neutral-400 border border-dashed border-neutral-300">
+                            class="h-64 bg-neutral-100 rounded-2xl flex flex-col items-center justify-center text-neutral-400 border border-dashed border-neutral-300 dark:bg-neutral-900 dark:border-neutral-800">
                             <span class="text-xs font-medium tracking-widest uppercase mb-1">إعلان</span>
                             <span class="text-xs">مساحة إعلانية</span>
                         </div>
@@ -406,6 +429,51 @@
             </div>
         </div>
     </main>
+
+    <!-- Quick Reader Modal -->
+    <div id="quick-reader"
+        class="hidden fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div
+            class="bg-white dark:bg-neutral-900 w-full max-w-4xl max-h-[90vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col animate-in zoom-in duration-300">
+            <div class="p-6 border-b border-neutral-100 dark:border-neutral-800 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <img id="reader-logo" src="" class="w-6 h-6 rounded-full object-contain bg-white p-0.5">
+                    <span id="reader-source"
+                        class="text-xs font-bold text-neutral-500 uppercase tracking-widest">المصدر</span>
+                </div>
+                <button onclick="closeReader()"
+                    class="p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-full transition-colors">
+                    <i data-lucide="x" class="w-5 h-5 text-neutral-500"></i>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-8 md:p-12 no-scrollbar">
+                <div class="max-w-2xl mx-auto">
+                    <img id="reader-image" src="" class="w-full h-64 md:h-96 object-cover rounded-2xl mb-8 shadow-lg">
+                    <h2 id="reader-title"
+                        class="text-3xl md:text-4xl font-serif font-bold text-neutral-900 dark:text-white mb-6 leading-tight">
+                        العنوان</h2>
+                    <div
+                        class="flex items-center gap-4 mb-8 text-sm text-neutral-400 border-y border-neutral-100 dark:border-neutral-800 py-4">
+                        <span id="reader-date" class="flex items-center gap-2"><i data-lucide="calendar"
+                                class="w-4 h-4"></i> التاريخ</span>
+                        <span id="reader-time" class="flex items-center gap-2 text-newspaper font-bold"><i
+                                data-lucide="clock" class="w-4 h-4"></i> دقيقتان</span>
+                    </div>
+                    <div id="reader-content"
+                        class="text-lg text-neutral-700 dark:text-neutral-300 leading-loose font-light prose dark:prose-invert max-w-none">
+                        <!-- Content injected here -->
+                    </div>
+                </div>
+            </div>
+            <div
+                class="p-6 border-t border-neutral-100 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/50 flex justify-center">
+                <a id="reader-link" href="#" target="_blank"
+                    class="bg-newspaper text-white px-8 py-3 rounded-full font-bold hover:scale-105 transition-all shadow-lg shadow-newspaper/30">
+                    قراءة المقال الأصلي بالكامل
+                </a>
+            </div>
+        </div>
+    </div>
 
     <!-- Footer -->
     <footer class="bg-neutral-950 text-white border-t border-neutral-900 pt-20 pb-10">
@@ -472,6 +540,36 @@
         const API_URL = '/api';
         const WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
 
+        // Source Logos Mapping
+        const SOURCE_LOGOS = {
+            'Reuters': 'https://www.reuters.com/pf/resources/images/reuters/logo-vertical-default-dark.svg?d=190',
+            'Al Jazeera English': 'https://www.aljazeera.com/wp-content/themes/aje-v2/assets/img/logo-aje.svg',
+            'BBC News': 'https://nav.files.bbci.co.uk/search/2.1.25/img/bbc_logo_black.png',
+            'Sky News': 'https://news.sky.com/assets/sky-news-logo.svg',
+            'Associated Press': 'https://apnews.com/pf/resources/images/ap-logo-black.svg?d=190',
+            'DW News': 'https://www.dw.com/resource/image/1655024/logo/4/200/200/7751f893a7c66d8e27f001306b3a2386/logo.png',
+            'NY Times': 'https://help.nytimes.com/hc/article_attachments/360020083232/The_New_York_Times_Logo.png',
+            'CNN': 'https://upload.wikimedia.org/wikipedia/commons/b/b1/CNN.svg',
+            'Al Jazeera': 'https://www.aljazeera.net/wp-content/themes/aljazeera/assets/images/aj-logo-new.svg',
+            'الحدث': 'https://www.alhadath.net/favicon.ico',
+            'العربية': 'https://www.alarabiya.net/favicon.ico',
+            'بي بي سي عربي': 'https://www.bbc.com/arabic/favicon.ico',
+            'الجزيرة': 'https://www.aljazeera.net/favicon.ico',
+            'Sky News Arabia Playlist': 'https://www.skynewsarabia.com/favicon.ico',
+            'Financial Times': 'https://www.ft.com/__origami/service/image/v2/images/raw/ftlogo-v1%3Abrand-ft-logo-square-coloured?source=origami-build-tools&format=png&width=100',
+            'Bloomberg Middle East': 'https://www.bloomberg.com/favicon.ico',
+            'The Guardian': 'https://assets.guim.co.uk/images/favicons/468e89111340aef53528646b1f2da84a/32x32.ico',
+            'Reuters': 'https://www.reuters.com/favicon.ico'
+        };
+
+        function getSourceLogo(sourceName) {
+            // Priority: Hardcoded Mapping -> Google Favicon Service
+            if (SOURCE_LOGOS[sourceName]) return SOURCE_LOGOS[sourceName];
+
+            // For others, try to get from domain if it's a newspaper, or use a generic news icon
+            return `https://www.google.com/s2/favicons?domain=${sourceName.toLowerCase().replace(/\s+/g, '')}.com&sz=128`;
+        }
+
         let currentPage = 1;
         let allNews = [];
         let pendingNews = [];
@@ -489,11 +587,29 @@
 
         let activeTab = 'world'; // 'world', 'yemen', or 'newspaper'
 
+        // --- Dark Mode Logic ---
+        function toggleDarkMode() {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('darkMode', 'disabled');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('darkMode', 'enabled');
+            }
+        }
+
+        function initDarkMode() {
+            if (localStorage.getItem('darkMode') === 'enabled' ||
+                (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            }
+        }
+
         // --- -
         document.addEventListener('DOMContentLoaded', () => {
+            initDarkMode();
             lucide.createIcons();
             initDate();
-            // Start with World news
             fetchNews(currentPage);
             connectWS();
         });
@@ -678,6 +794,14 @@
             const mobileSecondary = document.getElementById('mobile-secondary');
             const latestFeed = document.getElementById('latest-feed');
             const trendingList = document.getElementById('trending-list');
+            const isNewspaper = activeTab === 'newspaper';
+
+            // Special Grid Layout for Newspapers
+            if (isNewspaper) {
+                latestFeed.className = "grid grid-cols-1 md:grid-cols-2 gap-8";
+            } else {
+                latestFeed.className = "flex flex-col gap-10";
+            }
 
             if (!newsItems || newsItems.length === 0) {
                 tickerText.innerHTML = '<span class="text-neutral-400 px-4">لا توجد أخبار حالياً</span>';
@@ -706,13 +830,16 @@
             // 2. Main Hero (First item)
             const hero = newsItems[0];
             const heroImg = hero.image_url || getThumbnailUrl(hero.link);
+            const heroLogo = getSourceLogo(hero.source);
 
             document.getElementById('hero-main').innerHTML = `
                 <a href="${hero.link}" target="_blank" class="block w-full h-full">
                     <img src="${heroImg}" class="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" alt="${hero.title}">
                     <div class="absolute inset-0 image-gradient flex flex-col justify-end p-6 md:p-10">
                         <div class="transform translate-y-0 transition-transform duration-500">
-                            <span class="${bgClass} text-white text-[10px] md:text-xs font-bold px-2 py-1 rounded mb-4 inline-block tracking-wider uppercase">${hero.source}</span>
+                            <div class="flex items-center gap-2 mb-4">
+                                <span class="${bgClass} text-white text-[10px] md:text-xs font-bold px-2 py-1 rounded inline-block tracking-wider uppercase">${hero.source}</span>
+                            </div>
                             <h2 class="text-3xl md:text-5xl font-serif text-white font-bold leading-[1.1] md:leading-tight mb-3 drop-shadow-lg max-w-4xl tracking-tight">${hero.title}</h2>
                             <p class="text-neutral-200 text-sm md:text-base line-clamp-2 max-w-2xl opacity-90 leading-relaxed font-light">${hero.summary || ''}</p>
                             <div class="flex items-center gap-3 mt-4 text-xs text-neutral-300 font-medium">
@@ -727,12 +854,16 @@
             const sideItems = newsItems.slice(1, 3);
             const sideHTML = sideItems.map(item => {
                 const img = item.image_url || getThumbnailUrl(item.link);
+                const logo = getSourceLogo(item.source);
                 return `
-                    <a href="${item.link}" target="_blank" class="group relative flex-1 rounded-2xl overflow-hidden shadow-card">
+                    <a href="${item.link}" target="_blank" class="group relative flex-1 rounded-2xl overflow-hidden shadow-card dark:shadow-dark-card border border-transparent dark:border-neutral-800">
                         <img src="${img}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110">
                         <div class="absolute inset-0 bg-black/40 group-hover:bg-black/50 transition-colors"></div>
                         <div class="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent">
-                            <span class="${colorClass} text-xs font-bold uppercase mb-1 block tracking-wider">${item.source}</span>
+                            <div class="flex items-center gap-2 mb-1">
+                                <img src="${logo}" class="w-4 h-4 rounded-full bg-white p-0.5 object-contain" onerror="this.style.display='none'">
+                                <span class="${colorClass} text-xs font-bold uppercase block tracking-wider">${item.source}</span>
+                            </div>
                             <h3 class="text-lg font-bold text-white leading-tight">${item.title}</h3>
                         </div>
                     </a>
@@ -743,12 +874,16 @@
             // 3b. Mobile Secondary Grid (Items 1 & 2) - Mobile Only
             const mobileSecondaryHTML = sideItems.map(item => {
                 const img = item.image_url || getThumbnailUrl(item.link);
+                const logo = getSourceLogo(item.source);
                 return `
-                    <a href="${item.link}" target="_blank" class="group relative rounded-xl overflow-hidden shadow-card aspect-[4/3]">
+                    <a href="${item.link}" target="_blank" class="group relative rounded-xl overflow-hidden shadow-card aspect-[4/3] dark:shadow-dark-card border border-transparent dark:border-neutral-800">
                         <img src="${img}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110">
                         <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                         <div class="absolute bottom-0 left-0 right-0 p-3">
-                            <span class="${colorClass} text-[10px] font-bold uppercase mb-1 block">${item.source}</span>
+                            <div class="flex items-center gap-1.5 mb-1">
+                                <img src="${logo}" class="w-3 h-3 rounded-full bg-white p-0.5 object-contain" onerror="this.style.display='none'">
+                                <span class="${colorClass} text-[10px] font-bold uppercase block">${item.source}</span>
+                            </div>
                             <h3 class="text-sm font-bold text-white leading-tight line-clamp-2">${item.title}</h3>
                         </div>
                     </a>
@@ -757,45 +892,99 @@
             document.getElementById('mobile-secondary').innerHTML = mobileSecondaryHTML;
 
             // 4. Main Feed (Remaining items)
-            const feedHTML = newsItems.slice(3).map(item => {
-                const img = item.image_url || getThumbnailUrl(item.link);
-                return `
-                <article class="group flex flex-col md:flex-row gap-6 md:gap-8 items-start pb-10 border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50 p-4 -mx-4 rounded-xl transition-colors">
-                    <div class="w-full md:w-64 h-48 rounded-xl overflow-hidden shrink-0 shadow-sm relative">
-                        <img src="${img}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy">
-                        <div class="absolute top-2 right-2 bg-white/90 backdrop-blur text-[10px] font-bold px-2 py-1 rounded shadow-sm text-neutral-700">${item.source}</div>
-                    </div>
-                    <div class="flex-1">
-                        <div class="flex items-center gap-3 mb-2 text-xs font-medium text-neutral-400">
-                            <span class="${colorClass} uppercase tracking-wider font-bold">أخبار</span>
-                            <span class="w-1 h-1 bg-neutral-300 rounded-full"></span>
-                            <span class="flex items-center gap-1"><i data-lucide="clock" class="w-3 h-3"></i> ${timeAgo(item.published)}</span>
+            let feedHTML;
+
+            if (isNewspaper) {
+                // MAGAZINE STYLE for Newspapers
+                feedHTML = newsItems.slice(3).map(item => {
+                    const img = item.image_url || getThumbnailUrl(item.link);
+                    const logo = getSourceLogo(item.source);
+                    const readTime = Math.max(2, Math.floor(item.title.length / 20)); // Fake reading time based on title length
+
+                    return `
+                    <article class="group relative flex flex-col gap-5 pb-12 border-b border-neutral-100 dark:border-neutral-800 last:border-0 hover:bg-neutral-50/30 dark:hover:bg-neutral-900/20 p-6 -mx-6 rounded-2xl transition-all">
+                        <div class="flex flex-col md:flex-row gap-8 items-start">
+                             <div class="w-full md:w-56 h-40 rounded-lg overflow-hidden shrink-0 shadow-sm relative border border-neutral-100 dark:border-neutral-800">
+                                <img src="${img}" class="w-full h-full object-cover grayscale-[30%] group-hover:grayscale-0 transition-all duration-700 group-hover:scale-105" loading="lazy">
+                                <div class="absolute bottom-2 left-2 bg-black/70 backdrop-blur text-[9px] text-white px-2 py-0.5 rounded font-bold uppercase tracking-widest">مقال</div>
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex items-center gap-3 mb-3">
+                                    <div class="flex items-center gap-2 bg-neutral-100 dark:bg-neutral-800 px-2 py-1 rounded-md">
+                                        <img src="${logo}" class="w-4 h-4 rounded-full bg-white p-0.5 object-contain" onerror="this.style.display='none'">
+                                        <span class="text-[10px] font-black text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">${item.source}</span>
+                                    </div>
+                                    <span class="text-neutral-300 dark:text-neutral-700">|</span>
+                                    <span class="flex items-center gap-1 text-[10px] font-bold text-neutral-400 uppercase"><i data-lucide="book-open" class="w-3 h-3 text-newspaper"></i> قراءة في ${readTime} دقائق</span>
+                                </div>
+                                <a href="javascript:void(0)" onclick="openReader(${item.id}, 'newspaper')">
+                                    <h3 class="text-2xl md:text-3xl font-serif font-bold text-neutral-900 dark:text-white mb-4 leading-tight group-hover:text-newspaper transition-colors decoration-newspaper/20 underline-offset-8 group-hover:underline">${item.title}</h3>
+                                </a>
+                                <p class="text-neutral-600 dark:text-neutral-400 text-base leading-loose line-clamp-3 mb-6 font-light italic border-r-2 border-neutral-100 dark:border-neutral-800 pr-4">${item.summary || 'انقر لقراءة التحليل الكامل لهذا الخبر في المصدر الأصلي...'}</p>
+                                
+                                <div class="flex items-center justify-between">
+                                    <button onclick="openReader(${item.id}, 'newspaper')" class="inline-flex items-center gap-2 text-xs font-black text-newspaper hover:gap-4 transition-all uppercase tracking-widest">
+                                        قراءة سريعة <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                                    </button>
+                                    <div class="flex gap-4">
+                                        <button class="text-neutral-400 hover:text-newspaper transition-colors"><i data-lucide="bookmark" class="w-4 h-4"></i></button>
+                                        <button class="text-neutral-400 hover:text-newspaper transition-colors"><i data-lucide="share-2" class="w-4 h-4"></i></button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <a href="${item.link}" target="_blank">
-                            <h3 class="text-xl md:text-2xl font-bold text-neutral-900 mb-3 leading-snug ${hoverText} transition-colors tracking-tight font-serif">${item.title}</h3>
-                        </a>
-                        <p class="text-neutral-500 text-sm md:text-base leading-relaxed line-clamp-2 mb-4 font-light">${item.summary || 'انقر لقراءة التفاصيل الكاملة لهذا الخبر...'}</p>
-                        
-                        <div class="flex gap-3">
-                            <button class="text-xs font-bold text-neutral-900 flex items-center gap-1 hover:gap-2 transition-all group/btn">
-                                اقرأ المزيد <i data-lucide="arrow-left" class="w-3 h-3 ${colorClass}"></i>
-                            </button>
-                            <button class="text-neutral-400 hover:text-neutral-600"><i data-lucide="bookmark" class="w-4 h-4"></i></button>
-                            <button class="text-neutral-400 hover:text-neutral-600"><i data-lucide="share-2" class="w-4 h-4"></i></button>
+                    </article>
+                    `;
+                }).join('');
+            } else {
+                // Standard LIST STYLE for Videos
+                feedHTML = newsItems.slice(3).map(item => {
+                    const img = item.image_url || getThumbnailUrl(item.link);
+                    const logo = getSourceLogo(item.source);
+                    return `
+                    <article class="group flex flex-col md:flex-row gap-6 md:gap-8 items-start pb-10 border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50 dark:hover:bg-neutral-900/40 p-4 -mx-4 rounded-xl transition-colors dark:border-neutral-800">
+                        <div class="w-full md:w-64 h-48 rounded-xl overflow-hidden shrink-0 shadow-sm relative dark:shadow-dark-card border border-transparent dark:border-neutral-800">
+                            <img src="${img}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy">
+                            <div class="absolute top-2 right-2 bg-white/90 dark:bg-black/80 backdrop-blur text-[10px] font-bold px-2 py-1 rounded shadow-sm text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
+                                <img src="${logo}" class="w-3 h-3 rounded-full bg-white p-0.5 object-contain" onerror="this.style.display='none'">
+                                ${item.source}
+                            </div>
                         </div>
-                    </div>
-                </article>
-                `;
-            }).join('');
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-2 text-xs font-medium text-neutral-400">
+                                <span class="${colorClass} uppercase tracking-wider font-bold">أخبار</span>
+                                <span class="w-1 h-1 bg-neutral-300 dark:bg-neutral-700 rounded-full"></span>
+                                <span class="flex items-center gap-1"><i data-lucide="clock" class="w-3 h-3"></i> ${timeAgo(item.published)}</span>
+                            </div>
+                            <a href="${item.link}" target="_blank">
+                                <h3 class="text-xl md:text-2xl font-bold text-neutral-900 dark:text-white mb-3 leading-snug ${hoverText} transition-colors tracking-tight font-serif">${item.title}</h3>
+                            </a>
+                            <p class="text-neutral-500 dark:text-neutral-400 text-sm md:text-base leading-relaxed line-clamp-2 mb-4 font-light">${item.summary || 'انقر لقراءة التفاصيل الكاملة لهذا الخبر...'}</p>
+                            
+                            <div class="flex gap-3">
+                                <button class="text-xs font-bold text-neutral-900 dark:text-neutral-300 flex items-center gap-1 hover:gap-2 transition-all group/btn">
+                                    اقرأ المزيد <i data-lucide="arrow-left" class="w-3 h-3 ${colorClass}"></i>
+                                </button>
+                                <button class="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"><i data-lucide="bookmark" class="w-4 h-4"></i></button>
+                                <button class="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"><i data-lucide="share-2" class="w-4 h-4"></i></button>
+                            </div>
+                        </div>
+                    </article>
+                    `;
+                }).join('');
+            }
             document.getElementById('latest-feed').innerHTML = feedHTML;
 
             // 5. Trending Widget (Recycle top 5 for demo)
             const trendingHTML = newsItems.slice(0, 5).map((item, idx) => `
                 <a href="${item.link}" target="_blank" class="flex gap-4 group items-start">
-                    <span class="text-3xl font-serif font-bold text-neutral-200 ${hoverText} transition-colors -mt-2">0${idx + 1}</span>
+                    <span class="text-3xl font-serif font-bold text-neutral-200 dark:text-neutral-800 ${hoverText} transition-colors -mt-2">0${idx + 1}</span>
                     <div>
-                        <span class="text-[10px] font-bold text-neutral-400 uppercase mb-1 block">${item.source}</span>
-                        <h4 class="text-sm font-bold text-neutral-800 leading-snug group-hover:text-neutral-600 transition-colors line-clamp-2">${item.title}</h4>
+                        <div class="flex items-center gap-1.5 mb-1">
+                            <img src="${getSourceLogo(item.source)}" class="w-3 h-3 rounded-full bg-white p-0.5 object-contain" onerror="this.style.display='none'">
+                            <span class="text-[10px] font-bold text-neutral-400 uppercase block">${item.source}</span>
+                        </div>
+                        <h4 class="text-sm font-bold text-neutral-800 dark:text-neutral-200 leading-snug group-hover:text-neutral-600 dark:group-hover:text-neutral-400 transition-colors line-clamp-2">${item.title}</h4>
                     </div>
                 </a>
             `).join('');
@@ -929,6 +1118,41 @@
                 console.error('Error clearing news:', error);
                 alert('حدث خطأ أثناء الاتصال بالخادم');
             }
+        }
+
+        // --- Quick Reader Functions ---
+        function openReader(id, type) {
+            let item;
+            if (type === 'world') item = allNews.find(n => n.id === id);
+            else if (type === 'yemen') item = yemenNews.find(n => n.id === id);
+            else item = newspaperNews.find(n => n.id === id);
+
+            if (!item) return;
+
+            document.getElementById('reader-logo').src = getSourceLogo(item.source);
+            document.getElementById('reader-source').textContent = item.source;
+            document.getElementById('reader-image').src = item.image_url || getThumbnailUrl(item.link);
+            document.getElementById('reader-title').textContent = item.title;
+            document.getElementById('reader-date').textContent = timeAgo(item.published);
+            document.getElementById('reader-link').href = item.link;
+
+            const readTime = Math.max(2, Math.floor(item.title.length / 20));
+            document.getElementById('reader-time').innerHTML = `<i data-lucide="clock" class="w-4 h-4"></i> قراءة في ${readTime} دقائق`;
+
+            // For now show summary as content, in future can fetch full text
+            document.getElementById('reader-content').innerHTML = `
+                <p class="mb-6">${item.summary || 'جاري جلب محتوى المقال...'}</p>
+                <p>هذا النص يمثل مخلصاً ذكياً للمحتوى المنشور في ${item.source}. للقراءة المتعمقة والاطلاع على كافة التفاصيل والبيانات الواردة في هذا التقرير، يرجى الانتقال للمصدر الأصلي عبر الزر أدناه.</p>
+            `;
+
+            document.getElementById('quick-reader').classList.remove('hidden');
+            document.body.style.overflow = 'hidden'; // Stop scrolling
+            lucide.createIcons();
+        }
+
+        function closeReader() {
+            document.getElementById('quick-reader').classList.add('hidden');
+            document.body.style.overflow = 'auto'; // Restore scrolling
         }
 
     </script>
