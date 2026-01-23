@@ -231,6 +231,15 @@ YOUTUBE_CHANNELS = [
     {"url": "https://www.youtube.com/@breakingpoints/videos", "name": "Breaking Points", "type": "channel"},
     {"url": "https://www.youtube.com/@cfr/videos", "name": "CFR", "type": "channel"},
     {"url": "https://www.youtube.com/@MiddleEastEye/videos", "name": "Middle East Eye", "type": "channel"},
+    {"url": "https://www.youtube.com/@AFP/videos", "name": "AFP", "type": "channel"},
+    {"url": "https://www.youtube.com/@unitednations/videos", "name": "United Nations", "type": "channel"},
+    {"url": "https://www.youtube.com/@PBSNewsHour/videos", "name": "PBS NewsHour", "type": "channel"},
+    {"url": "https://www.youtube.com/@guardiannews/videos", "name": "Guardian News", "type": "channel"},
+    {"url": "https://www.youtube.com/@axios/videos", "name": "Axios", "type": "channel"},
+    {"url": "https://www.youtube.com/@talktv/videos", "name": "TalkTV", "type": "channel"},
+    {"url": "https://www.youtube.com/@DemocracyNow/videos", "name": "Democracy Now", "type": "channel"},
+    {"url": "https://www.youtube.com/@GBNewsOnline/videos", "name": "GB News", "type": "channel"},
+    {"url": "https://www.youtube.com/@RedactedNews/videos", "name": "Redacted News", "type": "channel"},
 ]
 
 # Yemen YouTube Channels List
