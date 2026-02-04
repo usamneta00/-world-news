@@ -398,11 +398,36 @@
                     </div>
                 </div>
             </div>
-            <div class="p-6 border-t border-white/10 flex justify-center">
+            <div class="p-6 border-t border-white/10 flex justify-between items-center bg-black/40">
+                <button id="view-evolution-btn" onclick="showTimeline()"
+                    class="hidden items-center gap-2 px-6 py-3 bg-neon-accent/10 text-neon-accent border border-neon-accent/20 font-mono text-[10px] uppercase tracking-widest hover:bg-neon-accent hover:text-black transition-all rounded-sm">
+                    <i data-lucide="git-merge" class="w-4 h-4"></i> View Evolution
+                </button>
                 <a id="reader-link" href="#" target="_blank"
                     class="px-8 py-3 bg-neon-blue text-obsidian font-bold text-xs uppercase tracking-widest hover:bg-white transition-all">
                     Read Original Source
                 </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Evolution Timeline Modal -->
+    <div id="timeline-modal" class="fixed inset-0 z-[100] hidden flex items-center justify-center p-4 md:p-10">
+        <div class="absolute inset-0 bg-obsidian/95 backdrop-blur-xl" onclick="closeTimeline()"></div>
+        <div
+            class="relative w-full max-w-4xl max-h-[90vh] glass-panel flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
+            <div class="p-6 border-b border-white/10 flex items-center justify-between">
+                <div>
+                    <span class="text-neon-accent text-[10px] font-mono uppercase tracking-[0.3em]">Story
+                        Evolution</span>
+                    <h3 id="timeline-topic-summary" class="font-serif text-2xl text-white mt-1">مسار الحدث</h3>
+                </div>
+                <button onclick="closeTimeline()" class="p-2 hover:bg-white/5 rounded-full transition-colors">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div id="timeline-container" class="flex-1 overflow-y-auto p-8 md:p-12 no-scrollbar scroll-smooth">
+                <!-- Timeline items go here -->
             </div>
         </div>
     </div>
@@ -670,6 +695,19 @@
             if (link) link.href = item.link;
             if (content) content.innerHTML = `<p class="mb-6">${item.summary || 'Summary not available.'}</p>`;
 
+            // Setup Evolution Button
+            const evolBtn = document.getElementById('view-evolution-btn');
+            if (evolBtn) {
+                if (item.topic_id) {
+                    evolBtn.classList.remove('hidden');
+                    evolBtn.classList.add('flex');
+                    evolBtn.setAttribute('data-topic-id', item.topic_id);
+                } else {
+                    evolBtn.classList.add('hidden');
+                    evolBtn.classList.remove('flex');
+                }
+            }
+
             const reader = document.getElementById('quick-reader');
             if (reader) reader.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
@@ -692,6 +730,25 @@
                 ws.onmessage = (e) => {
                     const msg = JSON.parse(e.data);
                     if (msg.type === 'ping') return;
+                    if (msg.type === 'topic_update') {
+                        const lists = [allNews, yemenNews, newspaperNews];
+                        for (let list of lists) {
+                            const item = list.find(n => n.id === msg.data.id);
+                            if (item) {
+                                item.topic_id = msg.data.topic_id;
+                                // If reader is open, maybe update the evolution button visibility
+                                const evolBtn = document.getElementById('view-evolution-btn');
+                                if (evolBtn && !document.getElementById('quick-reader').classList.contains('hidden')) {
+                                    evolBtn.classList.remove('hidden');
+                                    evolBtn.classList.add('flex');
+                                    evolBtn.setAttribute('data-topic-id', item.topic_id);
+                                }
+                                break;
+                            }
+                        }
+                        return;
+                    }
+
                     let pending = activeTab === 'world' ? pendingNews : (activeTab === 'yemen' ? yemenPendingNews : newspaperPendingNews);
                     if ((msg.type === 'new_news' && activeTab === 'world') || (msg.type === 'new_yemen_news' && activeTab === 'yemen') || (msg.type === 'new_newspaper_news' && activeTab === 'newspaper')) {
                         pending.push(msg.data);
@@ -742,6 +799,55 @@
                     if (r.ok) location.reload();
                 } catch (e) { console.error(e); }
             }
+        }
+
+        async function showTimeline() {
+            const btn = document.getElementById('view-evolution-btn');
+            const topicId = btn.getAttribute('data-topic-id');
+            if (!topicId) return;
+
+            const container = document.getElementById('timeline-container');
+            const modal = document.getElementById('timeline-modal');
+
+            modal.classList.remove('hidden');
+            container.innerHTML = `<div class="flex items-center justify-center p-20"><div class="w-8 h-8 border-2 border-neon-accent border-t-transparent rounded-full animate-spin"></div></div>`;
+
+            try {
+                const response = await fetch(`${API_URL}/timeline/${topicId}`);
+                const data = await response.json();
+
+                if (data.items && data.items.length > 0) {
+                    container.innerHTML = data.items.map((it, idx) => `
+                        <div class="relative flex gap-8 pb-12 group last:pb-0">
+                            <!-- Line -->
+                            ${idx !== data.items.length - 1 ? '<div class="absolute left-3 top-8 bottom-0 w-px bg-white/10 group-hover:bg-neon-accent/30 transition-colors"></div>' : ''}
+                            
+                            <!-- Dot -->
+                            <div class="relative z-10 w-6 h-6 rounded-full bg-obsidian border-2 border-neutral-700 mt-1 flex-shrink-0 group-hover:border-neon-accent transition-colors">
+                                <div class="absolute inset-1 rounded-full bg-neutral-700 group-hover:bg-neon-accent transition-colors"></div>
+                            </div>
+                            
+                            <div class="flex-1 text-right">
+                                <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">${timeAgo(it.published)} • ${it.source}</span>
+                                <h4 class="font-serif text-xl text-white mt-1 group-hover:text-neon-blue transition-colors cursor-pointer" onclick="openAndCloseTimeline(${it.id})">${it.title}</h4>
+                                <p class="text-sm text-neutral-400 mt-2 font-light leading-relaxed">${it.summary || ''}</p>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                container.innerHTML = `<p class="text-center text-red-500 font-mono">Failed to load evolution thread.</p>`;
+            }
+            lucide.createIcons();
+        }
+
+        function closeTimeline() {
+            document.getElementById('timeline-modal').classList.add('hidden');
+        }
+
+        function openAndCloseTimeline(id) {
+            closeTimeline();
+            openReader(id, activeTab);
         }
 
         document.addEventListener('DOMContentLoaded', () => {

@@ -11,3 +11,4 @@ aiosqlite
 asyncio
 yt-dlp
 python-dateutil
+openai

@@ -18,6 +18,7 @@ from bs4 import BeautifulSoup
 import hashlib
 from urllib.parse import urljoin, urlparse, quote
 import html
+from openai import OpenAI
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)
@@ -44,6 +45,8 @@ class NewsItem(Base):
     image_url = Column(String, nullable=True)
     video_id = Column(String, nullable=True)  # YouTube video ID
     created_at = Column(DateTime, default=datetime.now) # Track when added to our DB
+    topic_id = Column(String, nullable=True, index=True) # For event sequence threading
+    topic_summary = Column(String, nullable=True) # AI generated description of this event thread
 
 class ChannelLastVideo(Base):
     __tablename__ = "channel_last_video"
@@ -65,6 +68,8 @@ class YemenNewsItem(Base):
     image_url = Column(String, nullable=True)
     video_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.now) # Track when added to our DB
+    topic_id = Column(String, nullable=True, index=True)
+    topic_summary = Column(String, nullable=True)
 
 class YemenChannelLastVideo(Base):
     __tablename__ = "yemen_channel_last_video"
@@ -86,6 +91,8 @@ class NewspaperNewsItem(Base):
     image_url = Column(String, nullable=True)
     article_id = Column(String, nullable=True)  # Unique article identifier
     created_at = Column(DateTime, default=datetime.now)
+    topic_id = Column(String, nullable=True, index=True)
+    topic_summary = Column(String, nullable=True)
 
 class NewspaperLastArticle(Base):
     __tablename__ = "newspaper_last_article"
@@ -133,6 +140,19 @@ def migrate_database():
                 conn.execute(text("ALTER TABLE yemen_news ADD COLUMN created_at DATETIME"))
                 try: conn.commit() 
                 except: pass 
+            
+            # Add topic_id and topic_summary columns if missing
+            for table in ['news', 'yemen_news', 'newspaper_news']:
+                res = conn.execute(text(f"PRAGMA table_info({table})"))
+                cols = [row[1] for row in res]
+                if 'topic_id' not in cols:
+                    logger.info(f"Adding topic_id to {table}...")
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN topic_id VARCHAR"))
+                if 'topic_summary' not in cols:
+                    logger.info(f"Adding topic_summary to {table}...")
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN topic_summary VARCHAR"))
+                try: conn.commit()
+                except: pass
             
             # Check if channel_last_video table exists
             result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='channel_last_video'"))
@@ -308,9 +328,72 @@ def is_yemen_related(title: str) -> bool:
             return True
     return False
 
-def generate_article_id(url: str) -> str:
-    """Generate a unique ID for an article based on its URL"""
-    return hashlib.md5(url.encode()).hexdigest()[:16]
+# AI Setup for Event Evolution
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+
+async def analyze_topic_ai(title: str, summary: str):
+    """Assign news to a topic thread or create a new one using OpenAI"""
+    if not openai_client: return None
+    
+    # Get last 20 topics to help AI cluster consistently
+    db = SessionLocal()
+    recent_items = db.query(NewsItem).filter(NewsItem.topic_id != None).order_by(desc(NewsItem.created_at)).limit(20).all()
+    existing_topics = list(set([f"{i.topic_id}: {i.topic_summary}" for i in recent_items]))
+    db.close()
+
+    prompt = f"""
+    New Story: {title}
+    Summary: {summary}
+    
+    Existing Recent Topic Threads:
+    {json.dumps(existing_topics, ensure_ascii=False)}
+    
+    Task:
+    Decide if this story belongs to one of the existing topics or if it's a new separate event thread.
+    Provide output in JSON:
+    {{
+        "topic_id": "slug-name-in-english",
+        "topic_summary_ar": "وصف مختصر جدا للحدث باللغة العربية"
+    }}
+    
+    If it belongs to an existing topic, reuse that EXACT topic_id.
+    If it's new, create a descriptive slug.
+    """
+    
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={ "type": "json_object" }
+        )
+        return json.loads(response.choices[0].message.content)
+    except Exception as e:
+        logger.error(f"Topic clustering error: {e}")
+        return None
+
+async def process_topic_evolution(item_id: int, table_name: str):
+    """Background task to link news items into evolution threads"""
+    db = SessionLocal()
+    try:
+        model = {"news": NewsItem, "yemen_news": YemenNewsItem, "newspaper_news": NewspaperNewsItem}.get(table_name)
+        item = db.query(model).get(item_id)
+        if not item: return
+
+        ai_data = await analyze_topic_ai(item.title, item.summary)
+        if ai_data:
+            item.topic_id = ai_data.get('topic_id')
+            item.topic_summary = ai_data.get('topic_summary_ar')
+            db.commit()
+            logger.info(f"Threaded item {item_id} into topic: {item.topic_id}")
+            
+            # Notify frontend of enrichment
+            await manager.broadcast(json.dumps({
+                "type": "topic_update",
+                "data": {"id": item.id, "table": table_name, "topic_id": item.topic_id}
+            }))
+    except Exception as e: logger.error(f"Evolution task error: {e}")
+    finally: db.close()
 
 def translate_to_arabic(text: str) -> str:
     """Translate English text to Arabic using Google Translate free API"""
@@ -514,6 +597,8 @@ async def fetch_newspaper_feeds():
             
             # Add all new articles to database
             for article in articles:
+                if first_run:
+                    continue
                 try:
                     # Check if article already exists (safety check)
                     exists = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.link == article['link']).first()
@@ -533,6 +618,9 @@ async def fetch_newspaper_feeds():
                     db.add(new_item)
                     db.commit()
                     db.refresh(new_item)  # Refresh to get the ID
+                    
+                    # Process evolution in background
+                    asyncio.create_task(process_topic_evolution(new_item.id, "newspaper_news"))
                     
                     item_dict = {
                         "id": new_item.id,
@@ -895,6 +983,8 @@ async def fetch_youtube_feeds():
             
             # Add all new videos to database
             for video in videos:
+                if first_run:
+                    continue
                 try:
                     # Check if video already exists (safety check)
                     exists = db.query(NewsItem).filter(NewsItem.link == video['link']).first()
@@ -913,6 +1003,9 @@ async def fetch_youtube_feeds():
                     db.add(new_item)
                     db.commit()
                     db.refresh(new_item)
+                    
+                    # Process evolution in background
+                    asyncio.create_task(process_topic_evolution(new_item.id, "news"))
                     
                     item_dict = {
                         "id": new_item.id,
@@ -996,8 +1089,8 @@ async def fetch_youtube_feeds():
         first_run = False
         
         # Check every 5 minutes as requested
-        logger.info("Waiting 3 minutes before next fetch...")
-        await asyncio.sleep(180)
+        logger.info("Waiting 1 minutes before next fetch...")
+        await asyncio.sleep(60)
 
 async def fetch_yemen_youtube_feeds():
     """Main function to fetch and store ONLY NEW Yemen-related YouTube videos"""
@@ -1021,6 +1114,8 @@ async def fetch_yemen_youtube_feeds():
             
             # Add all new videos to database
             for video in videos:
+                if first_run:
+                    continue
                 try:
                     # Check if video already exists (safety check)
                     exists = db.query(YemenNewsItem).filter(YemenNewsItem.link == video['link']).first()
@@ -1039,6 +1134,9 @@ async def fetch_yemen_youtube_feeds():
                     db.add(new_item)
                     db.commit()
                     db.refresh(new_item)
+                    
+                    # Process evolution in background
+                    asyncio.create_task(process_topic_evolution(new_item.id, "yemen_news"))
                     
                     item_dict = {
                         "id": new_item.id,
@@ -1135,6 +1233,27 @@ async def get_news(page: int = 1, limit: int = 20):
         "page": page,
         "limit": limit
     }
+
+@app.get("/api/timeline/{topic_id}")
+async def get_timeline(topic_id: str):
+    """Fetch all news items belonging to an evolution thread"""
+    db = SessionLocal()
+    items = []
+    for model in [NewsItem, YemenNewsItem, NewspaperNewsItem]:
+        results = db.query(model).filter(model.topic_id == topic_id).order_by(model.published).all()
+        for r in results:
+            items.append({
+                "id": r.id,
+                "title": r.title,
+                "summary": r.summary,
+                "published": r.published.isoformat(),
+                "source": r.source,
+                "link": r.link,
+                "image_url": r.image_url
+            })
+    db.close()
+    items.sort(key=lambda x: x['published'])
+    return {"topic_id": topic_id, "items": items}
 
 @app.get("/api/yemen-news")
 async def get_yemen_news(page: int = 1, limit: int = 20):
