@@ -374,6 +374,10 @@ async def analyze_topic_ai(title: str, summary: str):
         logger.error(f"Topic clustering error: {e}")
         return None
 
+def generate_article_id(url: str) -> str:
+    """Generate a stable unique ID for an article URL"""
+    return hashlib.md5(url.encode()).hexdigest()
+
 async def process_topic_evolution(item_id: int, table_name: str):
     """Background task to link news items into evolution threads"""
     db = SessionLocal()
@@ -386,6 +390,9 @@ async def process_topic_evolution(item_id: int, table_name: str):
         if ai_data:
             item.topic_id = ai_data.get('topic_id')
             item.topic_summary = ai_data.get('topic_summary_ar')
+            # Also update the actual summary with the better AI description
+            if item.topic_summary:
+                item.summary = item.topic_summary
             db.commit()
             logger.info(f"Threaded item {item_id} into topic: {item.topic_id}")
             
