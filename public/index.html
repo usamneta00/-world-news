@@ -612,10 +612,14 @@
                             <div class="timeline-icon">
                                 <i data-lucide="git-branch" class="w-5 h-5 text-white"></i>
                             </div>
-                            <div>
+                            <div class="flex-1">
                                 <h3 class="timeline-section-title">الخريطة الزمنية وتطور الحدث</h3>
                                 <p id="timeline-thread-title" class="text-sm text-neutral-400 mt-1"></p>
                             </div>
+                            <button id="copy-timeline-links" onclick="copyTimelineLinks()" class="hidden px-4 py-2 bg-white/5 hover:bg-neon-blue/20 border border-white/10 hover:border-neon-blue/50 rounded-lg transition-all duration-300 flex items-center gap-2 text-xs text-neutral-300 hover:text-neon-blue" title="نسخ جميع الروابط">
+                                <i data-lucide="copy" class="w-4 h-4"></i>
+                                <span>نسخ الروابط</span>
+                            </button>
                         </div>
                         
                         <div id="timeline-loading" class="timeline-loading hidden">
@@ -681,6 +685,7 @@
         let currentPage = 1, allNews = [], pendingNews = [], totalItems = 0;
         let yemenCurrentPage = 1, yemenNews = [], yemenPendingNews = [], yemenTotalItems = 0;
         let newspaperCurrentPage = 1, newspaperNews = [], newspaperPendingNews = [], newspaperTotalItems = 0;
+        let currentTimelineLinks = []; // Store timeline links for copying
 
         // --- Three.js Background ---
         let scene, camera, renderer, particles, ring;
@@ -919,9 +924,21 @@
                 
                 if (loading) loading.classList.add('hidden');
                 
+                // Reset timeline links
+                currentTimelineLinks = [];
+                const copyBtn = document.getElementById('copy-timeline-links');
+                if (copyBtn) copyBtn.classList.add('hidden');
+                
                 if (!data.related_news || data.related_news.length === 0) {
                     if (empty) empty.classList.remove('hidden');
                     return;
+                }
+                
+                // Store links for copying
+                currentTimelineLinks = data.related_news.map(news => news.link);
+                if (copyBtn && currentTimelineLinks.length > 0) {
+                    copyBtn.classList.remove('hidden');
+                    lucide.createIcons();
                 }
                 
                 // Show thread title
@@ -988,6 +1005,31 @@
         function openTimelineLink(link) {
             // Open the news link directly in a new tab
             window.open(link, '_blank');
+        }
+        
+        function copyTimelineLinks() {
+            if (currentTimelineLinks.length === 0) return;
+            
+            const linksText = currentTimelineLinks.join('\n');
+            navigator.clipboard.writeText(linksText).then(() => {
+                // Show success feedback
+                const btn = document.getElementById('copy-timeline-links');
+                if (btn) {
+                    const originalHTML = btn.innerHTML;
+                    btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i><span>تم النسخ!</span>';
+                    btn.classList.add('bg-green-500/20', 'border-green-500/50', 'text-green-400');
+                    lucide.createIcons();
+                    
+                    setTimeout(() => {
+                        btn.innerHTML = originalHTML;
+                        btn.classList.remove('bg-green-500/20', 'border-green-500/50', 'text-green-400');
+                        lucide.createIcons();
+                    }, 2000);
+                }
+            }).catch(err => {
+                console.error('Failed to copy links:', err);
+                alert('فشل نسخ الروابط');
+            });
         }
 
         function openReader(id, type) {
