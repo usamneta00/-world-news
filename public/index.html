@@ -681,18 +681,13 @@
             lucide.createIcons();
         }
 
-        function openReader(id, type, providedItem = null) {
-            let item = providedItem;
-            if (!item) {
-                const list = (type === 'world' ? allNews : (type === 'yemen' ? yemenNews : newspaperNews));
-                item = list.find(n => n.id === id);
-            }
-
+        function openReader(id, type) {
+            const list = (type === 'world' ? allNews : (type === 'yemen' ? yemenNews : newspaperNews));
+            const item = list.find(n => n.id === id);
             if (!item) return;
 
             const logo = document.getElementById('reader-logo');
             const source = document.getElementById('reader-source');
-            const imgContainer = document.getElementById('reader-image').parentElement;
             const img = document.getElementById('reader-image');
             const title = document.getElementById('reader-title');
             const date = document.getElementById('reader-date');
@@ -701,15 +696,7 @@
 
             if (logo) logo.src = getSourceLogo(item.source);
             if (source) source.textContent = item.source;
-
-            // Check for YouTube video
-            const youtubeId = item.link?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/)?.[1];
-            if (youtubeId) {
-                imgContainer.innerHTML = `<iframe src="https://www.youtube.com/embed/${youtubeId}?autoplay=1" class="w-full h-full" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
-            } else {
-                imgContainer.innerHTML = `<img id="reader-image" src="${item.image_url || getThumbnailUrl(item.link)}" class="w-full h-full object-cover">`;
-            }
-
+            if (img) img.src = item.image_url || getThumbnailUrl(item.link);
             if (title) title.textContent = item.title;
             if (date) date.textContent = timeAgo(item.published);
             if (link) link.href = item.link;
@@ -827,6 +814,9 @@
             }
         }
 
+        // Store timeline items globally for access
+        let timelineItems = [];
+
         async function showTimeline() {
             const btn = document.getElementById('view-evolution-btn');
             const topicId = btn.getAttribute('data-topic-id');
@@ -839,17 +829,20 @@
             container.innerHTML = `<div class="flex items-center justify-center p-20"><div class="w-8 h-8 border-2 border-neon-accent border-t-transparent rounded-full animate-spin"></div></div>`;
 
             try {
-                const response = await fetch(`${API_URL}/timeline/${topicId}`);
+                const response = await fetch(`${API_URL}/timeline/${encodeURIComponent(topicId)}`);
                 const data = await response.json();
+
+                // Store timeline items globally
+                timelineItems = data.items || [];
 
                 // Set the topic summary/title in the modal header
                 document.getElementById('timeline-topic-summary').textContent = topicId;
 
-                if (data.items && data.items.length > 0) {
-                    container.innerHTML = data.items.map((it, idx) => `
+                if (timelineItems.length > 0) {
+                    container.innerHTML = timelineItems.map((it, idx) => `
                         <div class="relative flex gap-4 md:gap-8 pb-10 group last:pb-0">
                             <!-- Line -->
-                            ${idx !== data.items.length - 1 ? '<div class="absolute left-3 top-8 bottom-0 w-px bg-white/10 group-hover:bg-neon-accent/30 transition-colors"></div>' : ''}
+                            ${idx !== timelineItems.length - 1 ? '<div class="absolute left-3 top-8 bottom-0 w-px bg-white/10 group-hover:bg-neon-accent/30 transition-colors"></div>' : ''}
                             
                             <!-- Dot -->
                             <div class="relative z-10 w-6 h-6 rounded-full bg-obsidian border-2 border-neutral-700 mt-1 flex-shrink-0 group-hover:border-neon-accent transition-colors">
@@ -857,19 +850,20 @@
                             </div>
                             
                             <div class="flex-1 text-right">
-                                 <span class="text-[9px] md:text-[10px] font-mono text-neutral-500 uppercase tracking-widest">${timeAgo(it.published)} • ${it.source}</span>
-                                <div class="flex items-start justify-between gap-4">
-                                    <h4 class="font-serif text-lg md:text-xl text-white mt-1 group-hover:text-neon-blue transition-colors cursor-pointer" onclick="openAndCloseTimeline(event, ${JSON.stringify(it).replace(/"/g, '&quot;')})">${it.title}</h4>
-                                    <a href="${it.link}" target="_blank" class="mt-2 p-1 text-neutral-600 hover:text-neon-accent transition-colors" onclick="event.stopPropagation()">
-                                        <i data-lucide="external-link" class="w-4 h-4"></i>
-                                    </a>
-                                </div>
+                                <span class="text-[9px] md:text-[10px] font-mono text-neutral-500 uppercase tracking-widest">${timeAgo(it.published)} • ${it.source}</span>
+                                <a href="${it.link}" target="_blank" rel="noopener noreferrer" class="block">
+                                    <h4 class="font-serif text-lg md:text-xl text-white mt-1 group-hover:text-neon-blue transition-colors cursor-pointer">${it.title}</h4>
+                                </a>
                                 <p class="text-xs md:text-sm text-neutral-400 mt-2 font-light leading-relaxed">${it.summary || ''}</p>
+                                ${it.image_url ? `<img src="${it.image_url}" class="mt-3 w-32 h-20 object-cover rounded-sm opacity-60 group-hover:opacity-100 transition-opacity">` : ''}
                             </div>
                         </div>
                     `).join('');
+                } else {
+                    container.innerHTML = `<p class="text-center text-neutral-500 font-mono py-20">لا توجد أحداث مرتبطة بهذا الموضوع.</p>`;
                 }
             } catch (e) {
+                console.error('Timeline fetch error:', e);
                 container.innerHTML = `<p class="text-center text-red-500 font-mono">Failed to load evolution thread.</p>`;
             }
             lucide.createIcons();
@@ -877,12 +871,6 @@
 
         function closeTimeline() {
             document.getElementById('timeline-modal').classList.add('hidden');
-        }
-
-        function openAndCloseTimeline(event, item) {
-            if (event) event.preventDefault();
-            closeTimeline();
-            openReader(item.id, null, item);
         }
 
         document.addEventListener('DOMContentLoaded', () => {
