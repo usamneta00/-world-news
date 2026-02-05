@@ -107,7 +107,8 @@ class EventThread(Base):
     id = Column(Integer, primary_key=True, index=True)
     news_id = Column(Integer, index=True)  # The news item this thread belongs to
     related_news_id = Column(Integer, index=True)  # Related news item
-    news_type = Column(String)  # 'world', 'yemen', 'newspaper'
+    news_type = Column(String)  # 'world', 'yemen', 'newspaper' - type of the main news
+    related_news_type = Column(String)  # 'world', 'yemen', 'newspaper' - type of the related news
     thread_title = Column(String)  # Arabic title for the event thread
     similarity_reason = Column(String)  # Why these are related
     created_at = Column(DateTime, default=datetime.now)
@@ -215,6 +216,18 @@ def migrate_database():
                 logger.info("Creating event_threads table...")
                 EventThread.__table__.create(engine)
                 logger.info("Successfully created event_threads table")
+            else:
+                # Check if related_news_type column exists
+                result = conn.execute(text("PRAGMA table_info(event_threads)"))
+                event_columns = [row[1] for row in result]
+                if 'related_news_type' not in event_columns:
+                    logger.info("Adding related_news_type column to event_threads table...")
+                    conn.execute(text("ALTER TABLE event_threads ADD COLUMN related_news_type VARCHAR"))
+                    # Set default value for existing rows
+                    conn.execute(text("UPDATE event_threads SET related_news_type = news_type WHERE related_news_type IS NULL"))
+                    try: conn.commit()
+                    except: pass
+                    logger.info("Successfully added related_news_type column")
     except Exception as e:
         logger.error(f"Migration error: {e}")
 
@@ -225,34 +238,54 @@ migrate_database()
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 
 async def process_event_timeline(db, news_id: int, news_title: str, news_summary: str, news_type: str):
-    """Process and store event timeline for a new news item"""
+    """Process and store event timeline for a new news item - searches across ALL news types"""
     try:
-        # Get all existing news to find related ones
-        if news_type == 'world':
-            all_news = db.query(NewsItem).filter(NewsItem.id != news_id).order_by(desc(NewsItem.created_at)).limit(100).all()
-        elif news_type == 'yemen':
-            all_news = db.query(YemenNewsItem).filter(YemenNewsItem.id != news_id).order_by(desc(YemenNewsItem.created_at)).limit(100).all()
-        else:  # newspaper
-            all_news = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id != news_id).order_by(desc(NewspaperNewsItem.created_at)).limit(100).all()
+        # Get news from ALL types to find related ones
+        world_news = db.query(NewsItem).order_by(desc(NewsItem.created_at)).limit(200).all()
+        yemen_news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(200).all()
+        newspaper_news = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(200).all()
         
-        if not all_news:
+        # Prepare combined news list with type prefix to identify source
+        # Format: "type:id" to track which table each news comes from
+        all_news_combined = []
+        
+        for n in world_news:
+            if not (news_type == 'world' and n.id == news_id):
+                all_news_combined.append({"id": f"world:{n.id}", "title": n.title, "type": "world", "real_id": n.id})
+        
+        for n in yemen_news:
+            if not (news_type == 'yemen' and n.id == news_id):
+                all_news_combined.append({"id": f"yemen:{n.id}", "title": n.title, "type": "yemen", "real_id": n.id})
+        
+        for n in newspaper_news:
+            if not (news_type == 'newspaper' and n.id == news_id):
+                all_news_combined.append({"id": f"newspaper:{n.id}", "title": n.title, "type": "newspaper", "real_id": n.id})
+        
+        if not all_news_combined:
             return
         
-        # Prepare news list for AI
-        news_list = [{"id": n.id, "title": n.title} for n in all_news]
-        
-        # Find related news using AI
-        result = await find_related_news_with_ai(news_title, news_summary, news_list, news_type)
+        # Find related news using AI (searches across all types)
+        result = await find_related_news_with_ai(news_title, news_summary, all_news_combined, news_type)
         
         if result.get("thread_title") and result.get("related_ids"):
             # Store the event threads
-            for related_id in result["related_ids"]:
+            for related_id_str in result["related_ids"]:
                 try:
+                    # Parse the type:id format
+                    if isinstance(related_id_str, str) and ':' in related_id_str:
+                        related_type, related_id = related_id_str.split(':', 1)
+                        related_id = int(related_id)
+                    else:
+                        # Fallback for old format (just ID) - assume same type
+                        related_type = news_type
+                        related_id = int(related_id_str)
+                    
                     # Check if this relationship already exists
                     existing = db.query(EventThread).filter(
                         EventThread.news_id == news_id,
                         EventThread.related_news_id == related_id,
-                        EventThread.news_type == news_type
+                        EventThread.news_type == news_type,
+                        EventThread.related_news_type == related_type
                     ).first()
                     
                     if not existing:
@@ -260,6 +293,7 @@ async def process_event_timeline(db, news_id: int, news_title: str, news_summary
                             news_id=news_id,
                             related_news_id=related_id,
                             news_type=news_type,
+                            related_news_type=related_type,
                             thread_title=result["thread_title"],
                             similarity_reason=result.get("reason", "")
                         )
@@ -281,8 +315,8 @@ async def find_related_news_with_ai(current_news_title: str, current_news_summar
         return {"thread_title": "", "related_ids": [], "reason": ""}
     
     try:
-        # Prepare the news list for AI
-        news_list_text = "\n".join([f"ID: {n['id']} - العنوان: {n['title']}" for n in all_news_titles[:100]])
+        # Prepare the news list for AI - include more items since we're combining all sources
+        news_list_text = "\n".join([f"ID: {n['id']} - العنوان: {n['title']}" for n in all_news_titles[:300]])
         
         prompt = f"""أنت محلل أخبار خبير. مهمتك هي إيجاد الأخبار المرتبطة بموضوع معين.
 
@@ -324,7 +358,7 @@ async def find_related_news_with_ai(current_news_title: str, current_news_summar
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.3,
-            "max_tokens": 500
+            "max_tokens": 1500
         }
         
         response = await asyncio.to_thread(
@@ -1336,41 +1370,47 @@ async def get_newspaper_news(page: int = 1, limit: int = 20):
 
 @app.get("/api/event-timeline/{news_type}/{news_id}")
 async def get_event_timeline(news_type: str, news_id: int):
-    """Get the event timeline for a specific news item"""
+    """Get the event timeline for a specific news item - includes ALL related news from all types"""
     db = SessionLocal()
     try:
-        # Get all related news through event threads
+        # Get all related news through event threads (no filter on news_type for related items)
         threads = db.query(EventThread).filter(
             EventThread.news_id == news_id,
             EventThread.news_type == news_type
         ).all()
         
         # Also get threads where this news is a related item (reverse lookup)
+        # Check both when related_news_type matches and when it's the same type (legacy data)
         reverse_threads = db.query(EventThread).filter(
-            EventThread.related_news_id == news_id,
-            EventThread.news_type == news_type
+            EventThread.related_news_id == news_id
+        ).filter(
+            (EventThread.related_news_type == news_type) | 
+            ((EventThread.related_news_type == None) & (EventThread.news_type == news_type))
         ).all()
         
-        # Combine all related news IDs
-        related_ids = set()
+        # Combine all related news with their types
+        # Format: (id, type)
+        related_items = set()
         thread_title = ""
         similarity_reason = ""
         
         for thread in threads:
-            related_ids.add(thread.related_news_id)
+            # Use related_news_type if available, otherwise fall back to news_type
+            related_type = thread.related_news_type or thread.news_type
+            related_items.add((thread.related_news_id, related_type))
             if thread.thread_title:
                 thread_title = thread.thread_title
             if thread.similarity_reason:
                 similarity_reason = thread.similarity_reason
         
         for thread in reverse_threads:
-            related_ids.add(thread.news_id)
+            related_items.add((thread.news_id, thread.news_type))
             if thread.thread_title and not thread_title:
                 thread_title = thread.thread_title
             if thread.similarity_reason and not similarity_reason:
                 similarity_reason = thread.similarity_reason
         
-        if not related_ids:
+        if not related_items:
             return {
                 "thread_title": "",
                 "related_news": [],
@@ -1378,27 +1418,32 @@ async def get_event_timeline(news_type: str, news_id: int):
                 "current_news_id": news_id
             }
         
-        # Get the actual news items
+        # Get the actual news items from their respective tables
         related_news = []
-        if news_type == 'world':
-            NewsModel = NewsItem
-        elif news_type == 'yemen':
-            NewsModel = YemenNewsItem
-        else:
-            NewsModel = NewspaperNewsItem
         
-        for rid in related_ids:
-            news_item = db.query(NewsModel).filter(NewsModel.id == rid).first()
-            if news_item:
-                related_news.append({
-                    "id": news_item.id,
-                    "title": news_item.title,
-                    "link": news_item.link,
-                    "summary": news_item.summary,
-                    "published": str(news_item.published),
-                    "source": news_item.source,
-                    "image_url": news_item.image_url
-                })
+        for rid, rtype in related_items:
+            try:
+                if rtype == 'world':
+                    news_item = db.query(NewsItem).filter(NewsItem.id == rid).first()
+                elif rtype == 'yemen':
+                    news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == rid).first()
+                else:  # newspaper
+                    news_item = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id == rid).first()
+                
+                if news_item:
+                    related_news.append({
+                        "id": news_item.id,
+                        "title": news_item.title,
+                        "link": news_item.link,
+                        "summary": news_item.summary,
+                        "published": str(news_item.published),
+                        "source": news_item.source,
+                        "image_url": news_item.image_url,
+                        "news_type": rtype  # Include the type for reference
+                    })
+            except Exception as e:
+                logger.error(f"Error fetching related news {rtype}:{rid}: {e}")
+                continue
         
         # Sort by published date (oldest first for timeline)
         related_news.sort(key=lambda x: x['published'])
