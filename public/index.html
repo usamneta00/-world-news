@@ -681,13 +681,18 @@
             lucide.createIcons();
         }
 
-        function openReader(id, type) {
-            const list = (type === 'world' ? allNews : (type === 'yemen' ? yemenNews : newspaperNews));
-            const item = list.find(n => n.id === id);
+        function openReader(id, type, providedItem = null) {
+            let item = providedItem;
+            if (!item) {
+                const list = (type === 'world' ? allNews : (type === 'yemen' ? yemenNews : newspaperNews));
+                item = list.find(n => n.id === id);
+            }
+
             if (!item) return;
 
             const logo = document.getElementById('reader-logo');
             const source = document.getElementById('reader-source');
+            const imgContainer = document.getElementById('reader-image').parentElement;
             const img = document.getElementById('reader-image');
             const title = document.getElementById('reader-title');
             const date = document.getElementById('reader-date');
@@ -696,7 +701,15 @@
 
             if (logo) logo.src = getSourceLogo(item.source);
             if (source) source.textContent = item.source;
-            if (img) img.src = item.image_url || getThumbnailUrl(item.link);
+
+            // Check for YouTube video
+            const youtubeId = item.link?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/)?.[1];
+            if (youtubeId) {
+                imgContainer.innerHTML = `<iframe src="https://www.youtube.com/embed/${youtubeId}?autoplay=1" class="w-full h-full" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+            } else {
+                imgContainer.innerHTML = `<img id="reader-image" src="${item.image_url || getThumbnailUrl(item.link)}" class="w-full h-full object-cover">`;
+            }
+
             if (title) title.textContent = item.title;
             if (date) date.textContent = timeAgo(item.published);
             if (link) link.href = item.link;
@@ -844,8 +857,13 @@
                             </div>
                             
                             <div class="flex-1 text-right">
-                                <span class="text-[9px] md:text-[10px] font-mono text-neutral-500 uppercase tracking-widest">${timeAgo(it.published)} • ${it.source}</span>
-                                <h4 class="font-serif text-lg md:text-xl text-white mt-1 group-hover:text-neon-blue transition-colors cursor-pointer" onclick="openAndCloseTimeline(${it.id})">${it.title}</h4>
+                                 <span class="text-[9px] md:text-[10px] font-mono text-neutral-500 uppercase tracking-widest">${timeAgo(it.published)} • ${it.source}</span>
+                                <div class="flex items-start justify-between gap-4">
+                                    <h4 class="font-serif text-lg md:text-xl text-white mt-1 group-hover:text-neon-blue transition-colors cursor-pointer" onclick="openAndCloseTimeline(event, ${JSON.stringify(it).replace(/"/g, '&quot;')})">${it.title}</h4>
+                                    <a href="${it.link}" target="_blank" class="mt-2 p-1 text-neutral-600 hover:text-neon-accent transition-colors" onclick="event.stopPropagation()">
+                                        <i data-lucide="external-link" class="w-4 h-4"></i>
+                                    </a>
+                                </div>
                                 <p class="text-xs md:text-sm text-neutral-400 mt-2 font-light leading-relaxed">${it.summary || ''}</p>
                             </div>
                         </div>
@@ -861,9 +879,10 @@
             document.getElementById('timeline-modal').classList.add('hidden');
         }
 
-        function openAndCloseTimeline(id) {
+        function openAndCloseTimeline(event, item) {
+            if (event) event.preventDefault();
             closeTimeline();
-            openReader(id, activeTab);
+            openReader(item.id, null, item);
         }
 
         document.addEventListener('DOMContentLoaded', () => {

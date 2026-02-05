@@ -360,7 +360,10 @@ async def analyze_topic_ai(title: str, summary: str):
     If it belongs to an existing topic, reuse that EXACT topic_id.
     If it's new, create a descriptive title in ARABIC.
     
-    IMPORTANT: Focus on the MAIN EVENT (e.g. 'قصف ميناء الحديدة', 'مفاوضات السلام'). Do not create overly specific IDs for every slight change unless it's a major new development.
+    IMPORTANT: Only group items that are DIRECTLY part of the same specific event evolution or narrative.
+    Focus on strict similarity. If two stories are about the same general region but different incidents, do NOT group them.
+    Create a new topic_id if the story is a fresh event. Reuse topic_id ONLY if it is a clear continuation or update to that specific thread.
+    The goal is to provide a timeline of a SPECIFIC narrative unfolding.
     """
     
     try:
