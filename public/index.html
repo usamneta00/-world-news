@@ -947,8 +947,11 @@
                         minute: '2-digit'
                     });
                     
+                    // Escape the link for safe use in onclick
+                    const escapedLink = news.link.replace(/'/g, "\\'");
+                    
                     return `
-                        <div class="timeline-item ${isCurrent ? 'current' : ''}" onclick="openTimelineNews(${news.id}, '${newsType}')">
+                        <div class="timeline-item ${isCurrent ? 'current' : ''}" onclick="openTimelineLink('${escapedLink}')">
                             <div class="timeline-dot"></div>
                             <div class="timeline-card">
                                 <div class="timeline-date">
@@ -982,11 +985,9 @@
             }
         }
         
-        function openTimelineNews(newsId, newsType) {
-            closeReader();
-            setTimeout(() => {
-                openReader(newsId, newsType);
-            }, 300);
+        function openTimelineLink(link) {
+            // Open the news link directly in a new tab
+            window.open(link, '_blank');
         }
 
         function openReader(id, type) {
