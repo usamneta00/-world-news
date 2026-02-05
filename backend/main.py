@@ -18,7 +18,6 @@ from bs4 import BeautifulSoup
 import hashlib
 from urllib.parse import urljoin, urlparse, quote
 import html
-from openai import OpenAI
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)
@@ -45,8 +44,6 @@ class NewsItem(Base):
     image_url = Column(String, nullable=True)
     video_id = Column(String, nullable=True)  # YouTube video ID
     created_at = Column(DateTime, default=datetime.now) # Track when added to our DB
-    topic_id = Column(String, nullable=True, index=True) # For event sequence threading
-    topic_summary = Column(String, nullable=True) # AI generated description of this event thread
 
 class ChannelLastVideo(Base):
     __tablename__ = "channel_last_video"
@@ -68,8 +65,6 @@ class YemenNewsItem(Base):
     image_url = Column(String, nullable=True)
     video_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.now) # Track when added to our DB
-    topic_id = Column(String, nullable=True, index=True)
-    topic_summary = Column(String, nullable=True)
 
 class YemenChannelLastVideo(Base):
     __tablename__ = "yemen_channel_last_video"
@@ -91,8 +86,6 @@ class NewspaperNewsItem(Base):
     image_url = Column(String, nullable=True)
     article_id = Column(String, nullable=True)  # Unique article identifier
     created_at = Column(DateTime, default=datetime.now)
-    topic_id = Column(String, nullable=True, index=True)
-    topic_summary = Column(String, nullable=True)
 
 class NewspaperLastArticle(Base):
     __tablename__ = "newspaper_last_article"
@@ -107,6 +100,17 @@ class SystemState(Base):
     id = Column(Integer, primary_key=True)
     key = Column(String, unique=True)
     value = Column(String)
+
+# Event Timeline - Related news threads
+class EventThread(Base):
+    __tablename__ = "event_threads"
+    id = Column(Integer, primary_key=True, index=True)
+    news_id = Column(Integer, index=True)  # The news item this thread belongs to
+    related_news_id = Column(Integer, index=True)  # Related news item
+    news_type = Column(String)  # 'world', 'yemen', 'newspaper'
+    thread_title = Column(String)  # Arabic title for the event thread
+    similarity_reason = Column(String)  # Why these are related
+    created_at = Column(DateTime, default=datetime.now)
 
 Base.metadata.create_all(bind=engine)
 
@@ -140,19 +144,6 @@ def migrate_database():
                 conn.execute(text("ALTER TABLE yemen_news ADD COLUMN created_at DATETIME"))
                 try: conn.commit() 
                 except: pass 
-            
-            # Add topic_id and topic_summary columns if missing
-            for table in ['news', 'yemen_news', 'newspaper_news']:
-                res = conn.execute(text(f"PRAGMA table_info({table})"))
-                cols = [row[1] for row in res]
-                if 'topic_id' not in cols:
-                    logger.info(f"Adding topic_id to {table}...")
-                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN topic_id VARCHAR"))
-                if 'topic_summary' not in cols:
-                    logger.info(f"Adding topic_summary to {table}...")
-                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN topic_summary VARCHAR"))
-                try: conn.commit()
-                except: pass
             
             # Check if channel_last_video table exists
             result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='channel_last_video'"))
@@ -217,11 +208,156 @@ def migrate_database():
                 logger.info("Creating newspaper_last_article table...")
                 NewspaperLastArticle.__table__.create(engine)
                 logger.info("Successfully created newspaper_last_article table")
+            
+            # Check if event_threads table exists
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='event_threads'"))
+            if not result.fetchone():
+                logger.info("Creating event_threads table...")
+                EventThread.__table__.create(engine)
+                logger.info("Successfully created event_threads table")
     except Exception as e:
         logger.error(f"Migration error: {e}")
 
 # Run migration on startup
 migrate_database()
+
+# OpenAI API for finding related news
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
+
+async def process_event_timeline(db, news_id: int, news_title: str, news_summary: str, news_type: str):
+    """Process and store event timeline for a new news item"""
+    try:
+        # Get all existing news to find related ones
+        if news_type == 'world':
+            all_news = db.query(NewsItem).filter(NewsItem.id != news_id).order_by(desc(NewsItem.created_at)).limit(100).all()
+        elif news_type == 'yemen':
+            all_news = db.query(YemenNewsItem).filter(YemenNewsItem.id != news_id).order_by(desc(YemenNewsItem.created_at)).limit(100).all()
+        else:  # newspaper
+            all_news = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id != news_id).order_by(desc(NewspaperNewsItem.created_at)).limit(100).all()
+        
+        if not all_news:
+            return
+        
+        # Prepare news list for AI
+        news_list = [{"id": n.id, "title": n.title} for n in all_news]
+        
+        # Find related news using AI
+        result = await find_related_news_with_ai(news_title, news_summary, news_list, news_type)
+        
+        if result.get("thread_title") and result.get("related_ids"):
+            # Store the event threads
+            for related_id in result["related_ids"]:
+                try:
+                    # Check if this relationship already exists
+                    existing = db.query(EventThread).filter(
+                        EventThread.news_id == news_id,
+                        EventThread.related_news_id == related_id,
+                        EventThread.news_type == news_type
+                    ).first()
+                    
+                    if not existing:
+                        thread = EventThread(
+                            news_id=news_id,
+                            related_news_id=related_id,
+                            news_type=news_type,
+                            thread_title=result["thread_title"],
+                            similarity_reason=result.get("reason", "")
+                        )
+                        db.add(thread)
+                except Exception as e:
+                    logger.error(f"Error adding event thread: {e}")
+                    continue
+            
+            db.commit()
+            logger.info(f"[Timeline] Added {len(result['related_ids'])} related news for {news_type} news ID {news_id}: {result['thread_title']}")
+    except Exception as e:
+        logger.error(f"Error in process_event_timeline: {e}")
+        db.rollback()
+
+async def find_related_news_with_ai(current_news_title: str, current_news_summary: str, all_news_titles: List[dict], news_type: str) -> dict:
+    """Use GPT-4o-mini to find related news and generate Arabic thread title"""
+    if not OPENAI_API_KEY:
+        logger.warning("OPENAI_API_KEY not set, skipping AI-based related news")
+        return {"thread_title": "", "related_ids": [], "reason": ""}
+    
+    try:
+        # Prepare the news list for AI
+        news_list_text = "\n".join([f"ID: {n['id']} - العنوان: {n['title']}" for n in all_news_titles[:100]])
+        
+        prompt = f"""أنت محلل أخبار خبير. مهمتك هي إيجاد الأخبار المرتبطة بموضوع معين.
+
+الخبر الحالي:
+العنوان: {current_news_title}
+الملخص: {current_news_summary}
+
+قائمة الأخبار المتاحة:
+{news_list_text}
+
+المطلوب:
+1. أعطني عنوان عربي قصير وجذاب لـ"خيط الحدث" يصف الموضوع الرئيسي (مثال: "أزمة ميناء الحديدة" أو "التصعيد في البحر الأحمر")
+2. أعطني قائمة بـ IDs الأخبار المرتبطة بنفس الموضوع (الحد الأقصى 10 أخبار)
+3. اشرح باختصار لماذا هذه الأخبار مرتبطة
+
+أجب بصيغة JSON فقط كالتالي:
+{{
+    "thread_title": "عنوان الخيط بالعربية",
+    "related_ids": [1, 2, 3],
+    "reason": "سبب الترابط باختصار"
+}}
+
+إذا لم تجد أخبار مرتبطة، أرجع:
+{{
+    "thread_title": "",
+    "related_ids": [],
+    "reason": ""
+}}"""
+
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": "أنت محلل أخبار خبير تجيب بصيغة JSON فقط."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.3,
+            "max_tokens": 500
+        }
+        
+        response = await asyncio.to_thread(
+            lambda: requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            content = result['choices'][0]['message']['content']
+            # Parse JSON from response
+            import json
+            # Clean the response if it has markdown code blocks
+            content = content.strip()
+            if content.startswith("```"):
+                content = content.split("```")[1]
+                if content.startswith("json"):
+                    content = content[4:]
+            content = content.strip()
+            
+            parsed = json.loads(content)
+            return parsed
+        else:
+            logger.error(f"OpenAI API error: {response.status_code} - {response.text}")
+            return {"thread_title": "", "related_ids": [], "reason": ""}
+            
+    except Exception as e:
+        logger.error(f"Error in find_related_news_with_ai: {e}")
+        return {"thread_title": "", "related_ids": [], "reason": ""}
 
 # YouTube Channels List - includes channels and playlists
 YOUTUBE_CHANNELS = [
@@ -328,134 +464,9 @@ def is_yemen_related(title: str) -> bool:
             return True
     return False
 
-# AI Setup for Event Evolution
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
-
-async def analyze_topic_ai(title: str, summary: str):
-    """Assign news to a topic thread or create a new one using OpenAI - STRICT similarity matching"""
-    if not openai_client: return None
-    
-    # Get last 50 topics to help AI cluster consistently
-    db = SessionLocal()
-    recent_items = db.query(NewsItem).filter(NewsItem.topic_id != None).order_by(desc(NewsItem.created_at)).limit(50).all()
-    existing_topics_with_titles = []
-    for i in recent_items:
-        existing_topics_with_titles.append({
-            "topic_id": i.topic_id,
-            "topic_summary": i.topic_summary,
-            "example_title": i.title[:100]
-        })
-    # Remove duplicates by topic_id
-    seen_topics = set()
-    unique_topics = []
-    for t in existing_topics_with_titles:
-        if t["topic_id"] not in seen_topics:
-            seen_topics.add(t["topic_id"])
-            unique_topics.append(t)
-    db.close()
-
-    prompt = f"""أنت محلل أخبار متخصص. مهمتك ربط الأخبار المتشابهة فقط.
-
-الخبر الجديد:
-العنوان: {title}
-الملخص: {summary}
-
-المواضيع الموجودة حالياً (مع أمثلة):
-{json.dumps(unique_topics, ensure_ascii=False, indent=2)}
-
-قواعد صارمة للربط:
-1. اربط الخبر بموضوع موجود فقط إذا كان يتحدث عن نفس الحدث المحدد (نفس الحادثة)
-2. لا تربط أخبار عامة معاً (مثلاً: لا تربط كل أخبار "غزة" معاً - كل حدث منفصل)
-3. الأخبار المختلفة ليست بالضرورة متشابهة
-4. إذا كان الخبر عن حدث جديد تماماً أو لا يوجد تطابق واضح، أنشئ topic_id جديد
-
-أمثلة على الربط الصحيح:
-- "ضربات إسرائيلية على رفح الليلة" + "استمرار القصف على رفح" = نفس الموضوع ✓
-- "اجتماع مجلس الأمن بشأن غزة" + "بايدن يلتقي نتنياهو" = موضوعان مختلفان ✗
-
-أمثلة على الربط الخاطئ (تجنب هذا):
-- ربط كل أخبار ترامب معاً ✗
-- ربط كل أخبار الشرق الأوسط معاً ✗
-- ربط كل أخبار الحرب معاً ✗
-
-أجب بـ JSON فقط:
-{{
-    "should_link": true/false,
-    "topic_id": "اسم الموضوع المحدد جداً بالعربية",
-    "topic_summary_ar": "وصف مختصر للحدث المحدد",
-    "confidence": "high/medium/low",
-    "reasoning": "سبب الربط أو عدمه"
-}}
-
-إذا كان confidence = "low"، اجعل should_link = false وأنشئ topic جديد.
-"""
-    
-    try:
-        response = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            response_format={ "type": "json_object" }
-        )
-        result = json.loads(response.choices[0].message.content)
-        
-        # Only return topic if confidence is high or medium
-        if result.get("confidence") == "low" or not result.get("should_link", True):
-            # Create a unique topic for this news item
-            logger.info(f"Low confidence or no link - creating unique topic: {result.get('reasoning', 'N/A')}")
-        
-        return {
-            "topic_id": result.get("topic_id"),
-            "topic_summary_ar": result.get("topic_summary_ar")
-        }
-    except Exception as e:
-        logger.error(f"Topic clustering error: {e}")
-        return None
-
 def generate_article_id(url: str) -> str:
-    """Generate a stable unique ID for an article URL"""
-    return hashlib.md5(url.encode()).hexdigest()
-
-async def process_topic_evolution(item_id: int, table_name: str):
-    """Background task to link news items into evolution threads"""
-    db = SessionLocal()
-    try:
-        model = {"news": NewsItem, "yemen_news": YemenNewsItem, "newspaper_news": NewspaperNewsItem}.get(table_name)
-        item = db.query(model).get(item_id)
-        if not item: return
-
-        ai_data = await analyze_topic_ai(item.title, item.summary)
-        if ai_data:
-            item.topic_id = ai_data.get('topic_id')
-            item.topic_summary = ai_data.get('topic_summary_ar')
-            # Also update the actual summary with the better AI description
-            if item.topic_summary:
-                item.summary = item.topic_summary
-            db.commit()
-            logger.info(f"Threaded item {item_id} into topic: {item.topic_id}")
-            
-            # Notify frontend of enrichment
-            await manager.broadcast(json.dumps({
-                "type": "topic_update",
-                "data": {"id": item.id, "table": table_name, "topic_id": item.topic_id}
-            }))
-    except Exception as e: logger.error(f"Evolution task error: {e}")
-    finally: db.close()
-
-async def backfill_topics():
-    """One-time task to process last 10 items for threads on startup"""
-    if not openai_client: return
-    logger.info("Starting backfill for topic threads...")
-    db = SessionLocal()
-    try:
-        for model_name, model in [("news", NewsItem), ("yemen_news", YemenNewsItem), ("newspaper_news", NewspaperNewsItem)]:
-            items = db.query(model).filter(model.topic_id == None).order_by(desc(model.published)).limit(10).all()
-            for item in items:
-                logger.info(f"Backfilling topic for {model_name} item {item.id}")
-                await process_topic_evolution(item.id, model_name)
-                await asyncio.sleep(1) # Rate limit
-    except Exception as e: logger.error(f"Backfill error: {e}")
-    finally: db.close()
+    """Generate a unique ID for an article based on its URL"""
+    return hashlib.md5(url.encode()).hexdigest()[:16]
 
 def translate_to_arabic(text: str) -> str:
     """Translate English text to Arabic using Google Translate free API"""
@@ -659,8 +670,6 @@ async def fetch_newspaper_feeds():
             
             # Add all new articles to database
             for article in articles:
-                if first_run:
-                    continue
                 try:
                     # Check if article already exists (safety check)
                     exists = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.link == article['link']).first()
@@ -681,9 +690,6 @@ async def fetch_newspaper_feeds():
                     db.commit()
                     db.refresh(new_item)  # Refresh to get the ID
                     
-                    # Process evolution in background
-                    asyncio.create_task(process_topic_evolution(new_item.id, "newspaper_news"))
-                    
                     item_dict = {
                         "id": new_item.id,
                         "title": new_item.title,
@@ -695,6 +701,10 @@ async def fetch_newspaper_feeds():
                     }
                     new_items_found.append(item_dict)
                     logger.info(f"[Newspaper] ✓ SAVED to DB (ID: {new_item.id}): {article['title'][:50]}... from {article['source']}")
+                    
+                    # Process event timeline only for updates (not first run)
+                    if not first_run:
+                        await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'newspaper')
                 except Exception as e:
                     db.rollback()
                     logger.error(f"[Newspaper] ✗ FAILED to save article: {article['title'][:50]}... Error: {e}")
@@ -1045,8 +1055,6 @@ async def fetch_youtube_feeds():
             
             # Add all new videos to database
             for video in videos:
-                if first_run:
-                    continue
                 try:
                     # Check if video already exists (safety check)
                     exists = db.query(NewsItem).filter(NewsItem.link == video['link']).first()
@@ -1066,9 +1074,6 @@ async def fetch_youtube_feeds():
                     db.commit()
                     db.refresh(new_item)
                     
-                    # Process evolution in background
-                    asyncio.create_task(process_topic_evolution(new_item.id, "news"))
-                    
                     item_dict = {
                         "id": new_item.id,
                         "title": new_item.title,
@@ -1080,6 +1085,10 @@ async def fetch_youtube_feeds():
                     }
                     new_items_found.append(item_dict)
                     logger.info(f"✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
+                    
+                    # Process event timeline only for updates (not first run)
+                    if not first_run:
+                        await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'world')
                 except Exception as e:
                     db.rollback()
                     logger.error(f"✗ FAILED to save video: {video['title'][:50]}... Error: {e}")
@@ -1176,8 +1185,6 @@ async def fetch_yemen_youtube_feeds():
             
             # Add all new videos to database
             for video in videos:
-                if first_run:
-                    continue
                 try:
                     # Check if video already exists (safety check)
                     exists = db.query(YemenNewsItem).filter(YemenNewsItem.link == video['link']).first()
@@ -1197,9 +1204,6 @@ async def fetch_yemen_youtube_feeds():
                     db.commit()
                     db.refresh(new_item)
                     
-                    # Process evolution in background
-                    asyncio.create_task(process_topic_evolution(new_item.id, "yemen_news"))
-                    
                     item_dict = {
                         "id": new_item.id,
                         "title": new_item.title,
@@ -1211,6 +1215,10 @@ async def fetch_yemen_youtube_feeds():
                     }
                     new_items_found.append(item_dict)
                     logger.info(f"[Yemen] ✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
+                    
+                    # Process event timeline only for updates (not first run)
+                    if not first_run:
+                        await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'yemen')
                 except Exception as e:
                     db.rollback()
                     logger.error(f"[Yemen] ✗ FAILED to save video: {video['title'][:50]}... Error: {e}")
@@ -1280,8 +1288,6 @@ async def startup_event():
     asyncio.create_task(fetch_youtube_feeds())
     asyncio.create_task(fetch_yemen_youtube_feeds())
     asyncio.create_task(fetch_newspaper_feeds())
-    # Process some existing items for the user to see the feature
-    asyncio.create_task(backfill_topics())
 
 @app.get("/api/news")
 async def get_news(page: int = 1, limit: int = 20):
@@ -1297,59 +1303,6 @@ async def get_news(page: int = 1, limit: int = 20):
         "page": page,
         "limit": limit
     }
-
-@app.get("/api/timeline/{topic_id:path}")
-async def get_timeline(topic_id: str, exclude_link: Optional[str] = None):
-    """Fetch all news items belonging to an evolution thread, excluding the current item"""
-    from urllib.parse import unquote
-    # Decode URL-encoded topic_id (for Arabic characters)
-    topic_id = unquote(topic_id)
-    if exclude_link:
-        exclude_link = unquote(exclude_link)
-    
-    db = SessionLocal()
-    items = []
-    for model in [NewsItem, YemenNewsItem, NewspaperNewsItem]:
-        results = db.query(model).filter(model.topic_id == topic_id).order_by(model.published).all()
-        for r in results:
-            # Skip the current item (the one user is viewing)
-            if exclude_link and r.link == exclude_link:
-                continue
-            items.append({
-                "id": r.id,
-                "title": r.title,
-                "summary": r.summary,
-                "published": r.published.isoformat(),
-                "source": r.source,
-                "link": r.link,
-                "image_url": r.image_url
-            })
-    db.close()
-    
-    # Sort by published date
-    items.sort(key=lambda x: x['published'])
-    
-    return {"topic_id": topic_id, "items": items}
-
-@app.get("/api/timeline-count/{topic_id:path}")
-async def get_timeline_count(topic_id: str, exclude_link: Optional[str] = None):
-    """Get count of OTHER items in a topic thread (excluding current item)"""
-    from urllib.parse import unquote
-    topic_id = unquote(topic_id)
-    if exclude_link:
-        exclude_link = unquote(exclude_link)
-    
-    db = SessionLocal()
-    count = 0
-    for model in [NewsItem, YemenNewsItem, NewspaperNewsItem]:
-        if exclude_link:
-            count += db.query(model).filter(model.topic_id == topic_id, model.link != exclude_link).count()
-        else:
-            count += db.query(model).filter(model.topic_id == topic_id).count()
-    db.close()
-    
-    # Return count of OTHER items (not including current one)
-    return {"topic_id": topic_id, "count": count, "has_timeline": count > 0}
 
 @app.get("/api/yemen-news")
 async def get_yemen_news(page: int = 1, limit: int = 20):
@@ -1380,6 +1333,84 @@ async def get_newspaper_news(page: int = 1, limit: int = 20):
         "page": page,
         "limit": limit
     }
+
+@app.get("/api/event-timeline/{news_type}/{news_id}")
+async def get_event_timeline(news_type: str, news_id: int):
+    """Get the event timeline for a specific news item"""
+    db = SessionLocal()
+    try:
+        # Get all related news through event threads
+        threads = db.query(EventThread).filter(
+            EventThread.news_id == news_id,
+            EventThread.news_type == news_type
+        ).all()
+        
+        # Also get threads where this news is a related item (reverse lookup)
+        reverse_threads = db.query(EventThread).filter(
+            EventThread.related_news_id == news_id,
+            EventThread.news_type == news_type
+        ).all()
+        
+        # Combine all related news IDs
+        related_ids = set()
+        thread_title = ""
+        similarity_reason = ""
+        
+        for thread in threads:
+            related_ids.add(thread.related_news_id)
+            if thread.thread_title:
+                thread_title = thread.thread_title
+            if thread.similarity_reason:
+                similarity_reason = thread.similarity_reason
+        
+        for thread in reverse_threads:
+            related_ids.add(thread.news_id)
+            if thread.thread_title and not thread_title:
+                thread_title = thread.thread_title
+            if thread.similarity_reason and not similarity_reason:
+                similarity_reason = thread.similarity_reason
+        
+        if not related_ids:
+            return {
+                "thread_title": "",
+                "related_news": [],
+                "reason": "",
+                "current_news_id": news_id
+            }
+        
+        # Get the actual news items
+        related_news = []
+        if news_type == 'world':
+            NewsModel = NewsItem
+        elif news_type == 'yemen':
+            NewsModel = YemenNewsItem
+        else:
+            NewsModel = NewspaperNewsItem
+        
+        for rid in related_ids:
+            news_item = db.query(NewsModel).filter(NewsModel.id == rid).first()
+            if news_item:
+                related_news.append({
+                    "id": news_item.id,
+                    "title": news_item.title,
+                    "link": news_item.link,
+                    "summary": news_item.summary,
+                    "published": str(news_item.published),
+                    "source": news_item.source,
+                    "image_url": news_item.image_url
+                })
+        
+        # Sort by published date (oldest first for timeline)
+        related_news.sort(key=lambda x: x['published'])
+        
+        return {
+            "thread_title": thread_title,
+            "related_news": related_news,
+            "reason": similarity_reason,
+            "current_news_id": news_id
+        }
+    finally:
+        db.close()
 
 @app.get("/api/debug")
 async def debug_info():
@@ -1430,6 +1461,7 @@ async def clear_all_news():
         db.query(ChannelLastVideo).delete()
         db.query(YemenChannelLastVideo).delete()
         db.query(NewspaperLastArticle).delete()
+        db.query(EventThread).delete()
         db.commit()
         logger.info("Manual database clear performed. All news and tracking data deleted.")
         return {"message": "All news and tracking data have been cleared successfully."}
