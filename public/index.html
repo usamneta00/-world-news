@@ -365,6 +365,306 @@
             color: #6b7280;
             font-size: 14px;
         }
+
+        /* Impact Ripple Effect Styles */
+        .ripple-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .ripple-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #06b6d4, #0891b2);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: ripple-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes ripple-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.4); }
+            50% { box-shadow: 0 0 0 10px rgba(6, 182, 212, 0); }
+        }
+
+        .ripple-section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: white;
+        }
+
+        .ripple-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+
+        .ripple-empty {
+            text-align: center;
+            padding: 30px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .ripple-central-event {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 30px auto;
+            width: fit-content;
+        }
+
+        .central-pulse {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(6, 182, 212, 0.3) 0%, transparent 70%);
+            animation: central-ripple 2s ease-out infinite;
+        }
+
+        @keyframes central-ripple {
+            0% { transform: scale(0.8); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .central-text {
+            position: relative;
+            z-index: 2;
+            padding: 20px 30px;
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(8, 145, 178, 0.1));
+            border: 2px solid rgba(6, 182, 212, 0.5);
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 16px;
+            color: #22d3ee;
+            text-align: center;
+            max-width: 300px;
+        }
+
+        .ripple-summary {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin: 20px 0;
+            padding: 12px 20px;
+            background: rgba(6, 182, 212, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(6, 182, 212, 0.2);
+            font-size: 14px;
+            color: #94a3b8;
+            text-align: center;
+        }
+
+        .ripple-graph {
+            position: relative;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            padding: 30px 10px;
+            min-height: 200px;
+        }
+
+        .impact-node {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            width: 160px;
+            transition: all 0.3s ease;
+            animation: node-appear 0.5s ease-out forwards;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .impact-node:nth-child(1) { animation-delay: 0.1s; }
+        .impact-node:nth-child(2) { animation-delay: 0.2s; }
+        .impact-node:nth-child(3) { animation-delay: 0.3s; }
+        .impact-node:nth-child(4) { animation-delay: 0.4s; }
+        .impact-node:nth-child(5) { animation-delay: 0.5s; }
+        .impact-node:nth-child(6) { animation-delay: 0.6s; }
+        .impact-node:nth-child(7) { animation-delay: 0.7s; }
+
+        @keyframes node-appear {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .impact-node:hover {
+            transform: translateY(-5px);
+            border-color: rgba(6, 182, 212, 0.4);
+            box-shadow: 0 10px 30px rgba(6, 182, 212, 0.15);
+        }
+
+        .impact-node.up { border-left: 3px solid #10b981; }
+        .impact-node.down { border-left: 3px solid #ef4444; }
+        .impact-node.neutral { border-left: 3px solid #f59e0b; }
+
+        .node-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+            font-size: 20px;
+        }
+
+        .impact-node.up .node-icon { background: rgba(16, 185, 129, 0.15); }
+        .impact-node.down .node-icon { background: rgba(239, 68, 68, 0.15); }
+        .impact-node.neutral .node-icon { background: rgba(245, 158, 11, 0.15); }
+
+        .node-sector {
+            font-size: 12px;
+            font-weight: 700;
+            color: #e5e5e5;
+            margin-bottom: 6px;
+            text-align: center;
+        }
+
+        .node-effect {
+            font-size: 11px;
+            color: #9ca3af;
+            text-align: center;
+            line-height: 1.4;
+            margin-bottom: 8px;
+        }
+
+        .node-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: auto;
+        }
+
+        .node-severity {
+            display: flex;
+            gap: 2px;
+        }
+
+        .node-severity span {
+            width: 4px;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+
+        .node-severity span.active { background: #06b6d4; }
+
+        .node-timeframe {
+            font-size: 9px;
+            padding: 2px 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            color: #6b7280;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .impact-connector {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(6, 182, 212, 0.5), rgba(6, 182, 212, 0.1));
+            transform-origin: left center;
+            pointer-events: none;
+        }
+
+        .ripple-legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: #6b7280;
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .legend-dot.up { background: #10b981; }
+        .legend-dot.down { background: #ef4444; }
+        .legend-dot.neutral { background: #f59e0b; }
+
+        .legend-item.severity {
+            gap: 8px;
+        }
+
+        .severity-bars {
+            display: flex;
+            gap: 2px;
+            align-items: flex-end;
+        }
+
+        .severity-bars .bar {
+            width: 4px;
+            background: #06b6d4;
+            border-radius: 1px;
+        }
+
+        .severity-bars .bar.s1 { height: 4px; }
+        .severity-bars .bar.s2 { height: 6px; }
+        .severity-bars .bar.s3 { height: 8px; }
+        .severity-bars .bar.s4 { height: 10px; }
+        .severity-bars .bar.s5 { height: 12px; }
+
+        @media (max-width: 768px) {
+            .ripple-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+
+            .ripple-icon {
+                width: 36px;
+                height: 36px;
+            }
+
+            .ripple-section-title {
+                font-size: 16px;
+            }
+
+            .central-text {
+                padding: 15px 20px;
+                font-size: 14px;
+                max-width: 250px;
+            }
+
+            .impact-node {
+                width: 140px;
+                padding: 12px;
+            }
+
+            .ripple-legend {
+                gap: 12px;
+            }
+        }
     </style>
 </head>
 
@@ -644,6 +944,74 @@
                             <div class="flex items-start gap-3">
                                 <i data-lucide="info" class="w-4 h-4 text-neon-blue mt-0.5 flex-shrink-0"></i>
                                 <p class="text-sm text-neutral-400" id="timeline-reason-text"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Impact Ripple Effect Section -->
+                    <div id="ripple-section" class="mt-12 border-t border-white/10 pt-8">
+                        <div class="ripple-header">
+                            <div class="ripple-icon">
+                                <i data-lucide="waves" class="w-5 h-5 text-white"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="ripple-section-title">محاكي التداعيات 🌊</h3>
+                                <p id="ripple-subtitle" class="text-sm text-neutral-400 mt-1">كيف سيؤثر هذا الخبر على القطاعات المختلفة؟</p>
+                            </div>
+                        </div>
+                        
+                        <div id="ripple-loading" class="ripple-loading hidden">
+                            <div class="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mb-3"></div>
+                            <span class="text-xs font-mono">جارٍ تحليل التداعيات...</span>
+                        </div>
+                        
+                        <div id="ripple-empty" class="ripple-empty hidden">
+                            <i data-lucide="circle-off" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
+                            <p>لا يمكن تحليل تداعيات هذا الخبر</p>
+                        </div>
+                        
+                        <div id="ripple-content" class="hidden">
+                            <!-- Central Event -->
+                            <div id="ripple-central" class="ripple-central-event">
+                                <div class="central-pulse"></div>
+                                <div class="central-text" id="central-event-text"></div>
+                            </div>
+                            
+                            <!-- Analysis Summary -->
+                            <div id="ripple-summary" class="ripple-summary hidden">
+                                <i data-lucide="brain" class="w-4 h-4 text-cyan-400"></i>
+                                <span id="ripple-summary-text"></span>
+                            </div>
+                            
+                            <!-- Impact Graph -->
+                            <div id="ripple-graph" class="ripple-graph">
+                                <!-- Impact nodes will be injected here -->
+                            </div>
+                            
+                            <!-- Impact Legend -->
+                            <div class="ripple-legend">
+                                <div class="legend-item">
+                                    <span class="legend-dot up"></span>
+                                    <span>ارتفاع</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span class="legend-dot down"></span>
+                                    <span>انخفاض</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span class="legend-dot neutral"></span>
+                                    <span>تغيير</span>
+                                </div>
+                                <div class="legend-item severity">
+                                    <span>الشدة:</span>
+                                    <div class="severity-bars">
+                                        <span class="bar s1"></span>
+                                        <span class="bar s2"></span>
+                                        <span class="bar s3"></span>
+                                        <span class="bar s4"></span>
+                                        <span class="bar s5"></span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1006,6 +1374,120 @@
             // Open the news link directly in a new tab
             window.open(link, '_blank');
         }
+
+        // Sector icons mapping
+        const SECTOR_ICONS = {
+            'الطاقة': '⚡',
+            'النفط': '🛢️',
+            'الغاز': '🔥',
+            'التجارة': '📦',
+            'التكنولوجيا': '💻',
+            'الأمن الغذائي': '🌾',
+            'الغذاء': '🍞',
+            'الاستثمار': '📈',
+            'السياحة': '✈️',
+            'النقل': '🚢',
+            'الشحن': '🚛',
+            'الملاحة': '⚓',
+            'التضخم': '💰',
+            'الأسواق': '📊',
+            'العملات': '💵',
+            'العقارات': '🏠',
+            'الصناعة': '🏭',
+            'الزراعة': '🌱',
+            'الصحة': '🏥',
+            'التعليم': '📚',
+            'الأمن': '🛡️',
+            'الدفاع': '⚔️',
+            'البنوك': '🏦',
+            'التأمين': '📋',
+            'default': '📍'
+        };
+
+        function getSectorIcon(sector) {
+            for (const [key, icon] of Object.entries(SECTOR_ICONS)) {
+                if (sector.includes(key)) return icon;
+            }
+            return SECTOR_ICONS.default;
+        }
+
+        async function fetchImpactRipple(newsId, newsType) {
+            const loading = document.getElementById('ripple-loading');
+            const empty = document.getElementById('ripple-empty');
+            const content = document.getElementById('ripple-content');
+            const centralText = document.getElementById('central-event-text');
+            const summarySection = document.getElementById('ripple-summary');
+            const summaryText = document.getElementById('ripple-summary-text');
+            const graph = document.getElementById('ripple-graph');
+            
+            // Reset state
+            if (loading) loading.classList.remove('hidden');
+            if (empty) empty.classList.add('hidden');
+            if (content) content.classList.add('hidden');
+            if (graph) graph.innerHTML = '';
+            
+            try {
+                const response = await fetch(`${API_URL}/impact-ripple/${newsType}/${newsId}`);
+                const data = await response.json();
+                
+                if (loading) loading.classList.add('hidden');
+                
+                if (!data.impacts || data.impacts.length === 0) {
+                    if (empty) empty.classList.remove('hidden');
+                    return;
+                }
+                
+                // Show central event
+                if (centralText && data.central_event) {
+                    centralText.textContent = data.central_event;
+                }
+                
+                // Show analysis summary
+                if (summarySection && summaryText && data.analysis_summary) {
+                    summaryText.textContent = data.analysis_summary;
+                    summarySection.classList.remove('hidden');
+                } else if (summarySection) {
+                    summarySection.classList.add('hidden');
+                }
+                
+                // Build impact nodes
+                const nodesHTML = data.impacts.map((impact, index) => {
+                    const icon = getSectorIcon(impact.sector);
+                    const severityBars = Array.from({length: 5}, (_, i) => 
+                        `<span class="${i < impact.severity ? 'active' : ''}"></span>`
+                    ).join('');
+                    
+                    return `
+                        <div class="impact-node ${impact.direction}" data-id="${impact.id}">
+                            <div class="node-icon">${icon}</div>
+                            <div class="node-sector">${impact.sector}</div>
+                            <div class="node-effect">${impact.effect}</div>
+                            <div class="node-meta">
+                                <div class="node-severity">${severityBars}</div>
+                                <span class="node-timeframe">${impact.timeframe}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                if (graph) graph.innerHTML = nodesHTML;
+                if (content) content.classList.remove('hidden');
+                
+                lucide.createIcons();
+                
+            } catch (error) {
+                console.error('Error fetching impact ripple:', error);
+                if (loading) loading.classList.add('hidden');
+                if (empty) {
+                    empty.classList.remove('hidden');
+                    empty.innerHTML = `
+                        <i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
+                        <p>حدث خطأ أثناء تحليل التداعيات</p>
+                    `;
+                }
+                lucide.createIcons();
+            }
+        }
         
         function copyTimelineLinks() {
             if (currentTimelineLinks.length === 0) return;
@@ -1059,6 +1541,9 @@
             
             // Fetch event timeline
             fetchEventTimeline(id, type);
+            
+            // Fetch impact ripple analysis
+            fetchImpactRipple(id, type);
             
             lucide.createIcons();
         }

@@ -1368,6 +1368,120 @@ async def get_newspaper_news(page: int = 1, limit: int = 20):
         "limit": limit
     }
 
+@app.get("/api/impact-ripple/{news_type}/{news_id}")
+async def get_impact_ripple(news_type: str, news_id: int):
+    """Analyze the ripple effect of a news item on different sectors"""
+    db = SessionLocal()
+    try:
+        # Get the news item
+        if news_type == 'world':
+            news_item = db.query(NewsItem).filter(NewsItem.id == news_id).first()
+        elif news_type == 'yemen':
+            news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == news_id).first()
+        else:
+            news_item = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id == news_id).first()
+        
+        if not news_item:
+            return {"error": "News not found", "impacts": []}
+        
+        # Analyze impact using AI
+        impact_data = await analyze_news_impact(news_item.title, news_item.summary or '')
+        
+        return impact_data
+    finally:
+        db.close()
+
+async def analyze_news_impact(title: str, summary: str) -> dict:
+    """Use AI to analyze the ripple effect of a news item on various sectors"""
+    if not OPENAI_API_KEY:
+        logger.warning("OPENAI_API_KEY not set, returning default impact analysis")
+        return {"impacts": [], "central_event": title[:50], "analysis_summary": ""}
+    
+    try:
+        prompt = f"""أنت محلل اقتصادي وجيوسياسي خبير. مهمتك هي تحليل تأثير خبر على القطاعات المختلفة.
+
+الخبر:
+العنوان: {title}
+الملخص: {summary}
+
+حلل كيف سيؤثر هذا الخبر على القطاعات المختلفة. أريد سلسلة من التداعيات المتتالية (ripple effect).
+
+أجب بصيغة JSON فقط كالتالي:
+{{
+    "central_event": "وصف مختصر للحدث الرئيسي (10 كلمات كحد أقصى)",
+    "analysis_summary": "ملخص تحليلي للتأثير العام (جملة واحدة)",
+    "impacts": [
+        {{
+            "id": "1",
+            "sector": "اسم القطاع (مثل: الطاقة، التجارة، التكنولوجيا، الأمن الغذائي، الاستثمار، السياحة، النقل)",
+            "effect": "التأثير المتوقع (جملة قصيرة)",
+            "direction": "up" أو "down" أو "neutral",
+            "severity": 1-5 (1=طفيف, 5=شديد),
+            "timeframe": "فوري" أو "قصير المدى" أو "طويل المدى",
+            "linked_to": ["id1", "id2"] (التأثيرات المرتبطة)
+        }}
+    ]
+}}
+
+قواعد مهمة:
+- أعط من 4 إلى 7 تأثيرات متتالية
+- التأثيرات يجب أن تكون مرتبطة ببعضها (سلسلة)
+- استخدم الأرقام للربط في linked_to
+- التأثير الأول يجب أن يكون مرتبط بالحدث الرئيسي (linked_to: [])
+- كل تأثير لاحق يرتبط بالسابق
+
+إذا كان الخبر غير واضح أو لا يمكن تحليله، أرجع:
+{{
+    "central_event": "",
+    "analysis_summary": "",
+    "impacts": []
+}}"""
+
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": "أنت محلل اقتصادي وجيوسياسي خبير تجيب بصيغة JSON فقط."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.4,
+            "max_tokens": 2000
+        }
+        
+        response = await asyncio.to_thread(
+            lambda: requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            content = result['choices'][0]['message']['content']
+            # Parse JSON from response
+            content = content.strip()
+            if content.startswith("```"):
+                content = content.split("```")[1]
+                if content.startswith("json"):
+                    content = content[4:]
+            content = content.strip()
+            
+            parsed = json.loads(content)
+            return parsed
+        else:
+            logger.error(f"OpenAI API error in impact analysis: {response.status_code} - {response.text}")
+            return {"impacts": [], "central_event": "", "analysis_summary": ""}
+            
+    except Exception as e:
+        logger.error(f"Error in analyze_news_impact: {e}")
+        return {"impacts": [], "central_event": "", "analysis_summary": ""}
+
 @app.get("/api/event-timeline/{news_type}/{news_id}")
 async def get_event_timeline(news_type: str, news_id: int):
     """Get the event timeline for a specific news item - includes ALL related news from all types"""
