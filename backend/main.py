@@ -333,35 +333,63 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 async def analyze_topic_ai(title: str, summary: str):
-    """Assign news to a topic thread or create a new one using OpenAI"""
+    """Assign news to a topic thread or create a new one using OpenAI - STRICT similarity matching"""
     if not openai_client: return None
     
-    # Get last 20 topics to help AI cluster consistently
+    # Get last 50 topics to help AI cluster consistently
     db = SessionLocal()
-    recent_items = db.query(NewsItem).filter(NewsItem.topic_id != None).order_by(desc(NewsItem.created_at)).limit(20).all()
-    existing_topics = list(set([f"{i.topic_id}: {i.topic_summary}" for i in recent_items]))
+    recent_items = db.query(NewsItem).filter(NewsItem.topic_id != None).order_by(desc(NewsItem.created_at)).limit(50).all()
+    existing_topics_with_titles = []
+    for i in recent_items:
+        existing_topics_with_titles.append({
+            "topic_id": i.topic_id,
+            "topic_summary": i.topic_summary,
+            "example_title": i.title[:100]
+        })
+    # Remove duplicates by topic_id
+    seen_topics = set()
+    unique_topics = []
+    for t in existing_topics_with_titles:
+        if t["topic_id"] not in seen_topics:
+            seen_topics.add(t["topic_id"])
+            unique_topics.append(t)
     db.close()
 
-    prompt = f"""
-    New Story: {title}
-    Summary: {summary}
-    
-    Existing Recent Topic Threads:
-    {json.dumps(existing_topics, ensure_ascii=False)}
-    
-    Task:
-    Decide if this story belongs to one of the existing topics or if it's a new separate event thread.
-    Provide output in JSON:
-    {{
-        "topic_id": "اسم الموضوع بالعربية (مثل: هجمات البحر الأحمر)",
-        "topic_summary_ar": "وصف مختصر جدا للحدث باللغة العربية"
-    }}
-    
-    If it belongs to an existing topic, reuse that EXACT topic_id.
-    If it's new, create a descriptive title in ARABIC.
-    
-    IMPORTANT: Focus on the MAIN EVENT (e.g. 'قصف ميناء الحديدة', 'مفاوضات السلام'). Do not create overly specific IDs for every slight change unless it's a major new development.
-    """
+    prompt = f"""أنت محلل أخبار متخصص. مهمتك ربط الأخبار المتشابهة فقط.
+
+الخبر الجديد:
+العنوان: {title}
+الملخص: {summary}
+
+المواضيع الموجودة حالياً (مع أمثلة):
+{json.dumps(unique_topics, ensure_ascii=False, indent=2)}
+
+قواعد صارمة للربط:
+1. اربط الخبر بموضوع موجود فقط إذا كان يتحدث عن نفس الحدث المحدد (نفس الحادثة)
+2. لا تربط أخبار عامة معاً (مثلاً: لا تربط كل أخبار "غزة" معاً - كل حدث منفصل)
+3. الأخبار المختلفة ليست بالضرورة متشابهة
+4. إذا كان الخبر عن حدث جديد تماماً أو لا يوجد تطابق واضح، أنشئ topic_id جديد
+
+أمثلة على الربط الصحيح:
+- "ضربات إسرائيلية على رفح الليلة" + "استمرار القصف على رفح" = نفس الموضوع ✓
+- "اجتماع مجلس الأمن بشأن غزة" + "بايدن يلتقي نتنياهو" = موضوعان مختلفان ✗
+
+أمثلة على الربط الخاطئ (تجنب هذا):
+- ربط كل أخبار ترامب معاً ✗
+- ربط كل أخبار الشرق الأوسط معاً ✗
+- ربط كل أخبار الحرب معاً ✗
+
+أجب بـ JSON فقط:
+{{
+    "should_link": true/false,
+    "topic_id": "اسم الموضوع المحدد جداً بالعربية",
+    "topic_summary_ar": "وصف مختصر للحدث المحدد",
+    "confidence": "high/medium/low",
+    "reasoning": "سبب الربط أو عدمه"
+}}
+
+إذا كان confidence = "low"، اجعل should_link = false وأنشئ topic جديد.
+"""
     
     try:
         response = openai_client.chat.completions.create(
@@ -369,7 +397,17 @@ async def analyze_topic_ai(title: str, summary: str):
             messages=[{"role": "user", "content": prompt}],
             response_format={ "type": "json_object" }
         )
-        return json.loads(response.choices[0].message.content)
+        result = json.loads(response.choices[0].message.content)
+        
+        # Only return topic if confidence is high or medium
+        if result.get("confidence") == "low" or not result.get("should_link", True):
+            # Create a unique topic for this news item
+            logger.info(f"Low confidence or no link - creating unique topic: {result.get('reasoning', 'N/A')}")
+        
+        return {
+            "topic_id": result.get("topic_id"),
+            "topic_summary_ar": result.get("topic_summary_ar")
+        }
     except Exception as e:
         logger.error(f"Topic clustering error: {e}")
         return None
@@ -1260,9 +1298,32 @@ async def get_news(page: int = 1, limit: int = 20):
         "limit": limit
     }
 
+def calculate_text_similarity(text1: str, text2: str) -> float:
+    """Calculate simple text similarity based on common words"""
+    if not text1 or not text2:
+        return 0.0
+    
+    # Simple word-based similarity
+    words1 = set(text1.lower().split())
+    words2 = set(text2.lower().split())
+    
+    # Remove common Arabic/English stop words
+    stop_words = {'في', 'من', 'إلى', 'على', 'عن', 'أن', 'التي', 'الذي', 'هذا', 'هذه', 'مع', 'كان', 'قد', 'بعد', 
+                  'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'is', 'are', 'was', 'were'}
+    words1 = words1 - stop_words
+    words2 = words2 - stop_words
+    
+    if not words1 or not words2:
+        return 0.0
+    
+    intersection = len(words1 & words2)
+    union = len(words1 | words2)
+    
+    return intersection / union if union > 0 else 0.0
+
 @app.get("/api/timeline/{topic_id:path}")
 async def get_timeline(topic_id: str):
-    """Fetch all news items belonging to an evolution thread"""
+    """Fetch all news items belonging to an evolution thread - with similarity filtering"""
     from urllib.parse import unquote
     # Decode URL-encoded topic_id (for Arabic characters)
     topic_id = unquote(topic_id)
@@ -1282,7 +1343,38 @@ async def get_timeline(topic_id: str):
                 "image_url": r.image_url
             })
     db.close()
+    
+    # Sort by published date
     items.sort(key=lambda x: x['published'])
+    
+    # If we have items, filter out ones that are not similar enough to the majority
+    if len(items) > 2:
+        # Calculate similarity of each item to others
+        filtered_items = []
+        for i, item in enumerate(items):
+            similarities = []
+            for j, other_item in enumerate(items):
+                if i != j:
+                    sim = calculate_text_similarity(
+                        f"{item['title']} {item.get('summary', '')}",
+                        f"{other_item['title']} {other_item.get('summary', '')}"
+                    )
+                    similarities.append(sim)
+            
+            # Keep item only if it has reasonable similarity with at least one other item
+            avg_similarity = sum(similarities) / len(similarities) if similarities else 0
+            max_similarity = max(similarities) if similarities else 0
+            
+            # Item should have at least 15% similarity with best match or 10% average
+            if max_similarity >= 0.15 or avg_similarity >= 0.10:
+                filtered_items.append(item)
+            else:
+                logger.info(f"Filtering out dissimilar item from timeline: {item['title'][:50]}... (max_sim: {max_similarity:.2f}, avg_sim: {avg_similarity:.2f})")
+        
+        # If filtering removed too many items (more than half), return original
+        if len(filtered_items) >= len(items) // 2:
+            items = filtered_items
+    
     return {"topic_id": topic_id, "items": items}
 
 @app.get("/api/yemen-news")
