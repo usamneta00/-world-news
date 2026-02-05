@@ -353,12 +353,14 @@ async def analyze_topic_ai(title: str, summary: str):
     Decide if this story belongs to one of the existing topics or if it's a new separate event thread.
     Provide output in JSON:
     {{
-        "topic_id": "slug-name-in-english",
+        "topic_id": "اسم الموضوع بالعربية (مثل: هجمات البحر الأحمر)",
         "topic_summary_ar": "وصف مختصر جدا للحدث باللغة العربية"
     }}
     
     If it belongs to an existing topic, reuse that EXACT topic_id.
-    If it's new, create a descriptive slug.
+    If it's new, create a descriptive title in ARABIC.
+    
+    IMPORTANT: Focus on the MAIN EVENT (e.g. 'قصف ميناء الحديدة', 'مفاوضات السلام'). Do not create overly specific IDs for every slight change unless it's a major new development.
     """
     
     try:
@@ -393,6 +395,21 @@ async def process_topic_evolution(item_id: int, table_name: str):
                 "data": {"id": item.id, "table": table_name, "topic_id": item.topic_id}
             }))
     except Exception as e: logger.error(f"Evolution task error: {e}")
+    finally: db.close()
+
+async def backfill_topics():
+    """One-time task to process last 10 items for threads on startup"""
+    if not openai_client: return
+    logger.info("Starting backfill for topic threads...")
+    db = SessionLocal()
+    try:
+        for model_name, model in [("news", NewsItem), ("yemen_news", YemenNewsItem), ("newspaper_news", NewspaperNewsItem)]:
+            items = db.query(model).filter(model.topic_id == None).order_by(desc(model.published)).limit(10).all()
+            for item in items:
+                logger.info(f"Backfilling topic for {model_name} item {item.id}")
+                await process_topic_evolution(item.id, model_name)
+                await asyncio.sleep(1) # Rate limit
+    except Exception as e: logger.error(f"Backfill error: {e}")
     finally: db.close()
 
 def translate_to_arabic(text: str) -> str:
@@ -1218,6 +1235,8 @@ async def startup_event():
     asyncio.create_task(fetch_youtube_feeds())
     asyncio.create_task(fetch_yemen_youtube_feeds())
     asyncio.create_task(fetch_newspaper_feeds())
+    # Process some existing items for the user to see the feature
+    asyncio.create_task(backfill_topics())
 
 @app.get("/api/news")
 async def get_news(page: int = 1, limit: int = 20):

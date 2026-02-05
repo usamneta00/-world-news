@@ -398,13 +398,14 @@
                     </div>
                 </div>
             </div>
-            <div class="p-6 border-t border-white/10 flex justify-between items-center bg-black/40">
+            <div
+                class="p-4 md:p-6 border-t border-white/10 flex flex-col md:flex-row gap-4 md:justify-between items-center bg-black/40">
                 <button id="view-evolution-btn" onclick="showTimeline()"
-                    class="hidden items-center gap-2 px-6 py-3 bg-neon-accent/10 text-neon-accent border border-neon-accent/20 font-mono text-[10px] uppercase tracking-widest hover:bg-neon-accent hover:text-black transition-all rounded-sm">
+                    class="hidden w-full md:w-auto items-center justify-center gap-2 px-6 py-3 bg-neon-accent/10 text-neon-accent border border-neon-accent/20 font-mono text-[10px] uppercase tracking-widest hover:bg-neon-accent hover:text-black transition-all rounded-sm">
                     <i data-lucide="git-merge" class="w-4 h-4"></i> View Evolution
                 </button>
                 <a id="reader-link" href="#" target="_blank"
-                    class="px-8 py-3 bg-neon-blue text-obsidian font-bold text-xs uppercase tracking-widest hover:bg-white transition-all">
+                    class="w-full md:w-auto flex justify-center items-center px-8 py-3 bg-neon-blue text-obsidian font-bold text-xs uppercase tracking-widest hover:bg-white transition-all">
                     Read Original Source
                 </a>
             </div>
@@ -418,15 +419,16 @@
             class="relative w-full max-w-4xl max-h-[90vh] glass-panel flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
             <div class="p-6 border-b border-white/10 flex items-center justify-between">
                 <div>
-                    <span class="text-neon-accent text-[10px] font-mono uppercase tracking-[0.3em]">Story
+                    <span class="text-neon-accent text-[10px] font-mono uppercase tracking-[0.3em]">Event Linkages &
                         Evolution</span>
-                    <h3 id="timeline-topic-summary" class="font-serif text-2xl text-white mt-1">مسار الحدث</h3>
+                    <h3 id="timeline-topic-summary" class="font-serif text-2xl text-white mt-1">تطور القضية وتسلل
+                        الأحداث</h3>
                 </div>
                 <button onclick="closeTimeline()" class="p-2 hover:bg-white/5 rounded-full transition-colors">
                     <i data-lucide="x" class="w-6 h-6"></i>
                 </button>
             </div>
-            <div id="timeline-container" class="flex-1 overflow-y-auto p-8 md:p-12 no-scrollbar scroll-smooth">
+            <div id="timeline-container" class="flex-1 overflow-y-auto p-6 md:p-12 no-scrollbar scroll-smooth">
                 <!-- Timeline items go here -->
             </div>
         </div>
@@ -608,6 +610,7 @@
                     <div class="absolute inset-0 bg-gradient-to-t from-paper via-transparent to-transparent dark:from-obsidian dark:via-transparent dark:to-transparent opacity-90 pointer-events-none"></div>
                     <div class="absolute bottom-0 left-0 w-full p-8 md:p-12 text-right">
                         <div class="flex items-center justify-end gap-3 mb-4">
+                            ${h.topic_id ? `<span class="px-2 py-1 bg-neon-accent/20 text-neon-accent text-[10px] font-mono font-bold rounded-sm border border-neon-accent/30 flex items-center gap-1"><i data-lucide="git-merge" class="w-3 h-3"></i> THREAD</span>` : ''}
                             <span class="px-2 py-1 bg-neon-accent text-white text-[10px] font-mono uppercase tracking-wider">${h.source}</span>
                             <span class="text-neutral-600 dark:text-neutral-400 text-xs font-mono">${timeAgo(h.published)}</span>
                         </div>
@@ -626,7 +629,10 @@
                 heroSide.innerHTML = items.slice(1, 4).map(item => `
                     <article class="flex-1 bg-white dark:bg-neutral-900 p-6 flex flex-col justify-center group hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer text-right" onclick="openReader(${item.id}, '${activeTab}')">
                         <div class="flex justify-between items-start mb-4">
-                            <span class="text-[10px] font-mono text-neutral-400">${timeAgo(item.published)}</span>
+                            <div class="flex gap-2">
+                                ${item.topic_id ? `<span class="text-[9px] font-mono text-neon-accent font-bold border border-neon-accent/20 px-1 rounded-sm flex items-center gap-1"><i data-lucide="git-merge" class="w-2.5 h-2.5"></i></span>` : ''}
+                                <span class="text-[10px] font-mono text-neutral-400">${timeAgo(item.published)}</span>
+                            </div>
                             <span class="text-[10px] font-mono text-neon-accent uppercase">${item.source}</span>
                         </div>
                         <h2 class="font-serif text-xl font-medium mb-3 group-hover:text-neon-accent transition-colors line-clamp-2">${item.title}</h2>
@@ -650,6 +656,7 @@
                         </div>
                         <div class="${isWide ? 'w-full md:w-1/2 flex flex-col justify-center' : ''} text-right">
                             <div class="flex items-center justify-end gap-2 mb-2">
+                                ${n.topic_id ? `<span class="px-1.5 py-0.5 bg-neon-accent/10 text-neon-accent text-[9px] font-bold rounded-sm border border-neon-accent/20 flex items-center gap-1"><i data-lucide="git-merge" class="w-2.5 h-2.5"></i> THREAD</span>` : ''}
                                 <span class="text-[10px] font-mono uppercase text-neutral-500 tracking-wider">${n.source}</span>
                                 ${i === 0 ? '<div class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>' : ''}
                             </div>
@@ -736,12 +743,18 @@
                             const item = list.find(n => n.id === msg.data.id);
                             if (item) {
                                 item.topic_id = msg.data.topic_id;
-                                // If reader is open, maybe update the evolution button visibility
+                                // Force UI refresh
+                                renderUI(activeTab === 'world' ? allNews : (activeTab === 'yemen' ? yemenNews : newspaperNews));
+
+                                // If reader is open, update the evolution button visibility
                                 const evolBtn = document.getElementById('view-evolution-btn');
                                 if (evolBtn && !document.getElementById('quick-reader').classList.contains('hidden')) {
-                                    evolBtn.classList.remove('hidden');
-                                    evolBtn.classList.add('flex');
-                                    evolBtn.setAttribute('data-topic-id', item.topic_id);
+                                    const currentId = parseInt(document.getElementById('reader-link').href.split('/').pop()); // Approximation or add data-id to reader link
+                                    if (item.topic_id) {
+                                        evolBtn.classList.remove('hidden');
+                                        evolBtn.classList.add('flex');
+                                        evolBtn.setAttribute('data-topic-id', item.topic_id);
+                                    }
                                 }
                                 break;
                             }
@@ -816,9 +829,12 @@
                 const response = await fetch(`${API_URL}/timeline/${topicId}`);
                 const data = await response.json();
 
+                // Set the topic summary/title in the modal header
+                document.getElementById('timeline-topic-summary').textContent = topicId;
+
                 if (data.items && data.items.length > 0) {
                     container.innerHTML = data.items.map((it, idx) => `
-                        <div class="relative flex gap-8 pb-12 group last:pb-0">
+                        <div class="relative flex gap-4 md:gap-8 pb-10 group last:pb-0">
                             <!-- Line -->
                             ${idx !== data.items.length - 1 ? '<div class="absolute left-3 top-8 bottom-0 w-px bg-white/10 group-hover:bg-neon-accent/30 transition-colors"></div>' : ''}
                             
@@ -828,9 +844,9 @@
                             </div>
                             
                             <div class="flex-1 text-right">
-                                <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest">${timeAgo(it.published)} • ${it.source}</span>
-                                <h4 class="font-serif text-xl text-white mt-1 group-hover:text-neon-blue transition-colors cursor-pointer" onclick="openAndCloseTimeline(${it.id})">${it.title}</h4>
-                                <p class="text-sm text-neutral-400 mt-2 font-light leading-relaxed">${it.summary || ''}</p>
+                                <span class="text-[9px] md:text-[10px] font-mono text-neutral-500 uppercase tracking-widest">${timeAgo(it.published)} • ${it.source}</span>
+                                <h4 class="font-serif text-lg md:text-xl text-white mt-1 group-hover:text-neon-blue transition-colors cursor-pointer" onclick="openAndCloseTimeline(${it.id})">${it.title}</h4>
+                                <p class="text-xs md:text-sm text-neutral-400 mt-2 font-light leading-relaxed">${it.summary || ''}</p>
                             </div>
                         </div>
                     `).join('');
