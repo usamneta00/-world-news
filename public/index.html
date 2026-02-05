@@ -665,6 +665,326 @@
                 gap: 12px;
             }
         }
+
+        /* Personal Impact Section Styles */
+        .personal-impact-section {
+            margin-top: 30px;
+            padding: 25px;
+            background: linear-gradient(135deg, rgba(0, 102, 51, 0.1), rgba(204, 0, 0, 0.05));
+            border: 1px solid rgba(0, 102, 51, 0.3);
+            border-radius: 20px;
+            animation: personal-appear 0.6s ease-out;
+        }
+
+        @keyframes personal-appear {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .personal-impact-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(0, 102, 51, 0.2);
+        }
+
+        .personal-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #006633, #004422);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 4px 15px rgba(0, 102, 51, 0.3);
+        }
+
+        .personal-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #10b981;
+            margin-bottom: 4px;
+        }
+
+        .personal-subtitle {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .impact-category {
+            margin-bottom: 25px;
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #e5e5e5;
+            margin-bottom: 15px;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+        }
+
+        .impact-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .daily-life-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .daily-life-card:hover {
+            border-color: rgba(16, 185, 129, 0.4);
+            transform: translateY(-3px);
+        }
+
+        .daily-life-card .card-area {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #22d3ee;
+            margin-bottom: 8px;
+        }
+
+        .daily-life-card .card-effect {
+            font-size: 12px;
+            color: #9ca3af;
+            line-height: 1.5;
+            margin-bottom: 10px;
+        }
+
+        .daily-life-card .card-action {
+            font-size: 11px;
+            color: #10b981;
+            padding: 8px 10px;
+            background: rgba(16, 185, 129, 0.1);
+            border-radius: 8px;
+            border-right: 3px solid #10b981;
+        }
+
+        .daily-life-card .card-urgency {
+            display: inline-block;
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            margin-top: 8px;
+            font-weight: 600;
+        }
+
+        .daily-life-card .card-urgency.urgent {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+        }
+
+        .daily-life-card .card-urgency.soon {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+        }
+
+        .daily-life-card .card-urgency.future {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+        }
+
+        .investment-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .investment-card:hover {
+            border-color: rgba(245, 158, 11, 0.4);
+            transform: translateY(-3px);
+        }
+
+        .investment-card .card-type {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .investment-card .type-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #fbbf24;
+        }
+
+        .investment-card .recommendation {
+            font-size: 10px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .investment-card .recommendation.buy {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+        }
+
+        .investment-card .recommendation.sell {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+        }
+
+        .investment-card .recommendation.wait {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+        }
+
+        .investment-card .recommendation.hedge {
+            background: rgba(168, 85, 247, 0.2);
+            color: #c084fc;
+        }
+
+        .investment-card .card-reason {
+            font-size: 12px;
+            color: #9ca3af;
+            line-height: 1.5;
+            margin-bottom: 10px;
+        }
+
+        .investment-card .risk-level {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            color: #6b7280;
+        }
+
+        .investment-card .risk-indicator {
+            display: flex;
+            gap: 3px;
+        }
+
+        .investment-card .risk-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .investment-card .risk-dot.active.low { background: #10b981; }
+        .investment-card .risk-dot.active.medium { background: #f59e0b; }
+        .investment-card .risk-dot.active.high { background: #ef4444; }
+
+        .yemen-specific-box {
+            background: linear-gradient(135deg, rgba(0, 102, 51, 0.15), rgba(204, 0, 0, 0.1));
+            border: 2px solid rgba(0, 102, 51, 0.4);
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .yemen-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 15px;
+            font-weight: 700;
+            color: #10b981;
+            margin-bottom: 15px;
+        }
+
+        .yemen-flag {
+            font-size: 20px;
+        }
+
+        .yemen-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+
+        .yemen-detail-item {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 12px;
+            border-radius: 10px;
+            border-right: 3px solid #006633;
+        }
+
+        .yemen-detail-item .detail-label {
+            font-size: 10px;
+            color: #6b7280;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .yemen-detail-item .detail-value {
+            font-size: 12px;
+            color: #e5e5e5;
+            line-height: 1.4;
+        }
+
+        .yemen-advice {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 12px;
+            padding: 15px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .yemen-advice .advice-icon {
+            width: 32px;
+            height: 32px;
+            background: rgba(16, 185, 129, 0.2);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .yemen-advice .advice-text {
+            font-size: 13px;
+            color: #a7f3d0;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 768px) {
+            .personal-impact-section {
+                padding: 15px;
+            }
+
+            .personal-icon {
+                width: 40px;
+                height: 40px;
+                font-size: 20px;
+            }
+
+            .personal-title {
+                font-size: 16px;
+            }
+
+            .impact-cards {
+                grid-template-columns: 1fr;
+            }
+
+            .yemen-details {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 
@@ -1010,6 +1330,55 @@
                                         <span class="bar s3"></span>
                                         <span class="bar s4"></span>
                                         <span class="bar s5"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Personal Impact Section for Yemen -->
+                            <div id="personal-impact-section" class="personal-impact-section hidden">
+                                <div class="personal-impact-header">
+                                    <div class="personal-icon">
+                                        <span>🇾🇪</span>
+                                    </div>
+                                    <div>
+                                        <h4 class="personal-title">كيف سيؤثر عليك في اليمن؟</h4>
+                                        <p class="personal-subtitle">رؤية استباقية لحياتك واستثماراتك</p>
+                                    </div>
+                                </div>
+
+                                <!-- Daily Life Impact -->
+                                <div id="daily-life-impacts" class="impact-category">
+                                    <div class="category-header">
+                                        <i data-lucide="home" class="w-4 h-4"></i>
+                                        <span>التأثير على حياتك اليومية</span>
+                                    </div>
+                                    <div id="daily-life-cards" class="impact-cards">
+                                        <!-- Cards will be injected here -->
+                                    </div>
+                                </div>
+
+                                <!-- Investment Recommendations -->
+                                <div id="investment-impacts" class="impact-category">
+                                    <div class="category-header">
+                                        <i data-lucide="trending-up" class="w-4 h-4"></i>
+                                        <span>توصيات الاستثمار</span>
+                                    </div>
+                                    <div id="investment-cards" class="impact-cards">
+                                        <!-- Cards will be injected here -->
+                                    </div>
+                                </div>
+
+                                <!-- Yemen Specific Impact -->
+                                <div id="yemen-specific-impact" class="yemen-specific-box">
+                                    <div class="yemen-header">
+                                        <span class="yemen-flag">🇾🇪</span>
+                                        <span>التأثير على السوق اليمني</span>
+                                    </div>
+                                    <div id="yemen-details" class="yemen-details">
+                                        <!-- Details will be injected here -->
+                                    </div>
+                                    <div id="yemen-advice" class="yemen-advice">
+                                        <!-- Advice will be injected here -->
                                     </div>
                                 </div>
                             </div>
@@ -1411,6 +1780,80 @@
             return SECTOR_ICONS.default;
         }
 
+        // Daily life area icons
+        const DAILY_LIFE_ICONS = {
+            'أسعار الغذاء': '🍞',
+            'الغذاء': '🍞',
+            'الوقود': '⛽',
+            'البنزين': '⛽',
+            'الديزل': '⛽',
+            'الكهرباء': '💡',
+            'الإنترنت': '📶',
+            'التحويلات': '💸',
+            'التحويلات المالية': '💸',
+            'الأدوية': '💊',
+            'الصحة': '🏥',
+            'التعليم': '📚',
+            'المواصلات': '🚗',
+            'الإيجارات': '🏠',
+            'الملابس': '👕',
+            'default': '📍'
+        };
+
+        // Investment type icons
+        const INVESTMENT_ICONS = {
+            'العقارات': '🏢',
+            'الذهب': '🥇',
+            'العملات': '💵',
+            'الدولار': '💵',
+            'التجارة': '🛒',
+            'المشاريع': '🏭',
+            'المشاريع الصغيرة': '🏪',
+            'الأسهم': '📈',
+            'السندات': '📋',
+            'default': '💰'
+        };
+
+        function getDailyLifeIcon(area) {
+            for (const [key, icon] of Object.entries(DAILY_LIFE_ICONS)) {
+                if (area.includes(key)) return icon;
+            }
+            return DAILY_LIFE_ICONS.default;
+        }
+
+        function getInvestmentIcon(type) {
+            for (const [key, icon] of Object.entries(INVESTMENT_ICONS)) {
+                if (type.includes(key)) return icon;
+            }
+            return INVESTMENT_ICONS.default;
+        }
+
+        function getUrgencyClass(urgency) {
+            if (urgency.includes('عاجل')) return 'urgent';
+            if (urgency.includes('قريب')) return 'soon';
+            return 'future';
+        }
+
+        function getRecommendationClass(rec) {
+            if (rec.includes('شراء')) return 'buy';
+            if (rec.includes('بيع')) return 'sell';
+            if (rec.includes('تحوط')) return 'hedge';
+            return 'wait';
+        }
+
+        function getRecommendationText(rec) {
+            if (rec.includes('شراء')) return 'شراء';
+            if (rec.includes('بيع')) return 'بيع';
+            if (rec.includes('تحوط')) return 'تحوط';
+            return 'انتظار';
+        }
+
+        function getRiskLevel(risk) {
+            if (risk.includes('منخفض')) return 'low';
+            if (risk.includes('مرتفع')) return 'high';
+            return 'medium';
+        }
+
         async function fetchImpactRipple(newsId, newsType) {
             const loading = document.getElementById('ripple-loading');
             const empty = document.getElementById('ripple-empty');
@@ -1419,11 +1862,13 @@
             const summarySection = document.getElementById('ripple-summary');
             const summaryText = document.getElementById('ripple-summary-text');
             const graph = document.getElementById('ripple-graph');
+            const personalSection = document.getElementById('personal-impact-section');
             
             // Reset state
             if (loading) loading.classList.remove('hidden');
             if (empty) empty.classList.add('hidden');
             if (content) content.classList.add('hidden');
+            if (personalSection) personalSection.classList.add('hidden');
             if (graph) graph.innerHTML = '';
             
             try {
@@ -1473,6 +1918,12 @@
                 if (graph) graph.innerHTML = nodesHTML;
                 if (content) content.classList.remove('hidden');
                 
+                // Render Personal Impact Section
+                if (data.personal_impact && personalSection) {
+                    renderPersonalImpact(data.personal_impact);
+                    personalSection.classList.remove('hidden');
+                }
+                
                 lucide.createIcons();
                 
             } catch (error) {
@@ -1486,6 +1937,93 @@
                     `;
                 }
                 lucide.createIcons();
+            }
+        }
+
+        function renderPersonalImpact(personalImpact) {
+            const dailyLifeCards = document.getElementById('daily-life-cards');
+            const investmentCards = document.getElementById('investment-cards');
+            const yemenDetails = document.getElementById('yemen-details');
+            const yemenAdvice = document.getElementById('yemen-advice');
+            
+            // Render Daily Life Cards
+            if (dailyLifeCards && personalImpact.daily_life) {
+                dailyLifeCards.innerHTML = personalImpact.daily_life.map(item => {
+                    const icon = getDailyLifeIcon(item.area);
+                    const urgencyClass = getUrgencyClass(item.urgency);
+                    return `
+                        <div class="daily-life-card">
+                            <div class="card-area">
+                                <span>${icon}</span>
+                                <span>${item.area}</span>
+                            </div>
+                            <div class="card-effect">${item.effect}</div>
+                            <div class="card-action">💡 ${item.action}</div>
+                            <span class="card-urgency ${urgencyClass}">${item.urgency}</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            // Render Investment Cards
+            if (investmentCards && personalImpact.investments) {
+                investmentCards.innerHTML = personalImpact.investments.map(item => {
+                    const icon = getInvestmentIcon(item.type);
+                    const recClass = getRecommendationClass(item.recommendation);
+                    const recText = getRecommendationText(item.recommendation);
+                    const riskLevel = getRiskLevel(item.risk_level);
+                    
+                    const riskDots = ['low', 'medium', 'high'].map((level, i) => {
+                        const isActive = (riskLevel === 'low' && i === 0) || 
+                                        (riskLevel === 'medium' && i <= 1) || 
+                                        (riskLevel === 'high');
+                        return `<span class="risk-dot ${isActive ? 'active ' + riskLevel : ''}"></span>`;
+                    }).join('');
+                    
+                    return `
+                        <div class="investment-card">
+                            <div class="card-type">
+                                <span class="type-name">${icon} ${item.type}</span>
+                                <span class="recommendation ${recClass}">${recText}</span>
+                            </div>
+                            <div class="card-reason">${item.reason}</div>
+                            <div class="risk-level">
+                                <span>المخاطرة:</span>
+                                <div class="risk-indicator">${riskDots}</div>
+                                <span>${item.risk_level}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            // Render Yemen Specific Details
+            if (yemenDetails && personalImpact.yemen_specific) {
+                const ys = personalImpact.yemen_specific;
+                yemenDetails.innerHTML = `
+                    <div class="yemen-detail-item">
+                        <div class="detail-label">💵 الريال اليمني</div>
+                        <div class="detail-value">${ys.rial_impact || 'لا يوجد تأثير متوقع'}</div>
+                    </div>
+                    <div class="yemen-detail-item">
+                        <div class="detail-label">📦 أسعار المستوردات</div>
+                        <div class="detail-value">${ys.import_prices || 'لا يوجد تأثير متوقع'}</div>
+                    </div>
+                    <div class="yemen-detail-item">
+                        <div class="detail-label">🏪 السوق المحلي</div>
+                        <div class="detail-value">${ys.local_market || 'لا يوجد تأثير متوقع'}</div>
+                    </div>
+                `;
+            }
+            
+            // Render Yemen Advice
+            if (yemenAdvice && personalImpact.yemen_specific && personalImpact.yemen_specific.advice) {
+                yemenAdvice.innerHTML = `
+                    <div class="advice-icon">
+                        <i data-lucide="lightbulb" class="w-4 h-4 text-green-400"></i>
+                    </div>
+                    <div class="advice-text">${personalImpact.yemen_specific.advice}</div>
+                `;
             }
         }
         

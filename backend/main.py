@@ -1392,19 +1392,22 @@ async def get_impact_ripple(news_type: str, news_id: int):
         db.close()
 
 async def analyze_news_impact(title: str, summary: str) -> dict:
-    """Use AI to analyze the ripple effect of a news item on various sectors"""
+    """Use AI to analyze the ripple effect of a news item on various sectors with focus on Yemen"""
     if not OPENAI_API_KEY:
         logger.warning("OPENAI_API_KEY not set, returning default impact analysis")
-        return {"impacts": [], "central_event": title[:50], "analysis_summary": ""}
+        return {"impacts": [], "central_event": title[:50], "analysis_summary": "", "personal_impact": None}
     
     try:
-        prompt = f"""أنت محلل اقتصادي وجيوسياسي خبير. مهمتك هي تحليل تأثير خبر على القطاعات المختلفة.
+        prompt = f"""أنت محلل اقتصادي وجيوسياسي خبير متخصص في الشأن اليمني. مهمتك هي تحليل تأثير خبر عالمي على القطاعات المختلفة مع التركيز على كيفية تأثر المواطن اليمني والمستثمر في اليمن.
 
 الخبر:
 العنوان: {title}
 الملخص: {summary}
 
-حلل كيف سيؤثر هذا الخبر على القطاعات المختلفة. أريد سلسلة من التداعيات المتتالية (ripple effect).
+حلل كيف سيؤثر هذا الخبر على:
+1. القطاعات العالمية والإقليمية
+2. الحياة اليومية للمواطن اليمني
+3. الاستثمارات والأعمال في اليمن
 
 أجب بصيغة JSON فقط كالتالي:
 {{
@@ -1420,21 +1423,48 @@ async def analyze_news_impact(title: str, summary: str) -> dict:
             "timeframe": "فوري" أو "قصير المدى" أو "طويل المدى",
             "linked_to": ["id1", "id2"] (التأثيرات المرتبطة)
         }}
-    ]
+    ],
+    "personal_impact": {{
+        "daily_life": [
+            {{
+                "area": "المجال (مثل: أسعار الغذاء، الوقود، الكهرباء، الإنترنت، التحويلات المالية)",
+                "effect": "التأثير المتوقع على حياتك اليومية",
+                "action": "ماذا يمكنك فعله للتحضير أو الاستفادة",
+                "urgency": "عاجل" أو "قريب" أو "مستقبلي"
+            }}
+        ],
+        "investments": [
+            {{
+                "type": "نوع الاستثمار (مثل: العقارات، الذهب، العملات، التجارة، المشاريع الصغيرة)",
+                "recommendation": "شراء" أو "بيع" أو "انتظار" أو "تحوط",
+                "reason": "سبب التوصية",
+                "risk_level": "منخفض" أو "متوسط" أو "مرتفع"
+            }}
+        ],
+        "yemen_specific": {{
+            "rial_impact": "تأثير متوقع على سعر الريال اليمني",
+            "import_prices": "تأثير على أسعار المستوردات",
+            "local_market": "تأثير على السوق المحلي اليمني",
+            "advice": "نصيحة عامة للمواطن اليمني"
+        }}
+    }}
 }}
 
 قواعد مهمة:
-- أعط من 4 إلى 7 تأثيرات متتالية
+- أعط من 4 إلى 7 تأثيرات متتالية في impacts
 - التأثيرات يجب أن تكون مرتبطة ببعضها (سلسلة)
-- استخدم الأرقام للربط في linked_to
-- التأثير الأول يجب أن يكون مرتبط بالحدث الرئيسي (linked_to: [])
-- كل تأثير لاحق يرتبط بالسابق
+- في personal_impact ركز على اليمن تحديداً
+- أعط 2-4 تأثيرات على الحياة اليومية
+- أعط 2-3 توصيات استثمارية
+- كن واقعياً ومحدداً بالنسبة للوضع في اليمن
+- اذكر مدن يمنية محددة إن كان ذلك مناسباً (صنعاء، عدن، تعز، مأرب، الحديدة)
 
 إذا كان الخبر غير واضح أو لا يمكن تحليله، أرجع:
 {{
     "central_event": "",
     "analysis_summary": "",
-    "impacts": []
+    "impacts": [],
+    "personal_impact": null
 }}"""
 
         headers = {
