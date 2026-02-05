@@ -1655,9 +1655,13 @@
             if (items) items.innerHTML = '';
             if (threadTitle) threadTitle.textContent = '';
             
+            console.log(`[Timeline] Fetching for ${newsType}/${newsId}...`);
+            
             try {
                 const response = await fetch(`${API_URL}/event-timeline/${newsType}/${newsId}`);
                 const data = await response.json();
+                
+                console.log('[Timeline] Response:', data);
                 
                 if (loading) loading.classList.add('hidden');
                 
@@ -1667,7 +1671,16 @@
                 if (copyBtn) copyBtn.classList.add('hidden');
                 
                 if (!data.related_news || data.related_news.length === 0) {
-                    if (empty) empty.classList.remove('hidden');
+                    if (empty) {
+                        empty.classList.remove('hidden');
+                        empty.innerHTML = `
+                            <i data-lucide="git-branch" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
+                            <p>لم يتم العثور على أخبار مرتبطة بهذا الحدث</p>
+                            <p class="text-xs mt-2 opacity-60">ستظهر الأخبار المرتبطة تلقائياً عند توفرها</p>
+                            <p class="text-xs mt-1 opacity-40">(يتطلب وجود OPENAI_API_KEY للتحليل التلقائي)</p>
+                        `;
+                        lucide.createIcons();
+                    }
                     return;
                 }
                 
@@ -1744,8 +1757,24 @@
             window.open(link, '_blank');
         }
 
-        // Sector icons mapping
+        // Sector icons mapping - comprehensive for all sectors (political, security, economic, social, etc.)
         const SECTOR_ICONS = {
+            // Political
+            'السياسة': '🏛️',
+            'السياسة الدولية': '🌐',
+            'الدبلوماسية': '🤝',
+            'العلاقات الدولية': '🌍',
+            'التحالفات': '🤝',
+            // Security & Military
+            'الأمن': '🛡️',
+            'الأمن الإقليمي': '🛡️',
+            'الوضع العسكري': '⚔️',
+            'الدفاع': '⚔️',
+            'النزاعات': '💥',
+            'التسليح': '🎯',
+            // Economic
+            'الاقتصاد': '💹',
+            'الاقتصاد العالمي': '🌐',
             'الطاقة': '⚡',
             'النفط': '🛢️',
             'الغاز': '🔥',
@@ -1764,12 +1793,27 @@
             'العقارات': '🏠',
             'الصناعة': '🏭',
             'الزراعة': '🌱',
-            'الصحة': '🏥',
-            'التعليم': '📚',
-            'الأمن': '🛡️',
-            'الدفاع': '⚔️',
             'البنوك': '🏦',
             'التأمين': '📋',
+            // Social & Humanitarian
+            'الهجرة': '🚶',
+            'اللاجئين': '🏕️',
+            'المساعدات': '🎁',
+            'المساعدات الإنسانية': '❤️',
+            'الإغاثة': '🆘',
+            'حقوق الإنسان': '✊',
+            'الصحة': '🏥',
+            'الصحة العامة': '🏥',
+            'التعليم': '📚',
+            // Environmental
+            'البيئة': '🌿',
+            'المناخ': '🌡️',
+            'الكوارث': '⚠️',
+            'المياه': '💧',
+            // Media & Tech
+            'الإعلام': '📺',
+            'الاتصالات': '📡',
+            'الإنترنت': '🌐',
             'default': '📍'
         };
 
@@ -1871,14 +1915,40 @@
             if (personalSection) personalSection.classList.add('hidden');
             if (graph) graph.innerHTML = '';
             
+            console.log(`[Impact Ripple] Fetching for ${newsType}/${newsId}...`);
+            
             try {
                 const response = await fetch(`${API_URL}/impact-ripple/${newsType}/${newsId}`);
                 const data = await response.json();
                 
+                console.log('[Impact Ripple] Response:', data);
+                
                 if (loading) loading.classList.add('hidden');
                 
+                // Check if API key is not set
+                if (data.error === 'no_api_key') {
+                    if (empty) {
+                        empty.classList.remove('hidden');
+                        empty.innerHTML = `
+                            <i data-lucide="key" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
+                            <p class="text-amber-400 font-bold mb-2">مفتاح API غير مُعدّ</p>
+                            <p class="text-sm opacity-70">يرجى إضافة OPENAI_API_KEY لتفعيل تحليل التداعيات</p>
+                        `;
+                        lucide.createIcons();
+                    }
+                    return;
+                }
+                
                 if (!data.impacts || data.impacts.length === 0) {
-                    if (empty) empty.classList.remove('hidden');
+                    if (empty) {
+                        empty.classList.remove('hidden');
+                        empty.innerHTML = `
+                            <i data-lucide="circle-off" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
+                            <p>لا يمكن تحليل تداعيات هذا الخبر حالياً</p>
+                            <p class="text-xs mt-2 opacity-60">جرب خبراً آخر أو انتظر قليلاً</p>
+                        `;
+                        lucide.createIcons();
+                    }
                     return;
                 }
                 
@@ -2013,6 +2083,18 @@
                         <div class="detail-label">🏪 السوق المحلي</div>
                         <div class="detail-value">${ys.local_market || 'لا يوجد تأثير متوقع'}</div>
                     </div>
+                    ${ys.security_situation ? `
+                    <div class="yemen-detail-item" style="border-right-color: #ef4444;">
+                        <div class="detail-label">🛡️ الوضع الأمني</div>
+                        <div class="detail-value">${ys.security_situation}</div>
+                    </div>
+                    ` : ''}
+                    ${ys.humanitarian ? `
+                    <div class="yemen-detail-item" style="border-right-color: #f59e0b;">
+                        <div class="detail-label">❤️ الوضع الإنساني</div>
+                        <div class="detail-value">${ys.humanitarian}</div>
+                    </div>
+                    ` : ''}
                 `;
             }
             
