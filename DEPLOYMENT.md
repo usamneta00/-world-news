@@ -23,6 +23,8 @@ git commit -m "feat: Add Yemen news filter and new design2"
 git push origin main
 
 git push origin main  --force
+
+git add -A; git commit -m "Add keyword-based topic detection fallback + improved logging"; git push origin main
 ```
 
 ### 3️⃣ إنشاء مشروع على Railway
