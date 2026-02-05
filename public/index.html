@@ -686,6 +686,7 @@
             const item = list.find(n => n.id === id);
             if (!item) return;
 
+            const reader = document.getElementById('quick-reader');
             const logo = document.getElementById('reader-logo');
             const source = document.getElementById('reader-source');
             const img = document.getElementById('reader-image');
@@ -693,6 +694,9 @@
             const date = document.getElementById('reader-date');
             const link = document.getElementById('reader-link');
             const content = document.getElementById('reader-content');
+
+            // Store current item ID for topic_update matching
+            if (reader) reader.setAttribute('data-current-id', id);
 
             if (logo) logo.src = getSourceLogo(item.source);
             if (source) source.textContent = item.source;
@@ -715,7 +719,6 @@
                 }
             }
 
-            const reader = document.getElementById('quick-reader');
             if (reader) reader.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
             lucide.createIcons();
@@ -733,47 +736,115 @@
                 ws.onopen = () => {
                     const ind = document.getElementById('live-indicator');
                     if (ind) ind.classList.remove('hidden');
+                    console.log('WebSocket connected');
                 };
                 ws.onmessage = (e) => {
                     const msg = JSON.parse(e.data);
                     if (msg.type === 'ping') return;
+                    
+                    // Handle topic_update - when AI assigns a topic to a news item
                     if (msg.type === 'topic_update') {
-                        const lists = [allNews, yemenNews, newspaperNews];
-                        for (let list of lists) {
-                            const item = list.find(n => n.id === msg.data.id);
+                        const itemId = parseInt(msg.data.id);
+                        const tableName = msg.data.table;
+                        const topicId = msg.data.topic_id;
+                        
+                        console.log('Topic update received:', { itemId, tableName, topicId });
+                        
+                        // Determine which lists to update based on table name
+                        let listsToUpdate = [];
+                        if (tableName === 'news') {
+                            listsToUpdate = [{ list: allNews, pending: pendingNews, tab: 'world' }];
+                        } else if (tableName === 'yemen_news') {
+                            listsToUpdate = [{ list: yemenNews, pending: yemenPendingNews, tab: 'yemen' }];
+                        } else if (tableName === 'newspaper_news') {
+                            listsToUpdate = [{ list: newspaperNews, pending: newspaperPendingNews, tab: 'newspaper' }];
+                        } else {
+                            // Fallback: check all lists
+                            listsToUpdate = [
+                                { list: allNews, pending: pendingNews, tab: 'world' },
+                                { list: yemenNews, pending: yemenPendingNews, tab: 'yemen' },
+                                { list: newspaperNews, pending: newspaperPendingNews, tab: 'newspaper' }
+                            ];
+                        }
+                        
+                        let updated = false;
+                        for (let { list, pending, tab } of listsToUpdate) {
+                            // Check main list
+                            let item = list.find(n => parseInt(n.id) === itemId);
                             if (item) {
-                                item.topic_id = msg.data.topic_id;
-                                // Force UI refresh
-                                renderUI(activeTab === 'world' ? allNews : (activeTab === 'yemen' ? yemenNews : newspaperNews));
-
-                                // If reader is open, update the evolution button visibility
-                                const evolBtn = document.getElementById('view-evolution-btn');
-                                if (evolBtn && !document.getElementById('quick-reader').classList.contains('hidden')) {
-                                    const currentId = parseInt(document.getElementById('reader-link').href.split('/').pop()); // Approximation or add data-id to reader link
-                                    if (item.topic_id) {
-                                        evolBtn.classList.remove('hidden');
-                                        evolBtn.classList.add('flex');
-                                        evolBtn.setAttribute('data-topic-id', item.topic_id);
-                                    }
+                                item.topic_id = topicId;
+                                updated = true;
+                                console.log('Updated item in main list:', item.title);
+                            }
+                            // Also check pending list
+                            let pendingItem = pending.find(n => parseInt(n.id) === itemId);
+                            if (pendingItem) {
+                                pendingItem.topic_id = topicId;
+                                updated = true;
+                                console.log('Updated item in pending list:', pendingItem.title);
+                            }
+                        }
+                        
+                        if (updated) {
+                            // Re-render current tab
+                            renderUI(activeTab === 'world' ? allNews : (activeTab === 'yemen' ? yemenNews : newspaperNews));
+                            
+                            // If reader is open with this item, update the evolution button
+                            const reader = document.getElementById('quick-reader');
+                            const evolBtn = document.getElementById('view-evolution-btn');
+                            if (reader && !reader.classList.contains('hidden') && evolBtn) {
+                                // Check if the reader is showing this item
+                                const readerDataId = reader.getAttribute('data-current-id');
+                                if (readerDataId && parseInt(readerDataId) === itemId) {
+                                    evolBtn.classList.remove('hidden');
+                                    evolBtn.classList.add('flex');
+                                    evolBtn.setAttribute('data-topic-id', topicId);
+                                    lucide.createIcons();
                                 }
-                                break;
                             }
                         }
                         return;
                     }
 
-                    let pending = activeTab === 'world' ? pendingNews : (activeTab === 'yemen' ? yemenPendingNews : newspaperPendingNews);
-                    if ((msg.type === 'new_news' && activeTab === 'world') || (msg.type === 'new_yemen_news' && activeTab === 'yemen') || (msg.type === 'new_newspaper_news' && activeTab === 'newspaper')) {
-                        pending.push(msg.data);
-                        const banner = document.getElementById('new-news-banner');
-                        if (banner) {
-                            const txt = banner.querySelector('span.text-xs');
-                            if (txt) txt.textContent = `${pending.length} NEW UPDATES AVAILABLE`;
-                            banner.classList.remove('hidden');
+                    // Handle new news items
+                    let targetPending, targetTab, msgType;
+                    if (msg.type === 'new_news') {
+                        targetPending = pendingNews;
+                        targetTab = 'world';
+                        msgType = 'world';
+                    } else if (msg.type === 'new_yemen_news') {
+                        targetPending = yemenPendingNews;
+                        targetTab = 'yemen';
+                        msgType = 'yemen';
+                    } else if (msg.type === 'new_newspaper_news') {
+                        targetPending = newspaperPendingNews;
+                        targetTab = 'newspaper';
+                        msgType = 'newspaper';
+                    }
+                    
+                    if (targetPending && msg.data) {
+                        // Add to pending list
+                        targetPending.push(msg.data);
+                        console.log(`New ${msgType} item received:`, msg.data.title);
+                        
+                        // Show banner if on the same tab
+                        if (activeTab === targetTab) {
+                            const banner = document.getElementById('new-news-banner');
+                            if (banner) {
+                                const txt = banner.querySelector('span.text-xs');
+                                if (txt) txt.textContent = `${targetPending.length} NEW UPDATES AVAILABLE`;
+                                banner.classList.remove('hidden');
+                            }
                         }
                     }
                 };
-                ws.onclose = () => setTimeout(connectWS, 3000);
+                ws.onclose = () => {
+                    console.log('WebSocket disconnected, reconnecting...');
+                    const ind = document.getElementById('live-indicator');
+                    if (ind) ind.classList.add('hidden');
+                    setTimeout(connectWS, 3000);
+                };
+                ws.onerror = (err) => console.error('WebSocket error:', err);
             } catch (e) { console.error(e); }
         }
 
