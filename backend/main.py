@@ -1299,17 +1299,22 @@ async def get_news(page: int = 1, limit: int = 20):
     }
 
 @app.get("/api/timeline/{topic_id:path}")
-async def get_timeline(topic_id: str):
-    """Fetch all news items belonging to an evolution thread"""
+async def get_timeline(topic_id: str, exclude_link: Optional[str] = None):
+    """Fetch all news items belonging to an evolution thread, excluding the current item"""
     from urllib.parse import unquote
     # Decode URL-encoded topic_id (for Arabic characters)
     topic_id = unquote(topic_id)
+    if exclude_link:
+        exclude_link = unquote(exclude_link)
     
     db = SessionLocal()
     items = []
     for model in [NewsItem, YemenNewsItem, NewspaperNewsItem]:
         results = db.query(model).filter(model.topic_id == topic_id).order_by(model.published).all()
         for r in results:
+            # Skip the current item (the one user is viewing)
+            if exclude_link and r.link == exclude_link:
+                continue
             items.append({
                 "id": r.id,
                 "title": r.title,
@@ -1327,19 +1332,24 @@ async def get_timeline(topic_id: str):
     return {"topic_id": topic_id, "items": items}
 
 @app.get("/api/timeline-count/{topic_id:path}")
-async def get_timeline_count(topic_id: str):
-    """Get count of items in a topic thread - used to check if timeline should be shown"""
+async def get_timeline_count(topic_id: str, exclude_link: Optional[str] = None):
+    """Get count of OTHER items in a topic thread (excluding current item)"""
     from urllib.parse import unquote
     topic_id = unquote(topic_id)
+    if exclude_link:
+        exclude_link = unquote(exclude_link)
     
     db = SessionLocal()
     count = 0
     for model in [NewsItem, YemenNewsItem, NewspaperNewsItem]:
-        count += db.query(model).filter(model.topic_id == topic_id).count()
+        if exclude_link:
+            count += db.query(model).filter(model.topic_id == topic_id, model.link != exclude_link).count()
+        else:
+            count += db.query(model).filter(model.topic_id == topic_id).count()
     db.close()
     
-    # Return count > 1 to indicate if there are multiple items (not just the current one)
-    return {"topic_id": topic_id, "count": count, "has_timeline": count > 1}
+    # Return count of OTHER items (not including current one)
+    return {"topic_id": topic_id, "count": count, "has_timeline": count > 0}
 
 @app.get("/api/yemen-news")
 async def get_yemen_news(page: int = 1, limit: int = 20):
