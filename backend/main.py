@@ -1298,32 +1298,9 @@ async def get_news(page: int = 1, limit: int = 20):
         "limit": limit
     }
 
-def calculate_text_similarity(text1: str, text2: str) -> float:
-    """Calculate simple text similarity based on common words"""
-    if not text1 or not text2:
-        return 0.0
-    
-    # Simple word-based similarity
-    words1 = set(text1.lower().split())
-    words2 = set(text2.lower().split())
-    
-    # Remove common Arabic/English stop words
-    stop_words = {'في', 'من', 'إلى', 'على', 'عن', 'أن', 'التي', 'الذي', 'هذا', 'هذه', 'مع', 'كان', 'قد', 'بعد', 
-                  'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'is', 'are', 'was', 'were'}
-    words1 = words1 - stop_words
-    words2 = words2 - stop_words
-    
-    if not words1 or not words2:
-        return 0.0
-    
-    intersection = len(words1 & words2)
-    union = len(words1 | words2)
-    
-    return intersection / union if union > 0 else 0.0
-
 @app.get("/api/timeline/{topic_id:path}")
 async def get_timeline(topic_id: str):
-    """Fetch all news items belonging to an evolution thread - with similarity filtering"""
+    """Fetch all news items belonging to an evolution thread"""
     from urllib.parse import unquote
     # Decode URL-encoded topic_id (for Arabic characters)
     topic_id = unquote(topic_id)
@@ -1347,35 +1324,22 @@ async def get_timeline(topic_id: str):
     # Sort by published date
     items.sort(key=lambda x: x['published'])
     
-    # If we have items, filter out ones that are not similar enough to the majority
-    if len(items) > 2:
-        # Calculate similarity of each item to others
-        filtered_items = []
-        for i, item in enumerate(items):
-            similarities = []
-            for j, other_item in enumerate(items):
-                if i != j:
-                    sim = calculate_text_similarity(
-                        f"{item['title']} {item.get('summary', '')}",
-                        f"{other_item['title']} {other_item.get('summary', '')}"
-                    )
-                    similarities.append(sim)
-            
-            # Keep item only if it has reasonable similarity with at least one other item
-            avg_similarity = sum(similarities) / len(similarities) if similarities else 0
-            max_similarity = max(similarities) if similarities else 0
-            
-            # Item should have at least 15% similarity with best match or 10% average
-            if max_similarity >= 0.15 or avg_similarity >= 0.10:
-                filtered_items.append(item)
-            else:
-                logger.info(f"Filtering out dissimilar item from timeline: {item['title'][:50]}... (max_sim: {max_similarity:.2f}, avg_sim: {avg_similarity:.2f})")
-        
-        # If filtering removed too many items (more than half), return original
-        if len(filtered_items) >= len(items) // 2:
-            items = filtered_items
-    
     return {"topic_id": topic_id, "items": items}
+
+@app.get("/api/timeline-count/{topic_id:path}")
+async def get_timeline_count(topic_id: str):
+    """Get count of items in a topic thread - used to check if timeline should be shown"""
+    from urllib.parse import unquote
+    topic_id = unquote(topic_id)
+    
+    db = SessionLocal()
+    count = 0
+    for model in [NewsItem, YemenNewsItem, NewspaperNewsItem]:
+        count += db.query(model).filter(model.topic_id == topic_id).count()
+    db.close()
+    
+    # Return count > 1 to indicate if there are multiple items (not just the current one)
+    return {"topic_id": topic_id, "count": count, "has_timeline": count > 1}
 
 @app.get("/api/yemen-news")
 async def get_yemen_news(page: int = 1, limit: int = 20):

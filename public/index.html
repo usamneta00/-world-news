@@ -610,7 +610,6 @@
                     <div class="absolute inset-0 bg-gradient-to-t from-paper via-transparent to-transparent dark:from-obsidian dark:via-transparent dark:to-transparent opacity-90 pointer-events-none"></div>
                     <div class="absolute bottom-0 left-0 w-full p-8 md:p-12 text-right">
                         <div class="flex items-center justify-end gap-3 mb-4">
-                            ${h.topic_id ? `<span class="px-2 py-1 bg-neon-accent/20 text-neon-accent text-[10px] font-mono font-bold rounded-sm border border-neon-accent/30 flex items-center gap-1"><i data-lucide="git-merge" class="w-3 h-3"></i> THREAD</span>` : ''}
                             <span class="px-2 py-1 bg-neon-accent text-white text-[10px] font-mono uppercase tracking-wider">${h.source}</span>
                             <span class="text-neutral-600 dark:text-neutral-400 text-xs font-mono">${timeAgo(h.published)}</span>
                         </div>
@@ -629,10 +628,7 @@
                 heroSide.innerHTML = items.slice(1, 4).map(item => `
                     <article class="flex-1 bg-white dark:bg-neutral-900 p-6 flex flex-col justify-center group hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer text-right" onclick="openReader(${item.id}, '${activeTab}')">
                         <div class="flex justify-between items-start mb-4">
-                            <div class="flex gap-2">
-                                ${item.topic_id ? `<span class="text-[9px] font-mono text-neon-accent font-bold border border-neon-accent/20 px-1 rounded-sm flex items-center gap-1"><i data-lucide="git-merge" class="w-2.5 h-2.5"></i></span>` : ''}
-                                <span class="text-[10px] font-mono text-neutral-400">${timeAgo(item.published)}</span>
-                            </div>
+                            <span class="text-[10px] font-mono text-neutral-400">${timeAgo(item.published)}</span>
                             <span class="text-[10px] font-mono text-neon-accent uppercase">${item.source}</span>
                         </div>
                         <h2 class="font-serif text-xl font-medium mb-3 group-hover:text-neon-accent transition-colors line-clamp-2">${item.title}</h2>
@@ -656,7 +652,6 @@
                         </div>
                         <div class="${isWide ? 'w-full md:w-1/2 flex flex-col justify-center' : ''} text-right">
                             <div class="flex items-center justify-end gap-2 mb-2">
-                                ${n.topic_id ? `<span class="px-1.5 py-0.5 bg-neon-accent/10 text-neon-accent text-[9px] font-bold rounded-sm border border-neon-accent/20 flex items-center gap-1"><i data-lucide="git-merge" class="w-2.5 h-2.5"></i> THREAD</span>` : ''}
                                 <span class="text-[10px] font-mono uppercase text-neutral-500 tracking-wider">${n.source}</span>
                                 ${i === 0 ? '<div class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>' : ''}
                             </div>
@@ -681,7 +676,7 @@
             lucide.createIcons();
         }
 
-        function openReader(id, type) {
+        async function openReader(id, type) {
             currentlyReadingId = id;
             const list = (type === 'world' ? allNews : (type === 'yemen' ? yemenNews : newspaperNews));
             const item = list.find(n => n.id === id);
@@ -703,16 +698,28 @@
             if (link) link.href = item.link;
             if (content) content.innerHTML = `<p class="mb-6">${item.summary || 'Summary not available.'}</p>`;
 
-            // Setup Evolution Button
+            // Setup Evolution Button - only show if there are multiple items in the timeline
             const evolBtn = document.getElementById('view-evolution-btn');
             if (evolBtn) {
+                // Hide by default
+                evolBtn.classList.add('hidden');
+                evolBtn.classList.remove('flex');
+                
                 if (item.topic_id) {
-                    evolBtn.classList.remove('hidden');
-                    evolBtn.classList.add('flex');
-                    evolBtn.setAttribute('data-topic-id', item.topic_id);
-                } else {
-                    evolBtn.classList.add('hidden');
-                    evolBtn.classList.remove('flex');
+                    // Check if there are multiple items in the timeline
+                    try {
+                        const response = await fetch(`${API_URL}/timeline-count/${encodeURIComponent(item.topic_id)}`);
+                        const data = await response.json();
+                        
+                        // Only show button if there are more than 1 item (not just the current one)
+                        if (data.has_timeline && data.count > 1) {
+                            evolBtn.classList.remove('hidden');
+                            evolBtn.classList.add('flex');
+                            evolBtn.setAttribute('data-topic-id', item.topic_id);
+                        }
+                    } catch (e) {
+                        console.error('Error checking timeline count:', e);
+                    }
                 }
             }
 
@@ -776,15 +783,21 @@
                             renderUI(activeTab === 'world' ? allNews : (activeTab === 'yemen' ? yemenNews : newspaperNews));
                         }
 
-                        // If reader is open for THIS item, update the evolution button visibility
-                        if (currentlyReadingId === msg.data.id) {
-                            const evolBtn = document.getElementById('view-evolution-btn');
-                            if (evolBtn) {
-                                evolBtn.classList.remove('hidden');
-                                evolBtn.classList.add('flex');
-                                evolBtn.setAttribute('data-topic-id', msg.data.topic_id);
-                                lucide.createIcons();
-                            }
+                        // If reader is open for THIS item, check if timeline has multiple items before showing button
+                        if (currentlyReadingId === msg.data.id && msg.data.topic_id) {
+                            // Check if there are multiple items in the timeline
+                            fetch(`${API_URL}/timeline-count/${encodeURIComponent(msg.data.topic_id)}`)
+                                .then(r => r.json())
+                                .then(data => {
+                                    const evolBtn = document.getElementById('view-evolution-btn');
+                                    if (evolBtn && data.has_timeline && data.count > 1) {
+                                        evolBtn.classList.remove('hidden');
+                                        evolBtn.classList.add('flex');
+                                        evolBtn.setAttribute('data-topic-id', msg.data.topic_id);
+                                        lucide.createIcons();
+                                    }
+                                })
+                                .catch(e => console.error('Error checking timeline count:', e));
                         }
                         return;
                     }
