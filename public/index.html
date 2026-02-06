@@ -304,6 +304,160 @@
             font-weight: 500;
         }
 
+        .timeline-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 10px;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .timeline-type-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 9px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .timeline-type-badge.type-world {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .timeline-type-badge.type-yemen {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .timeline-type-badge.type-newspaper {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .timeline-action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border: none;
+        }
+
+        .timeline-action-btn.action-video {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+        }
+        .timeline-action-btn.action-video:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+
+        .timeline-action-btn.action-article {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+        }
+        .timeline-action-btn.action-article:hover {
+            background: rgba(245, 158, 11, 0.3);
+        }
+
+        .timeline-action-btn.action-news {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+        }
+        .timeline-action-btn.action-news:hover {
+            background: rgba(59, 130, 246, 0.3);
+        }
+
+        .timeline-thumbnail {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+        .timeline-card:hover .timeline-thumbnail {
+            opacity: 1;
+        }
+        @media (max-width: 768px) {
+            .timeline-thumbnail {
+                height: 80px;
+            }
+        }
+
+        /* Color the timeline dot based on news type */
+        .timeline-item.type-world .timeline-dot {
+            border-color: #3b82f6;
+        }
+        .timeline-item.type-yemen .timeline-dot {
+            border-color: #10b981;
+        }
+        .timeline-item.type-newspaper .timeline-dot {
+            border-color: #f59e0b;
+        }
+        .timeline-item.type-world:hover .timeline-dot {
+            background: #3b82f6;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+        }
+        .timeline-item.type-yemen:hover .timeline-dot {
+            background: #10b981;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.5);
+        }
+        .timeline-item.type-newspaper:hover .timeline-dot {
+            background: #f59e0b;
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
+        }
+
+        .timeline-summary {
+            font-size: 12px;
+            color: #9ca3af;
+            line-height: 1.5;
+            margin-top: 6px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .timeline-legend {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .timeline-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: #6b7280;
+        }
+        .timeline-legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .timeline-legend-dot.world { background: #3b82f6; }
+        .timeline-legend-dot.yemen { background: #10b981; }
+        .timeline-legend-dot.newspaper { background: #f59e0b; }
+
         .timeline-header {
             display: flex;
             align-items: center;
@@ -634,6 +788,21 @@
                         </div>
                         
                         <div id="timeline-content" class="timeline-container hidden">
+                            <!-- Legend for news types -->
+                            <div class="timeline-legend">
+                                <div class="timeline-legend-item">
+                                    <span class="timeline-legend-dot world"></span>
+                                    <span>🎬 فيديوهات عالمية</span>
+                                </div>
+                                <div class="timeline-legend-item">
+                                    <span class="timeline-legend-dot yemen"></span>
+                                    <span>🇾🇪 أخبار يمنية</span>
+                                </div>
+                                <div class="timeline-legend-item">
+                                    <span class="timeline-legend-dot newspaper"></span>
+                                    <span>📰 صحف عالمية</span>
+                                </div>
+                            </div>
                             <div class="timeline-line"></div>
                             <div id="timeline-items">
                                 <!-- Timeline items will be injected here -->
@@ -952,9 +1121,10 @@
                     reasonSection.classList.remove('hidden');
                 }
                 
-                // Build timeline items
+                // Build timeline items with type badges and actions
                 const timelineHTML = data.related_news.map((news, index) => {
                     const isCurrent = news.id === data.current_news_id;
+                    const newsType = news.news_type || 'world';
                     const date = new Date(news.published);
                     const formattedDate = date.toLocaleDateString('ar-EG', { 
                         year: 'numeric', 
@@ -967,8 +1137,40 @@
                     // Escape the link for safe use in onclick
                     const escapedLink = news.link.replace(/'/g, "\\'");
                     
+                    // Determine type badge info
+                    let typeBadge = '', typeIcon = '', actionBtn = '', actionClass = '';
+                    const isYouTube = news.link && (news.link.includes('youtube.com') || news.link.includes('youtu.be'));
+                    
+                    if (newsType === 'world') {
+                        typeBadge = `<span class="timeline-type-badge type-world">🎬 فيديو عالمي</span>`;
+                        actionBtn = `<button class="timeline-action-btn action-video" onclick="event.stopPropagation(); openTimelineLink('${escapedLink}')">
+                            <i data-lucide="play-circle" class="w-3 h-3"></i> مشاهدة
+                        </button>`;
+                    } else if (newsType === 'yemen') {
+                        typeBadge = `<span class="timeline-type-badge type-yemen">🇾🇪 خبر يمني</span>`;
+                        actionBtn = `<button class="timeline-action-btn action-news" onclick="event.stopPropagation(); openTimelineLink('${escapedLink}')">
+                            <i data-lucide="${isYouTube ? 'play-circle' : 'external-link'}" class="w-3 h-3"></i> ${isYouTube ? 'مشاهدة' : 'قراءة'}
+                        </button>`;
+                    } else if (newsType === 'newspaper') {
+                        typeBadge = `<span class="timeline-type-badge type-newspaper">📰 صحيفة عالمية</span>`;
+                        actionBtn = `<button class="timeline-action-btn action-article" onclick="event.stopPropagation(); openTimelineLink('${escapedLink}')">
+                            <i data-lucide="book-open" class="w-3 h-3"></i> قراءة المقال
+                        </button>`;
+                    }
+                    
+                    // Get thumbnail for YouTube videos
+                    let thumbnailHTML = '';
+                    if (isYouTube && news.image_url) {
+                        thumbnailHTML = `<img src="${news.image_url}" alt="" class="timeline-thumbnail" loading="lazy" onerror="this.style.display='none'">`;
+                    } else if (news.image_url && newsType === 'newspaper') {
+                        thumbnailHTML = `<img src="${news.image_url}" alt="" class="timeline-thumbnail" loading="lazy" onerror="this.style.display='none'">`;
+                    }
+                    
+                    // Summary preview
+                    const summaryHTML = news.summary ? `<p class="timeline-summary">${news.summary}</p>` : '';
+                    
                     return `
-                        <div class="timeline-item ${isCurrent ? 'current' : ''}" onclick="openTimelineLink('${escapedLink}')">
+                        <div class="timeline-item ${isCurrent ? 'current' : ''} type-${newsType}" onclick="openTimelineLink('${escapedLink}')">
                             <div class="timeline-dot"></div>
                             <div class="timeline-card">
                                 <div class="timeline-date">
@@ -976,8 +1178,16 @@
                                     ${formattedDate}
                                     ${isCurrent ? '<span class="px-2 py-0.5 bg-neon-blue/20 text-neon-blue rounded text-[9px] font-bold">الحالي</span>' : ''}
                                 </div>
+                                ${thumbnailHTML}
                                 <h4 class="timeline-title">${news.title}</h4>
-                                <span class="timeline-source">${news.source}</span>
+                                ${summaryHTML}
+                                <div class="timeline-meta">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="timeline-source">${news.source}</span>
+                                        ${typeBadge}
+                                    </div>
+                                    ${actionBtn}
+                                </div>
                             </div>
                         </div>
                     `;
