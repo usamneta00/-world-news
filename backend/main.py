@@ -238,31 +238,31 @@ migrate_database()
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 
 async def process_event_timeline(db, news_id: int, news_title: str, news_summary: str, news_type: str):
-    """Process and store event timeline for a new news item - excluding Yemen news as requested"""
-    if news_type == 'yemen':
-        return
-        
+    """Process and store event timeline for a new news item - searches across ALL news types"""
     try:
-        # Get news from specified types to find related ones (Excluding Yemen news)
-        world_news = db.query(NewsItem).order_by(desc(NewsItem.published)).limit(150).all()
-        newspaper_news = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.published)).limit(150).all()
+        # Get news from ALL types to find related ones
+        world_news = db.query(NewsItem).order_by(desc(NewsItem.created_at)).limit(200).all()
+        yemen_news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(200).all()
+        newspaper_news = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(200).all()
         
         # Prepare combined news list with type prefix to identify source
+        # Format: "type:id" to track which table each news comes from
         all_news_combined = []
         
         for n in world_news:
             if not (news_type == 'world' and n.id == news_id):
-                all_news_combined.append({"id": f"world:{n.id}", "title": n.title, "published": n.published, "type": "world", "real_id": n.id})
+                all_news_combined.append({"id": f"world:{n.id}", "title": n.title, "type": "world", "real_id": n.id})
+        
+        for n in yemen_news:
+            if not (news_type == 'yemen' and n.id == news_id):
+                all_news_combined.append({"id": f"yemen:{n.id}", "title": n.title, "type": "yemen", "real_id": n.id})
         
         for n in newspaper_news:
             if not (news_type == 'newspaper' and n.id == news_id):
-                all_news_combined.append({"id": f"newspaper:{n.id}", "title": n.title, "published": n.published, "type": "newspaper", "real_id": n.id})
+                all_news_combined.append({"id": f"newspaper:{n.id}", "title": n.title, "type": "newspaper", "real_id": n.id})
         
         if not all_news_combined:
             return
-            
-        # Sort ALL news by published date DESC so AI sees the most recent ones first across ALL sources
-        all_news_combined.sort(key=lambda x: x.get('published') or datetime.min, reverse=True)
         
         # Find related news using AI (searches across all types)
         result = await find_related_news_with_ai(news_title, news_summary, all_news_combined, news_type)
@@ -273,8 +273,8 @@ async def process_event_timeline(db, news_id: int, news_title: str, news_summary
                 try:
                     # Parse the type:id format
                     if isinstance(related_id_str, str) and ':' in related_id_str:
-                        related_type, related_id_val = related_id_str.split(':', 1)
-                        related_id = int(related_id_val)
+                        related_type, related_id = related_id_str.split(':', 1)
+                        related_id = int(related_id)
                     else:
                         # Fallback for old format (just ID) - assume same type
                         related_type = news_type
@@ -318,29 +318,28 @@ async def find_related_news_with_ai(current_news_title: str, current_news_summar
         # Prepare the news list for AI - include more items since we're combining all sources
         news_list_text = "\n".join([f"ID: {n['id']} - العنوان: {n['title']}" for n in all_news_titles[:300]])
         
-        prompt = f"""أنت محلل أخبار خبير مهمتك الربط بين الأخبار ذات الصلة المباشرة فقط لتكوين "خريطة زمنية" أو "خيط أحداث" (Event Thread).
-        
-الخبر الحالي الذي نريد البحث عن أخبار مرتبطة به:
+        prompt = f"""أنت محلل أخبار خبير. مهمتك هي إيجاد الأخبار المرتبطة بموضوع معين.
+
+الخبر الحالي:
 العنوان: {current_news_title}
 الملخص: {current_news_summary}
 
-قائمة الأخبار المتاحة للربط (مرتبة من الأحدث):
+قائمة الأخبار المتاحة:
 {news_list_text}
 
-المطلوب بدقة:
-1. اختر فقط الأخبار التي تتحدث عن **نفس الحدث تحديداً** أو تعتبر **تطوراً مباشراً** له. لا تربط أخباراً لمجرد أنها في نفس الدولة أو نفس التصنيف العام.
-2. أعطني عنواناً عربياً قصيراً ومركزاً جداً يصف هذا "الخيط" (مثال: "تفاقم أزمة غزة"، "مفاوضات وقف إطلاق النار").
-3. أرجع قائمة بـ الـ IDs الكاملة (كما هي في القائمة أعلاه، مثلاً 'world:123') للأخبار المرتبطة (بحد أقصى 10 أخبار).
-4. اشرح باختصار شديد سبب الربط.
+المطلوب:
+1. أعطني عنوان عربي قصير وجذاب لـ"خيط الحدث" يصف الموضوع الرئيسي (مثال: "أزمة ميناء الحديدة" أو "التصعيد في البحر الأحمر")
+2. أعطني قائمة بـ IDs الأخبار المرتبطة بنفس الموضوع (الحد الأقصى 10 أخبار)
+3. اشرح باختصار لماذا هذه الأخبار مرتبطة
 
-يجب أن تكون الإجابة بصيغة JSON فقط كالتالي:
+أجب بصيغة JSON فقط كالتالي:
 {{
-    "thread_title": "عنوان الخيط",
-    "related_ids": ["world:12", "yemen:5"],
-    "reason": "سبب الترابط"
+    "thread_title": "عنوان الخيط بالعربية",
+    "related_ids": [1, 2, 3],
+    "reason": "سبب الترابط باختصار"
 }}
 
-إذا لم تجد أي خبر مرتبط بنفس الموضوع تماماً، أرجع قائمة فارغة:
+إذا لم تجد أخبار مرتبطة، أرجع:
 {{
     "thread_title": "",
     "related_ids": [],
