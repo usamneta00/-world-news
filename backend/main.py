@@ -238,24 +238,21 @@ migrate_database()
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 
 async def process_event_timeline(db, news_id: int, news_title: str, news_summary: str, news_type: str):
-    """Process and store event timeline for a new news item - searches across ALL news types"""
+    """Process and store event timeline for a new news item - excluding Yemen news as requested"""
+    if news_type == 'yemen':
+        return
+        
     try:
-        # Get news from ALL types to find related ones
+        # Get news from specified types to find related ones (Excluding Yemen news)
         world_news = db.query(NewsItem).order_by(desc(NewsItem.published)).limit(150).all()
-        yemen_news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.published)).limit(150).all()
         newspaper_news = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.published)).limit(150).all()
         
         # Prepare combined news list with type prefix to identify source
-        # Format: "type:id" to track which table each news comes from
         all_news_combined = []
         
         for n in world_news:
             if not (news_type == 'world' and n.id == news_id):
                 all_news_combined.append({"id": f"world:{n.id}", "title": n.title, "published": n.published, "type": "world", "real_id": n.id})
-        
-        for n in yemen_news:
-            if not (news_type == 'yemen' and n.id == news_id):
-                all_news_combined.append({"id": f"yemen:{n.id}", "title": n.title, "published": n.published, "type": "yemen", "real_id": n.id})
         
         for n in newspaper_news:
             if not (news_type == 'newspaper' and n.id == news_id):
