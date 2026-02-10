@@ -502,6 +502,120 @@ def generate_article_id(url: str) -> str:
     """Generate a unique ID for an article based on its URL"""
     return hashlib.md5(url.encode()).hexdigest()[:16]
 
+# ============================================
+# Geopolitical Heatmap - Country Location Data
+# ============================================
+
+COUNTRY_DATA = {}
+
+def _add_country(key, lat, lng, ar, en, names):
+    COUNTRY_DATA[key] = {"lat": lat, "lng": lng, "country": ar, "country_en": en, "names": names}
+
+# Middle East & Gulf
+_add_country("yemen", 15.55, 48.52, "اليمن", "Yemen", ["اليمن", "يمني", "يمنية", "اليمني", "اليمنية", "صنعاء", "عدن", "مأرب", "تعز", "الحديدة", "حضرموت", "شبوة", "أبين", "لحج", "الضالع", "الحوثي", "الحوثيين", "أنصار الله", "Yemen", "Sanaa", "Aden", "Houthi"])
+_add_country("saudi", 24.71, 46.68, "السعودية", "Saudi Arabia", ["السعودية", "السعودي", "الرياض", "جدة", "مكة", "المدينة", "Saudi", "Riyadh", "Jeddah"])
+_add_country("uae", 24.47, 54.37, "الإمارات", "UAE", ["الإمارات", "الإماراتي", "أبوظبي", "دبي", "UAE", "Emirates", "Abu Dhabi", "Dubai"])
+_add_country("iran", 35.69, 51.39, "إيران", "Iran", ["إيران", "ايران", "الإيراني", "طهران", "خامنئي", "Iran", "Tehran", "Khamenei"])
+_add_country("iraq", 33.31, 44.37, "العراق", "Iraq", ["العراق", "العراقي", "بغداد", "أربيل", "الموصل", "البصرة", "كردستان", "Iraq", "Baghdad", "Mosul", "Erbil"])
+_add_country("syria", 33.51, 36.29, "سوريا", "Syria", ["سوريا", "السوري", "دمشق", "حلب", "إدلب", "الأسد", "Syria", "Damascus", "Aleppo", "Assad"])
+_add_country("lebanon", 33.89, 35.50, "لبنان", "Lebanon", ["لبنان", "اللبناني", "بيروت", "حزب الله", "Lebanon", "Beirut", "Hezbollah"])
+_add_country("jordan", 31.95, 35.93, "الأردن", "Jordan", ["الأردن", "الاردن", "الأردني", "Jordan", "Amman"])
+_add_country("palestine", 31.50, 34.47, "فلسطين", "Palestine", ["فلسطين", "الفلسطيني", "غزة", "الضفة الغربية", "رام الله", "حماس", "الجهاد", "القدس", "Palestine", "Gaza", "Hamas", "West Bank", "Jerusalem"])
+_add_country("israel", 31.77, 35.23, "إسرائيل", "Israel", ["إسرائيل", "اسرائيل", "الإسرائيلي", "تل أبيب", "نتنياهو", "الاحتلال", "Israel", "Tel Aviv", "Netanyahu", "IDF"])
+_add_country("kuwait", 29.38, 47.99, "الكويت", "Kuwait", ["الكويت", "الكويتي", "Kuwait"])
+_add_country("qatar", 25.29, 51.53, "قطر", "Qatar", ["قطر", "القطري", "الدوحة", "Qatar", "Doha"])
+_add_country("bahrain", 26.07, 50.56, "البحرين", "Bahrain", ["البحرين", "البحريني", "المنامة", "Bahrain", "Manama"])
+_add_country("oman", 23.59, 58.55, "عُمان", "Oman", ["سلطنة عمان", "عُمان", "مسقط", "Oman", "Muscat"])
+
+# North Africa
+_add_country("egypt", 30.04, 31.24, "مصر", "Egypt", ["مصر", "المصري", "القاهرة", "السيسي", "Egypt", "Cairo", "Sisi"])
+_add_country("libya", 32.90, 13.18, "ليبيا", "Libya", ["ليبيا", "الليبي", "طرابلس", "بنغازي", "Libya", "Tripoli", "Benghazi"])
+_add_country("tunisia", 36.81, 10.17, "تونس", "Tunisia", ["تونس", "التونسي", "Tunisia", "Tunis"])
+_add_country("algeria", 36.75, 3.06, "الجزائر", "Algeria", ["الجزائر", "الجزائري", "Algeria", "Algiers"])
+_add_country("morocco", 33.97, -6.85, "المغرب", "Morocco", ["المغرب", "المغربي", "الرباط", "Morocco", "Rabat"])
+_add_country("sudan", 15.59, 32.53, "السودان", "Sudan", ["السودان", "السوداني", "الخرطوم", "Sudan", "Khartoum"])
+_add_country("somalia", 2.05, 45.32, "الصومال", "Somalia", ["الصومال", "الصومالي", "مقديشو", "Somalia", "Mogadishu"])
+_add_country("ethiopia", 9.02, 38.75, "إثيوبيا", "Ethiopia", ["إثيوبيا", "اثيوبيا", "أديس أبابا", "Ethiopia", "Addis Ababa"])
+
+# Europe
+_add_country("russia", 55.76, 37.62, "روسيا", "Russia", ["روسيا", "الروسي", "موسكو", "بوتين", "الكرملين", "Russia", "Moscow", "Putin", "Kremlin"])
+_add_country("ukraine", 50.45, 30.52, "أوكرانيا", "Ukraine", ["أوكرانيا", "اوكرانيا", "الأوكراني", "كييف", "زيلينسكي", "Ukraine", "Kyiv", "Zelensky"])
+_add_country("uk", 51.51, -0.13, "بريطانيا", "United Kingdom", ["بريطانيا", "البريطاني", "لندن", "Britain", "UK", "London", "England"])
+_add_country("france", 48.86, 2.35, "فرنسا", "France", ["فرنسا", "الفرنسي", "باريس", "ماكرون", "France", "Paris", "Macron"])
+_add_country("germany", 52.52, 13.41, "ألمانيا", "Germany", ["ألمانيا", "المانيا", "الألماني", "برلين", "Germany", "Berlin"])
+_add_country("turkey", 39.93, 32.86, "تركيا", "Turkey", ["تركيا", "التركي", "أنقرة", "إسطنبول", "أردوغان", "Turkey", "Turkiye", "Ankara", "Istanbul", "Erdogan"])
+
+# Asia
+_add_country("china", 39.91, 116.40, "الصين", "China", ["الصين", "الصيني", "بكين", "شي جين بينغ", "China", "Beijing", "Xi Jinping"])
+_add_country("japan", 35.68, 139.69, "اليابان", "Japan", ["اليابان", "الياباني", "طوكيو", "Japan", "Tokyo"])
+_add_country("india", 28.61, 77.21, "الهند", "India", ["الهند", "الهندي", "نيودلهي", "مودي", "India", "New Delhi", "Modi"])
+_add_country("north_korea", 39.02, 125.75, "كوريا الشمالية", "North Korea", ["كوريا الشمالية", "بيونغيانغ", "كيم جونغ", "North Korea", "Pyongyang", "Kim Jong"])
+_add_country("south_korea", 37.57, 126.98, "كوريا الجنوبية", "South Korea", ["كوريا الجنوبية", "سيول", "South Korea", "Seoul"])
+_add_country("afghanistan", 34.53, 69.17, "أفغانستان", "Afghanistan", ["أفغانستان", "افغانستان", "كابل", "طالبان", "Afghanistan", "Kabul", "Taliban"])
+_add_country("pakistan", 33.69, 73.04, "باكستان", "Pakistan", ["باكستان", "إسلام آباد", "Pakistan", "Islamabad"])
+
+# Americas
+_add_country("usa", 38.91, -77.04, "أمريكا", "United States", ["أمريكا", "امريكا", "الأمريكي", "واشنطن", "البيت الأبيض", "البنتاغون", "الكونغرس", "ترامب", "بايدن", "USA", "United States", "Washington", "Pentagon", "White House", "Trump", "Biden", "Congress"])
+_add_country("canada", 45.42, -75.70, "كندا", "Canada", ["كندا", "الكندي", "أوتاوا", "Canada", "Ottawa"])
+
+# Other
+_add_country("south_africa", -25.75, 28.19, "جنوب أفريقيا", "South Africa", ["جنوب أفريقيا", "South Africa", "Johannesburg"])
+_add_country("red_sea", 20.00, 38.50, "البحر الأحمر", "Red Sea", ["البحر الأحمر", "باب المندب", "Red Sea", "Bab el-Mandeb"])
+_add_country("un_hq", 46.23, 6.14, "الأمم المتحدة", "United Nations", ["الأمم المتحدة", "مجلس الأمن", "United Nations", "Security Council"])
+
+# Build fast name → country_key lookup
+NAME_TO_COUNTRY = {}
+for _key, _data in COUNTRY_DATA.items():
+    for _name in _data["names"]:
+        NAME_TO_COUNTRY[_name] = _key
+
+# Intensity classification keywords
+CONFLICT_KEYWORDS_GEO = [
+    "حرب", "هجوم", "قصف", "غارة", "غارات", "صاروخ", "صواريخ", "قتل", "مقتل", "قتلى",
+    "ضحايا", "شهداء", "شهيد", "اشتباك", "اشتباكات", "معارك", "معركة", "تفجير", "انفجار",
+    "اغتيال", "عدوان", "قنبلة", "طائرة مسيرة", "دمار", "إبادة", "مجزرة",
+    "war", "attack", "strike", "bomb", "kill", "killed", "missile", "combat",
+    "explosion", "drone", "airstrike", "casualties", "dead", "destroyed"
+]
+CRISIS_KEYWORDS_GEO = [
+    "أزمة", "توتر", "تصعيد", "عقوبات", "احتجاج", "احتجاجات", "انقلاب",
+    "تهديد", "إنذار", "انتهاك", "خلاف", "نزاع", "حصار",
+    "crisis", "tension", "sanctions", "protest", "escalation", "threat", "coup", "conflict"
+]
+POSITIVE_KEYWORDS_GEO = [
+    "سلام", "اتفاقية", "اتفاق", "تعاون", "وقف إطلاق النار", "هدنة", "مفاوضات",
+    "إغاثة", "مساعدات", "إنسانية", "دبلوماسية", "تطبيع", "مصالحة",
+    "peace", "agreement", "cooperation", "ceasefire", "truce", "humanitarian",
+    "aid", "diplomacy", "negotiation", "reconciliation"
+]
+INTENSITY_RANK = {"positive": 1, "important": 2, "crisis": 3, "conflict": 4}
+
+def extract_locations_from_title(title):
+    """Extract country locations mentioned in a news title"""
+    found = set()
+    if not title:
+        return found
+    for name, country_key in NAME_TO_COUNTRY.items():
+        if name in title:
+            found.add(country_key)
+    return found
+
+def classify_news_intensity(title):
+    """Classify news intensity based on keywords in title"""
+    if not title:
+        return "important"
+    title_lower = title.lower()
+    for kw in CONFLICT_KEYWORDS_GEO:
+        if kw in title or kw in title_lower:
+            return "conflict"
+    for kw in CRISIS_KEYWORDS_GEO:
+        if kw in title or kw in title_lower:
+            return "crisis"
+    for kw in POSITIVE_KEYWORDS_GEO:
+        if kw in title or kw in title_lower:
+            return "positive"
+    return "important"
+
 def translate_to_arabic(text: str) -> str:
     """Translate English text to Arabic using Google Translate free API"""
     if not text or any(char in text for char in 'أبتثجحخدذرزسشصضطظعغفقكلمنهوي'): # Skip if already has Arabic chars
@@ -1453,6 +1567,79 @@ async def get_event_timeline(news_type: str, news_id: int):
             "related_news": related_news,
             "reason": similarity_reason,
             "current_news_id": news_id
+        }
+    finally:
+        db.close()
+
+@app.get("/api/heatmap")
+async def get_heatmap_data():
+    """Get geopolitical heatmap data - aggregated news locations with intensity"""
+    db = SessionLocal()
+    try:
+        # Get all news from all tables
+        world_news = db.query(NewsItem).order_by(desc(NewsItem.created_at)).limit(200).all()
+        yemen_news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(200).all()
+        newspaper_news = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(200).all()
+        
+        # Combine all news items
+        all_items = []
+        for n in world_news:
+            all_items.append({
+                "id": n.id, "title": n.title, "link": n.link,
+                "source": n.source, "published": str(n.published),
+                "image_url": n.image_url, "type": "world"
+            })
+        for n in yemen_news:
+            all_items.append({
+                "id": n.id, "title": n.title, "link": n.link,
+                "source": n.source, "published": str(n.published),
+                "image_url": n.image_url, "type": "yemen"
+            })
+        for n in newspaper_news:
+            all_items.append({
+                "id": n.id, "title": n.title, "link": n.link,
+                "source": n.source, "published": str(n.published),
+                "image_url": n.image_url, "type": "newspaper"
+            })
+        
+        # Process each item and aggregate by country
+        locations = {}
+        for item in all_items:
+            found_countries = extract_locations_from_title(item["title"])
+            intensity = classify_news_intensity(item["title"])
+            
+            for country_key in found_countries:
+                if country_key not in locations:
+                    geo = COUNTRY_DATA[country_key]
+                    locations[country_key] = {
+                        "country": geo["country"],
+                        "country_en": geo["country_en"],
+                        "lat": geo["lat"],
+                        "lng": geo["lng"],
+                        "news_count": 0,
+                        "intensity": "important",
+                        "news": []
+                    }
+                
+                locations[country_key]["news_count"] += 1
+                locations[country_key]["news"].append({
+                    "id": item["id"],
+                    "title": item["title"],
+                    "link": item["link"],
+                    "source": item["source"],
+                    "published": item["published"],
+                    "type": item["type"]
+                })
+                
+                # Upgrade intensity to the highest level found
+                current_intensity = locations[country_key]["intensity"]
+                if INTENSITY_RANK.get(intensity, 0) > INTENSITY_RANK.get(current_intensity, 0):
+                    locations[country_key]["intensity"] = intensity
+        
+        return {
+            "locations": list(locations.values()),
+            "total_news": len(all_items),
+            "mapped_countries": len(locations)
         }
     finally:
         db.close()

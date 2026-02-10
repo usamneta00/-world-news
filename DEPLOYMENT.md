@@ -21,6 +21,7 @@ git commit -m "feat: Add Yemen news filter and new design2"
 
 # رفع إلى GitHub
 git push origin main
+git push origin main --force
 ```
 
 ### 3️⃣ إنشاء مشروع على Railway

@@ -19,6 +19,10 @@
     <!-- Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
+    <!-- Leaflet Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <!-- Three.js Import Map -->
     <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
     <script type="importmap">
@@ -519,6 +523,196 @@
             color: #6b7280;
             font-size: 14px;
         }
+
+        /* ===== Geopolitical Heatmap Styles ===== */
+        #heatmap-map {
+            height: 70vh;
+            min-height: 500px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        .heatmap-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .heatmap-legend {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            font-size: 11px;
+        }
+
+        .heatmap-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #9ca3af;
+        }
+
+        .heatmap-legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .heatmap-stats {
+            display: flex;
+            gap: 16px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .heatmap-stat {
+            text-align: center;
+            padding: 16px 24px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            flex: 1;
+            min-width: 100px;
+        }
+
+        .heatmap-stat-number {
+            font-size: 28px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .heatmap-stat-label {
+            font-size: 10px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 4px;
+            font-family: 'Noto Sans Arabic', sans-serif;
+        }
+
+        /* Leaflet popup dark theme */
+        .leaflet-popup-content-wrapper {
+            background: rgba(15, 15, 15, 0.95) !important;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border-radius: 12px !important;
+            color: #e5e5e5 !important;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5) !important;
+        }
+
+        .leaflet-popup-content {
+            margin: 16px !important;
+            font-family: 'Noto Sans Arabic', 'Inter', sans-serif !important;
+            direction: rtl !important;
+        }
+
+        .leaflet-popup-tip {
+            background: rgba(15, 15, 15, 0.95) !important;
+        }
+
+        .leaflet-popup-close-button {
+            color: #9ca3af !important;
+            font-size: 20px !important;
+        }
+
+        .popup-country {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .popup-count {
+            font-size: 11px;
+            color: #6b7280;
+            margin-bottom: 12px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .popup-news-item {
+            display: block;
+            padding: 8px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            text-decoration: none;
+            color: #d1d5db;
+            transition: color 0.2s;
+            cursor: pointer;
+        }
+
+        .popup-news-item:hover {
+            color: #2dd4bf;
+        }
+
+        .popup-news-title {
+            font-size: 12px;
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .popup-news-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 4px;
+            font-size: 9px;
+            color: #6b7280;
+        }
+
+        .popup-type-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-left: 4px;
+        }
+
+        /* Override Leaflet controls for dark theme */
+        .leaflet-control-zoom a {
+            background-color: rgba(15, 15, 15, 0.9) !important;
+            color: #e5e5e5 !important;
+            border-color: rgba(255, 255, 255, 0.1) !important;
+        }
+
+        .leaflet-control-zoom a:hover {
+            background-color: rgba(45, 212, 191, 0.2) !important;
+            color: #2dd4bf !important;
+        }
+
+        .leaflet-control-attribution {
+            background: rgba(0, 0, 0, 0.6) !important;
+            color: #6b7280 !important;
+            font-size: 9px !important;
+        }
+
+        .leaflet-control-attribution a {
+            color: #3b82f6 !important;
+        }
+
+        @media (max-width: 768px) {
+            #heatmap-map {
+                height: 55vh;
+                min-height: 350px;
+                border-radius: 8px;
+            }
+            .heatmap-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .heatmap-stat {
+                padding: 12px 16px;
+            }
+            .heatmap-stat-number {
+                font-size: 22px;
+            }
+        }
     </style>
 </head>
 
@@ -561,10 +755,17 @@
                     class="hover:text-neon-accent transition-colors">Yemen</button>
                 <button id="tab-newspaper" onclick="switchTab('newspaper')"
                     class="hover:text-neon-accent transition-colors">Press</button>
+                <button id="tab-heatmap" onclick="switchTab('heatmap')"
+                    class="hover:text-neon-accent transition-colors flex items-center gap-1">
+                    <i data-lucide="globe-2" class="w-3.5 h-3.5"></i> Map
+                </button>
             </div>
 
             <div class="flex items-center gap-4">
                 <span id="current-date" class="hidden lg:block text-[10px] font-mono opacity-50"></span>
+                <button onclick="switchTab('heatmap')" class="md:hidden p-2 hover:text-neon-blue transition-colors" title="خريطة الحرارة الجيوسياسية">
+                    <i data-lucide="globe-2" class="w-4 h-4"></i>
+                </button>
                 <button onclick="clearAllNews()" class="p-2 hover:text-red-500 transition-colors" title="حذف الكل">
                     <i data-lucide="trash-2" class="w-4 h-4"></i>
                 </button>
@@ -667,6 +868,71 @@
 
             <!-- Secondary Layout for leftovers or sidebar - Integrated into trending/bento usually -->
             <div id="trending-list" class="hidden"></div>
+        </div>
+
+        <!-- Heatmap View -->
+        <div id="heatmap-view" class="hidden">
+            <div class="max-w-7xl mx-auto">
+                <!-- Header -->
+                <div class="heatmap-header">
+                    <div>
+                        <h2 class="font-serif text-3xl md:text-4xl text-white mb-2 flex items-center gap-3">
+                            <span class="w-10 h-10 bg-gradient-to-br from-red-500 via-yellow-500 to-green-500 rounded-xl flex items-center justify-center">
+                                <i data-lucide="globe-2" class="w-5 h-5 text-white"></i>
+                            </span>
+                            خريطة الحرارة الجيوسياسية
+                        </h2>
+                        <p class="text-sm text-neutral-400">نظرة بانورامية على توزع الأحداث حول العالم — انقر على أي منطقة لرؤية أخبارها</p>
+                    </div>
+                    <div class="heatmap-legend">
+                        <div class="heatmap-legend-item">
+                            <span class="heatmap-legend-dot" style="background:#ef4444;box-shadow:0 0 8px rgba(239,68,68,0.5)"></span>
+                            <span>صراع وتوتر</span>
+                        </div>
+                        <div class="heatmap-legend-item">
+                            <span class="heatmap-legend-dot" style="background:#f59e0b;box-shadow:0 0 8px rgba(245,158,11,0.5)"></span>
+                            <span>أزمات سياسية</span>
+                        </div>
+                        <div class="heatmap-legend-item">
+                            <span class="heatmap-legend-dot" style="background:#3b82f6;box-shadow:0 0 8px rgba(59,130,246,0.5)"></span>
+                            <span>أحداث مهمة</span>
+                        </div>
+                        <div class="heatmap-legend-item">
+                            <span class="heatmap-legend-dot" style="background:#10b981;box-shadow:0 0 8px rgba(16,185,129,0.5)"></span>
+                            <span>تطورات إيجابية</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loading -->
+                <div id="heatmap-loading" class="hidden flex items-center justify-center py-12">
+                    <div class="w-10 h-10 border-3 border-neon-blue border-t-transparent rounded-full animate-spin ml-4"></div>
+                    <span class="text-sm text-neutral-400 font-mono">جارٍ تحميل بيانات الخريطة...</span>
+                </div>
+
+                <!-- Map Container -->
+                <div id="heatmap-map"></div>
+
+                <!-- Stats -->
+                <div id="heatmap-stats" class="heatmap-stats">
+                    <div class="heatmap-stat">
+                        <div class="heatmap-stat-number text-neon-blue" id="stat-total">0</div>
+                        <div class="heatmap-stat-label">إجمالي الأخبار</div>
+                    </div>
+                    <div class="heatmap-stat">
+                        <div class="heatmap-stat-number text-white" id="stat-countries">0</div>
+                        <div class="heatmap-stat-label">دولة / منطقة</div>
+                    </div>
+                    <div class="heatmap-stat">
+                        <div class="heatmap-stat-number text-red-500" id="stat-conflicts">0</div>
+                        <div class="heatmap-stat-label">مناطق ساخنة</div>
+                    </div>
+                    <div class="heatmap-stat">
+                        <div class="heatmap-stat-number text-green-500" id="stat-positive">0</div>
+                        <div class="heatmap-stat-label">تطورات إيجابية</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Newsletter / Footer Area -->
@@ -946,7 +1212,7 @@
 
         function switchTab(tab) {
             activeTab = tab;
-            const tabs = ['world', 'yemen', 'newspaper'];
+            const tabs = ['world', 'yemen', 'newspaper', 'heatmap'];
             tabs.forEach(t => {
                 const el = document.getElementById(`tab-${t}`);
                 if (el) {
@@ -959,6 +1225,21 @@
                 activeEl.classList.add('text-neon-accent', 'font-bold');
                 activeEl.classList.remove('text-neutral-500');
             }
+
+            const newsContent = document.getElementById('news-content');
+            const heatmapView = document.getElementById('heatmap-view');
+            const loader = document.getElementById('loading-state');
+
+            if (tab === 'heatmap') {
+                if (newsContent) newsContent.classList.add('hidden');
+                if (heatmapView) heatmapView.classList.remove('hidden');
+                if (loader) loader.classList.add('hidden');
+                initHeatmap();
+                return;
+            }
+
+            // For news tabs: show news content, hide heatmap
+            if (heatmapView) heatmapView.classList.add('hidden');
 
             const labels = {
                 world: ['Trending Intelligence'],
@@ -984,7 +1265,10 @@
             const loader = document.getElementById('loading-state');
             const content = document.getElementById('news-content');
             if (loader) loader.classList.toggle('hidden', !l);
-            if (content) content.classList.toggle('hidden', l);
+            // Don't show news-content when in heatmap mode
+            if (activeTab !== 'heatmap') {
+                if (content) content.classList.toggle('hidden', l);
+            }
             if (!l) lucide.createIcons();
         }
 
@@ -1239,6 +1523,240 @@
             }).catch(err => {
                 console.error('Failed to copy links:', err);
                 alert('فشل نسخ الروابط');
+            });
+        }
+
+        // ========================================
+        // Geopolitical Heatmap Functions
+        // ========================================
+        let heatmapMap = null;
+        let heatmapMarkers = [];
+        let heatmapInitialized = false;
+
+        async function initHeatmap() {
+            if (typeof L === 'undefined') {
+                console.error('Leaflet library not loaded');
+                return;
+            }
+
+            if (!heatmapInitialized) {
+                const mapEl = document.getElementById('heatmap-map');
+                if (!mapEl) return;
+
+                heatmapMap = L.map('heatmap-map', {
+                    center: [25, 42],
+                    zoom: 3,
+                    zoomControl: true,
+                    attributionControl: true,
+                    minZoom: 2,
+                    maxZoom: 10
+                });
+
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+                    subdomains: 'abcd',
+                    maxZoom: 20
+                }).addTo(heatmapMap);
+
+                // Custom control buttons (Reset View + Fit All)
+                const CustomControls = L.Control.extend({
+                    options: { position: 'topleft' },
+                    onAdd: function(map) {
+                        const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+                        container.style.cssText = 'background:transparent;border:none;';
+
+                        // Reset to default view button
+                        const resetBtn = L.DomUtil.create('a', '', container);
+                        resetBtn.href = '#';
+                        resetBtn.title = 'العودة للعرض الافتراضي';
+                        resetBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>';
+                        resetBtn.style.cssText = 'display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:rgba(15,15,15,0.9);color:#e5e5e5;border:1px solid rgba(255,255,255,0.1);border-radius:6px;margin-bottom:6px;cursor:pointer;text-decoration:none;transition:all 0.2s;';
+                        resetBtn.onmouseover = () => { resetBtn.style.background = 'rgba(45,212,191,0.2)'; resetBtn.style.color = '#2dd4bf'; resetBtn.style.borderColor = 'rgba(45,212,191,0.4)'; };
+                        resetBtn.onmouseout = () => { resetBtn.style.background = 'rgba(15,15,15,0.9)'; resetBtn.style.color = '#e5e5e5'; resetBtn.style.borderColor = 'rgba(255,255,255,0.1)'; };
+                        L.DomEvent.on(resetBtn, 'click', function(e) {
+                            L.DomEvent.preventDefault(e);
+                            map.setView([25, 42], 3, { animate: true, duration: 0.8 });
+                        });
+
+                        // Fit all markers button
+                        const fitBtn = L.DomUtil.create('a', '', container);
+                        fitBtn.href = '#';
+                        fitBtn.title = 'عرض جميع المواقع';
+                        fitBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>';
+                        fitBtn.style.cssText = 'display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:rgba(15,15,15,0.9);color:#e5e5e5;border:1px solid rgba(255,255,255,0.1);border-radius:6px;margin-bottom:6px;cursor:pointer;text-decoration:none;transition:all 0.2s;';
+                        fitBtn.onmouseover = () => { fitBtn.style.background = 'rgba(59,130,246,0.2)'; fitBtn.style.color = '#3b82f6'; fitBtn.style.borderColor = 'rgba(59,130,246,0.4)'; };
+                        fitBtn.onmouseout = () => { fitBtn.style.background = 'rgba(15,15,15,0.9)'; fitBtn.style.color = '#e5e5e5'; fitBtn.style.borderColor = 'rgba(255,255,255,0.1)'; };
+                        L.DomEvent.on(fitBtn, 'click', function(e) {
+                            L.DomEvent.preventDefault(e);
+                            if (heatmapMarkers.length > 0) {
+                                const markerBounds = [];
+                                heatmapMarkers.forEach(m => { if (m.getLatLng) markerBounds.push(m.getLatLng()); });
+                                if (markerBounds.length > 0) {
+                                    map.fitBounds(L.latLngBounds(markerBounds).pad(0.15), { animate: true, duration: 0.8 });
+                                }
+                            }
+                        });
+
+                        L.DomEvent.disableClickPropagation(container);
+                        return container;
+                    }
+                });
+                heatmapMap.addControl(new CustomControls());
+
+                heatmapInitialized = true;
+            }
+
+            // Force map to recalculate size (needed when container was hidden)
+            setTimeout(() => {
+                if (heatmapMap) heatmapMap.invalidateSize();
+            }, 250);
+
+            await fetchHeatmapData();
+        }
+
+        async function fetchHeatmapData() {
+            const loading = document.getElementById('heatmap-loading');
+            if (loading) loading.classList.remove('hidden');
+
+            try {
+                const response = await fetch(`${API_URL}/heatmap`);
+                const data = await response.json();
+
+                if (loading) loading.classList.add('hidden');
+
+                // Update stats
+                const statTotal = document.getElementById('stat-total');
+                const statCountries = document.getElementById('stat-countries');
+                const statConflicts = document.getElementById('stat-conflicts');
+                const statPositive = document.getElementById('stat-positive');
+
+                if (statTotal) statTotal.textContent = data.total_news || 0;
+                if (statCountries) statCountries.textContent = data.mapped_countries || 0;
+
+                const conflictCount = data.locations ? data.locations.filter(l => l.intensity === 'conflict').length : 0;
+                const positiveCount = data.locations ? data.locations.filter(l => l.intensity === 'positive').length : 0;
+                if (statConflicts) statConflicts.textContent = conflictCount;
+                if (statPositive) statPositive.textContent = positiveCount;
+
+                if (data.locations) {
+                    renderHeatmapMarkers(data.locations);
+                }
+            } catch (error) {
+                console.error('Heatmap fetch error:', error);
+                if (loading) loading.classList.add('hidden');
+            }
+        }
+
+        function renderHeatmapMarkers(locations) {
+            if (!heatmapMap) return;
+
+            // Clear existing markers
+            heatmapMarkers.forEach(m => heatmapMap.removeLayer(m));
+            heatmapMarkers = [];
+
+            const intensityColors = {
+                conflict: '#ef4444',
+                crisis: '#f59e0b',
+                important: '#3b82f6',
+                positive: '#10b981'
+            };
+
+            const intensityGlows = {
+                conflict: 'rgba(239, 68, 68, 0.4)',
+                crisis: 'rgba(245, 158, 11, 0.3)',
+                important: 'rgba(59, 130, 246, 0.3)',
+                positive: 'rgba(16, 185, 129, 0.3)'
+            };
+
+            const intensityLabels = {
+                conflict: 'صراع وتوتر عالٍ',
+                crisis: 'أزمة سياسية',
+                important: 'أحداث مهمة',
+                positive: 'تطورات إيجابية'
+            };
+
+            const typeColors = { world: '#3b82f6', yemen: '#10b981', newspaper: '#f59e0b' };
+            const typeLabels = { world: 'عالمي', yemen: 'يمني', newspaper: 'صحافة' };
+
+            locations.forEach((loc, idx) => {
+                const color = intensityColors[loc.intensity] || '#3b82f6';
+                const glow = intensityGlows[loc.intensity] || 'rgba(59, 130, 246, 0.3)';
+                const radius = Math.min(Math.max(loc.news_count * 4, 10), 40);
+
+                // Outer glow ring (non-interactive so clicks pass through to main marker)
+                const glowMarker = L.circleMarker([loc.lat, loc.lng], {
+                    radius: radius + 10,
+                    fillColor: color,
+                    color: 'transparent',
+                    weight: 0,
+                    fillOpacity: 0.12,
+                    interactive: false
+                }).addTo(heatmapMap);
+                heatmapMarkers.push(glowMarker);
+
+                // Main marker
+                const marker = L.circleMarker([loc.lat, loc.lng], {
+                    radius: radius,
+                    fillColor: color,
+                    color: color,
+                    weight: 2,
+                    opacity: 0.9,
+                    fillOpacity: 0.35
+                }).addTo(heatmapMap);
+
+                // Build popup content — render ALL items, hide extras beyond first 8
+                const initialCount = 8;
+                const newsListHTML = loc.news.map((n, i) => {
+                    const typeColor = typeColors[n.type] || '#3b82f6';
+                    const typeLabel = typeLabels[n.type] || n.type;
+                    const isHidden = i >= initialCount;
+                    return `<a href="${n.link}" target="_blank" rel="noopener" class="popup-news-item${isHidden ? ' popup-more-item' : ''}" ${isHidden ? 'style="display:none"' : ''} onclick="event.stopPropagation()">
+                        <div class="popup-news-title">${n.title}</div>
+                        <div class="popup-news-meta">
+                            <span><span class="popup-type-dot" style="background:${typeColor}"></span>${typeLabel} · ${n.source}</span>
+                        </div>
+                    </a>`;
+                }).join('');
+
+                const extraCount = loc.news.length - initialCount;
+                const moreBtn = extraCount > 0
+                    ? `<div class="popup-load-more" onclick="this.parentNode.querySelectorAll('.popup-more-item').forEach(function(el){el.style.display=\'block\'});this.style.display=\'none\'" style="text-align:center;font-size:11px;color:#2dd4bf;padding:10px 0;margin-top:4px;border-top:1px solid rgba(255,255,255,0.08);cursor:pointer;font-weight:600;transition:color 0.2s" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#2dd4bf'">▼ عرض ${extraCount} خبر آخر</div>`
+                    : '';
+
+                const popupContent = `
+                    <div class="popup-country">${loc.country} <span style="font-size:11px;color:#6b7280;font-weight:400">${loc.country_en}</span></div>
+                    <div class="popup-count">${loc.news_count} خبر · ${intensityLabels[loc.intensity] || loc.intensity}</div>
+                    <div style="max-height:400px;overflow-y:auto;direction:rtl">${newsListHTML}${moreBtn}</div>
+                `;
+
+                marker.bindPopup(popupContent, { maxWidth: 340, minWidth: 260 });
+                heatmapMarkers.push(marker);
+
+                // Country label
+                const label = L.marker([loc.lat, loc.lng], {
+                    icon: L.divIcon({
+                        className: 'country-label-icon',
+                        html: `<div style="font-size:10px;color:${color};font-weight:700;text-shadow:0 1px 4px rgba(0,0,0,0.9),0 0 8px rgba(0,0,0,0.7);white-space:nowrap;text-align:center;transform:translateX(-50%);font-family:'Noto Sans Arabic',sans-serif;pointer-events:none">${loc.country}<br><span style="font-size:9px;font-weight:400;color:#9ca3af">${loc.news_count}</span></div>`,
+                        iconSize: [0, 0],
+                        iconAnchor: [0, -radius - 10]
+                    }),
+                    interactive: false
+                }).addTo(heatmapMap);
+                heatmapMarkers.push(label);
+
+                // Extra pulsing ring for conflict zones
+                if (loc.intensity === 'conflict') {
+                    const pulseRing = L.circleMarker([loc.lat, loc.lng], {
+                        radius: radius + 18,
+                        fillColor: 'transparent',
+                        color: color,
+                        weight: 1,
+                        opacity: 0.2,
+                        fillOpacity: 0,
+                        interactive: false
+                    }).addTo(heatmapMap);
+                    heatmapMarkers.push(pulseRing);
+                }
             });
         }
 
