@@ -18,6 +18,7 @@ from bs4 import BeautifulSoup
 import hashlib
 from urllib.parse import urljoin, urlparse, quote
 import html
+import numpy as np
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)
@@ -111,6 +112,15 @@ class EventThread(Base):
     related_news_type = Column(String)  # 'world', 'yemen', 'newspaper' - type of the related news
     thread_title = Column(String)  # Arabic title for the event thread
     similarity_reason = Column(String)  # Why these are related
+    created_at = Column(DateTime, default=datetime.now)
+
+class NewsEmbeddingCache(Base):
+    __tablename__ = "news_embedding_cache"
+    id = Column(Integer, primary_key=True, index=True)
+    news_id = Column(Integer, index=True)
+    news_type = Column(String)
+    title_hash = Column(String, unique=True, index=True)
+    embedding = Column(String)
     created_at = Column(DateTime, default=datetime.now)
 
 Base.metadata.create_all(bind=engine)
@@ -210,6 +220,13 @@ def migrate_database():
                 NewspaperLastArticle.__table__.create(engine)
                 logger.info("Successfully created newspaper_last_article table")
             
+            # Check if news_embedding_cache table exists
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='news_embedding_cache'"))
+            if not result.fetchone():
+                logger.info("Creating news_embedding_cache table...")
+                NewsEmbeddingCache.__table__.create(engine)
+                logger.info("Successfully created news_embedding_cache table")
+
             # Check if event_threads table exists
             result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='event_threads'"))
             if not result.fetchone():
@@ -635,6 +652,140 @@ def translate_to_arabic(text: str) -> str:
     except Exception as e:
         logger.error(f"Translation error: {e}")
         return text
+
+# ============================================
+# News Clustering - Embedding & Clustering Logic
+# ============================================
+_cluster_cache = {"data": None, "timestamp": None, "ttl": 600}
+
+async def call_openai_embeddings(titles: List[str]) -> Optional[List[List[float]]]:
+    """Call OpenAI embeddings API for a batch of titles"""
+    if not OPENAI_API_KEY:
+        return None
+    try:
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "text-embedding-3-small",
+            "input": titles
+        }
+        response = await asyncio.to_thread(
+            lambda: requests.post(
+                "https://api.openai.com/v1/embeddings",
+                headers=headers,
+                json=payload,
+                timeout=60
+            )
+        )
+        if response.status_code == 200:
+            result = response.json()
+            sorted_data = sorted(result["data"], key=lambda x: x["index"])
+            return [item["embedding"] for item in sorted_data]
+        else:
+            logger.error(f"OpenAI embeddings error: {response.status_code} - {response.text[:200]}")
+            return None
+    except Exception as e:
+        logger.error(f"Error calling OpenAI embeddings: {e}")
+        return None
+
+async def get_embeddings_batch(db, news_items: List[dict]) -> List[List[float]]:
+    """Get embeddings for news items, using DB cache when available"""
+    embeddings = [None] * len(news_items)
+    items_needing_embedding = []
+
+    for i, item in enumerate(news_items):
+        title_hash = hashlib.md5(item["title"].encode()).hexdigest()
+        cached = db.query(NewsEmbeddingCache).filter(
+            NewsEmbeddingCache.title_hash == title_hash
+        ).first()
+        if cached:
+            try:
+                embeddings[i] = json.loads(cached.embedding)
+            except:
+                items_needing_embedding.append((i, item, title_hash))
+        else:
+            items_needing_embedding.append((i, item, title_hash))
+
+    if items_needing_embedding and OPENAI_API_KEY:
+        batch_size = 100
+        for batch_start in range(0, len(items_needing_embedding), batch_size):
+            batch = items_needing_embedding[batch_start:batch_start + batch_size]
+            titles = [item["title"] for _, item, _ in batch]
+            new_embeddings = await call_openai_embeddings(titles)
+
+            if new_embeddings:
+                for j, (i, item, title_hash) in enumerate(batch):
+                    if j < len(new_embeddings):
+                        embeddings[i] = new_embeddings[j]
+                        try:
+                            cache_entry = NewsEmbeddingCache(
+                                news_id=item["id"],
+                                news_type=item["type"],
+                                title_hash=title_hash,
+                                embedding=json.dumps(new_embeddings[j])
+                            )
+                            db.add(cache_entry)
+                        except Exception as e:
+                            logger.error(f"Error caching embedding: {e}")
+                try:
+                    db.commit()
+                except:
+                    db.rollback()
+
+    dim = 1536
+    for i in range(len(embeddings)):
+        if embeddings[i] is None:
+            embeddings[i] = [0.0] * dim
+
+    return embeddings
+
+async def generate_cluster_title(cluster_items: List[dict]) -> str:
+    """Generate an Arabic title for a news cluster using GPT-4o-mini"""
+    if not OPENAI_API_KEY:
+        return cluster_items[0]["title"][:100]
+
+    try:
+        titles_text = "\n".join([f"- {item['title']}" for item in cluster_items[:10]])
+        prompt = f"""لديك مجموعة أخبار متشابهة تتحدث عن نفس الحدث:
+
+{titles_text}
+
+اكتب عنواناً واحداً قصيراً وجذاباً باللغة العربية يلخص الحدث المشترك. أجب بالعنوان فقط."""
+
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": "أنت محلل أخبار خبير. أجب بعنوان عربي قصير فقط بدون علامات تنصيص."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.3,
+            "max_tokens": 200
+        }
+
+        response = await asyncio.to_thread(
+            lambda: requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            title = result['choices'][0]['message']['content'].strip().strip('"').strip("'")
+            return title
+        return cluster_items[0]["title"][:100]
+    except Exception as e:
+        logger.error(f"Error generating cluster title: {e}")
+        return cluster_items[0]["title"][:100]
+
 
 def fetch_newspaper_articles(source_url: str, source_name: str, last_article_ids: Optional[List[str]] = None) -> List[dict]:
     """Fetch NEW articles from a newspaper website"""
@@ -1644,6 +1795,126 @@ async def get_heatmap_data():
     finally:
         db.close()
 
+@app.get("/api/news/clusters")
+async def get_news_clusters():
+    """Cluster similar news from all sources using embeddings and AgglomerativeClustering"""
+    global _cluster_cache
+
+    if (_cluster_cache["data"] and _cluster_cache["timestamp"] and
+            (datetime.now() - _cluster_cache["timestamp"]).total_seconds() < _cluster_cache["ttl"]):
+        return _cluster_cache["data"]
+
+    db = SessionLocal()
+    try:
+        world_news = db.query(NewsItem).order_by(desc(NewsItem.created_at)).limit(200).all()
+        yemen_news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(150).all()
+        newspaper_news = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(150).all()
+
+        all_news = []
+        for n in world_news:
+            all_news.append({
+                "id": n.id, "type": "world", "title": n.title, "link": n.link,
+                "summary": n.summary, "source": n.source, "published": str(n.published),
+                "image_url": n.image_url
+            })
+        for n in yemen_news:
+            all_news.append({
+                "id": n.id, "type": "yemen", "title": n.title, "link": n.link,
+                "summary": n.summary, "source": n.source, "published": str(n.published),
+                "image_url": n.image_url
+            })
+        for n in newspaper_news:
+            all_news.append({
+                "id": n.id, "type": "newspaper", "title": n.title, "link": n.link,
+                "summary": n.summary, "source": n.source, "published": str(n.published),
+                "image_url": n.image_url
+            })
+
+        if len(all_news) < 2:
+            return {"clusters": [], "total_news": len(all_news), "total_clusters": 0}
+
+        embeddings = await get_embeddings_batch(db, all_news)
+
+        all_zero = all(all(v == 0.0 for v in emb) for emb in embeddings)
+        if all_zero:
+            logger.warning("All embeddings are zero vectors - cannot cluster")
+            return {"clusters": [], "total_news": len(all_news), "total_clusters": 0,
+                    "error": "Embeddings unavailable - check OPENAI_API_KEY"}
+
+        try:
+            from sklearn.cluster import AgglomerativeClustering
+            from sklearn.metrics.pairwise import cosine_distances
+
+            embedding_matrix = np.array(embeddings)
+            distance_matrix = cosine_distances(embedding_matrix)
+
+            clustering = AgglomerativeClustering(
+                n_clusters=None,
+                distance_threshold=0.3,
+                metric="precomputed",
+                linkage="average"
+            )
+            labels = clustering.fit_predict(distance_matrix)
+        except ImportError:
+            logger.error("scikit-learn not installed")
+            return {"clusters": [], "total_news": len(all_news), "total_clusters": 0,
+                    "error": "scikit-learn not installed"}
+
+        cluster_groups = {}
+        for i, label in enumerate(labels):
+            label_int = int(label)
+            if label_int not in cluster_groups:
+                cluster_groups[label_int] = []
+            cluster_groups[label_int].append(all_news[i])
+
+        multi_clusters = {k: v for k, v in cluster_groups.items() if len(v) >= 2}
+
+        result_clusters = []
+        for label, items in multi_clusters.items():
+            try:
+                title = await generate_cluster_title(items)
+            except Exception as e:
+                logger.error(f"Error generating title for cluster {label}: {e}")
+                title = items[0]["title"][:100]
+
+            sources = list(set(item["source"] for item in items))
+            types_in_cluster = list(set(item["type"] for item in items))
+
+            items_sorted = sorted(items, key=lambda x: x["published"], reverse=True)
+
+            intensity = classify_news_intensity(items[0]["title"])
+
+            result_clusters.append({
+                "id": label,
+                "title": title,
+                "news_count": len(items),
+                "sources": sources,
+                "source_count": len(sources),
+                "types": types_in_cluster,
+                "intensity": intensity,
+                "latest_date": items_sorted[0]["published"] if items_sorted else "",
+                "news": items_sorted
+            })
+
+        result_clusters.sort(key=lambda x: x["news_count"], reverse=True)
+
+        result = {
+            "clusters": result_clusters,
+            "total_news": len(all_news),
+            "total_clusters": len(result_clusters)
+        }
+
+        _cluster_cache["data"] = result
+        _cluster_cache["timestamp"] = datetime.now()
+
+        logger.info(f"[Clusters] Generated {len(result_clusters)} clusters from {len(all_news)} news items")
+        return result
+    except Exception as e:
+        logger.error(f"Error in get_news_clusters: {e}")
+        return {"clusters": [], "total_news": 0, "total_clusters": 0, "error": str(e)}
+    finally:
+        db.close()
+
 @app.get("/api/debug")
 async def debug_info():
     """Debug endpoint to check database status"""
@@ -1694,7 +1965,10 @@ async def clear_all_news():
         db.query(YemenChannelLastVideo).delete()
         db.query(NewspaperLastArticle).delete()
         db.query(EventThread).delete()
+        db.query(NewsEmbeddingCache).delete()
         db.commit()
+        _cluster_cache["data"] = None
+        _cluster_cache["timestamp"] = None
         logger.info("Manual database clear performed. All news and tracking data deleted.")
         return {"message": "All news and tracking data have been cleared successfully."}
     except Exception as e:

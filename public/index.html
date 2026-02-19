@@ -713,6 +713,198 @@
                 font-size: 22px;
             }
         }
+
+        /* ===== News Clustering Styles ===== */
+        .cluster-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 24px;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cluster-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #3b82f6, #2dd4bf, #10b981);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .cluster-card:hover::before {
+            opacity: 1;
+        }
+
+        .cluster-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(59, 130, 246, 0.3);
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .cluster-card.expanded {
+            border-color: rgba(59, 130, 246, 0.4);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .cluster-count-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(45, 212, 191, 0.2));
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 800;
+            color: #60a5fa;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .cluster-source-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #9ca3af;
+            transition: all 0.2s;
+        }
+
+        .cluster-source-tag:hover {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.3);
+            color: #60a5fa;
+        }
+
+        .cluster-type-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .cluster-type-dot.world { background: #3b82f6; }
+        .cluster-type-dot.yemen { background: #10b981; }
+        .cluster-type-dot.newspaper { background: #f59e0b; }
+
+        .cluster-news-list {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .cluster-news-list.open {
+            max-height: 2000px;
+        }
+
+        .cluster-news-item {
+            display: flex;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 10px;
+            transition: all 0.2s;
+            text-decoration: none;
+            color: inherit;
+            border: 1px solid transparent;
+        }
+
+        .cluster-news-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .cluster-news-thumb {
+            width: 80px;
+            height: 56px;
+            border-radius: 8px;
+            object-fit: cover;
+            flex-shrink: 0;
+            opacity: 0.8;
+            transition: opacity 0.3s;
+        }
+
+        .cluster-news-item:hover .cluster-news-thumb {
+            opacity: 1;
+        }
+
+        .cluster-intensity-bar {
+            width: 4px;
+            border-radius: 4px;
+            position: absolute;
+            top: 16px;
+            bottom: 16px;
+            right: 0;
+        }
+
+        .cluster-intensity-bar.conflict { background: linear-gradient(180deg, #ef4444, #b91c1c); }
+        .cluster-intensity-bar.crisis { background: linear-gradient(180deg, #f59e0b, #d97706); }
+        .cluster-intensity-bar.important { background: linear-gradient(180deg, #3b82f6, #2563eb); }
+        .cluster-intensity-bar.positive { background: linear-gradient(180deg, #10b981, #059669); }
+
+        .clusters-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .clusters-stats-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .cluster-stat-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 100px;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+
+        .cluster-stat-pill strong {
+            color: #e5e5e5;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .cluster-expand-icon {
+            transition: transform 0.3s ease;
+        }
+
+        .cluster-card.expanded .cluster-expand-icon {
+            transform: rotate(180deg);
+        }
+
+        @media (max-width: 768px) {
+            .cluster-card {
+                padding: 16px;
+                border-radius: 12px;
+            }
+            .clusters-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
     </style>
 </head>
 
@@ -755,6 +947,10 @@
                     class="hover:text-neon-accent transition-colors">Yemen</button>
                 <button id="tab-newspaper" onclick="switchTab('newspaper')"
                     class="hover:text-neon-accent transition-colors">Press</button>
+                <button id="tab-clusters" onclick="switchTab('clusters')"
+                    class="hover:text-neon-accent transition-colors flex items-center gap-1">
+                    <i data-lucide="layers" class="w-3.5 h-3.5"></i> Events
+                </button>
                 <button id="tab-heatmap" onclick="switchTab('heatmap')"
                     class="hover:text-neon-accent transition-colors flex items-center gap-1">
                     <i data-lucide="globe-2" class="w-3.5 h-3.5"></i> Map
@@ -763,6 +959,9 @@
 
             <div class="flex items-center gap-4">
                 <span id="current-date" class="hidden lg:block text-[10px] font-mono opacity-50"></span>
+                <button onclick="switchTab('clusters')" class="md:hidden p-2 hover:text-neon-blue transition-colors" title="الأحداث الجارية">
+                    <i data-lucide="layers" class="w-4 h-4"></i>
+                </button>
                 <button onclick="switchTab('heatmap')" class="md:hidden p-2 hover:text-neon-blue transition-colors" title="خريطة الحرارة الجيوسياسية">
                     <i data-lucide="globe-2" class="w-4 h-4"></i>
                 </button>
@@ -931,6 +1130,68 @@
                         <div class="heatmap-stat-number text-green-500" id="stat-positive">0</div>
                         <div class="heatmap-stat-label">تطورات إيجابية</div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Clusters View -->
+        <div id="clusters-view" class="hidden">
+            <div class="max-w-7xl mx-auto">
+                <!-- Header -->
+                <div class="clusters-header">
+                    <div>
+                        <h2 class="font-serif text-3xl md:text-4xl text-white mb-2 flex items-center gap-3">
+                            <span class="w-10 h-10 bg-gradient-to-br from-blue-500 via-cyan-500 to-emerald-500 rounded-xl flex items-center justify-center">
+                                <i data-lucide="layers" class="w-5 h-5 text-white"></i>
+                            </span>
+                            الأحداث الجارية
+                        </h2>
+                        <p class="text-sm text-neutral-400">تجميع ذكي للأخبار المتشابهة من مصادر متعددة — انقر على أي حدث لرؤية التغطيات المختلفة</p>
+                    </div>
+                    <button onclick="refreshClusters()" class="px-4 py-2 bg-white/5 hover:bg-neon-blue/20 border border-white/10 hover:border-neon-blue/50 rounded-lg transition-all duration-300 flex items-center gap-2 text-xs text-neutral-300 hover:text-neon-blue">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                        <span>تحديث</span>
+                    </button>
+                </div>
+
+                <!-- Loading -->
+                <div id="clusters-loading" class="hidden flex flex-col items-center justify-center py-20">
+                    <div class="relative w-16 h-16 mb-6">
+                        <div class="absolute top-0 w-16 h-16 border-4 border-neutral-800 rounded-full opacity-20"></div>
+                        <div class="w-16 h-16 border-4 border-neon-blue border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                    <p class="text-neutral-400 font-mono text-xs tracking-widest uppercase">تحليل وتجميع الأخبار...</p>
+                    <p class="text-neutral-600 text-xs mt-2">يتم تحويل العناوين إلى متجهات وتجميعها حسب التشابه</p>
+                </div>
+
+                <!-- Error -->
+                <div id="clusters-error" class="hidden text-center py-16">
+                    <i data-lucide="alert-triangle" class="w-16 h-16 mx-auto mb-4 text-red-500/50"></i>
+                    <p class="text-neutral-400 text-lg mb-2">تعذر تحميل التجميعات</p>
+                    <p id="clusters-error-text" class="text-neutral-600 text-sm"></p>
+                    <button onclick="fetchClusters()" class="mt-4 px-6 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-neutral-300 hover:text-neon-blue hover:border-neon-blue/50 transition-all">
+                        إعادة المحاولة
+                    </button>
+                </div>
+
+                <!-- Stats -->
+                <div id="clusters-stats" class="clusters-stats-row hidden">
+                    <div class="cluster-stat-pill">
+                        <i data-lucide="layers" class="w-4 h-4 text-neon-blue"></i>
+                        <span><strong id="clusters-count">0</strong> حدث مجمّع</span>
+                    </div>
+                    <div class="cluster-stat-pill">
+                        <i data-lucide="newspaper" class="w-4 h-4 text-emerald-400"></i>
+                        <span><strong id="clusters-news-count">0</strong> خبر محلّل</span>
+                    </div>
+                    <div class="cluster-stat-pill">
+                        <i data-lucide="radio" class="w-4 h-4 text-amber-400"></i>
+                        <span>مصادر متعددة</span>
+                    </div>
+                </div>
+
+                <!-- Cluster Cards Grid -->
+                <div id="clusters-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 </div>
             </div>
         </div>
@@ -1212,7 +1473,7 @@
 
         function switchTab(tab) {
             activeTab = tab;
-            const tabs = ['world', 'yemen', 'newspaper', 'heatmap'];
+            const tabs = ['world', 'yemen', 'newspaper', 'clusters', 'heatmap'];
             tabs.forEach(t => {
                 const el = document.getElementById(`tab-${t}`);
                 if (el) {
@@ -1228,18 +1489,30 @@
 
             const newsContent = document.getElementById('news-content');
             const heatmapView = document.getElementById('heatmap-view');
+            const clustersView = document.getElementById('clusters-view');
             const loader = document.getElementById('loading-state');
 
             if (tab === 'heatmap') {
                 if (newsContent) newsContent.classList.add('hidden');
                 if (heatmapView) heatmapView.classList.remove('hidden');
+                if (clustersView) clustersView.classList.add('hidden');
                 if (loader) loader.classList.add('hidden');
                 initHeatmap();
                 return;
             }
 
-            // For news tabs: show news content, hide heatmap
+            if (tab === 'clusters') {
+                if (newsContent) newsContent.classList.add('hidden');
+                if (heatmapView) heatmapView.classList.add('hidden');
+                if (clustersView) clustersView.classList.remove('hidden');
+                if (loader) loader.classList.add('hidden');
+                fetchClusters();
+                return;
+            }
+
+            // For news tabs: show news content, hide others
             if (heatmapView) heatmapView.classList.add('hidden');
+            if (clustersView) clustersView.classList.add('hidden');
 
             const labels = {
                 world: ['Trending Intelligence'],
@@ -1265,8 +1538,7 @@
             const loader = document.getElementById('loading-state');
             const content = document.getElementById('news-content');
             if (loader) loader.classList.toggle('hidden', !l);
-            // Don't show news-content when in heatmap mode
-            if (activeTab !== 'heatmap') {
+            if (activeTab !== 'heatmap' && activeTab !== 'clusters') {
                 if (content) content.classList.toggle('hidden', l);
             }
             if (!l) lucide.createIcons();
@@ -1758,6 +2030,175 @@
                     heatmapMarkers.push(pulseRing);
                 }
             });
+        }
+
+        // ========================================
+        // News Clustering Functions
+        // ========================================
+        let clustersData = null;
+        let clustersLoaded = false;
+
+        async function fetchClusters(forceRefresh = false) {
+            if (clustersLoaded && clustersData && !forceRefresh) {
+                return;
+            }
+
+            const loading = document.getElementById('clusters-loading');
+            const error = document.getElementById('clusters-error');
+            const stats = document.getElementById('clusters-stats');
+            const grid = document.getElementById('clusters-grid');
+
+            if (loading) loading.classList.remove('hidden');
+            if (error) error.classList.add('hidden');
+            if (stats) stats.classList.add('hidden');
+            if (grid) grid.innerHTML = '';
+
+            try {
+                const response = await fetch(`${API_URL}/news/clusters`);
+                const data = await response.json();
+
+                if (loading) loading.classList.add('hidden');
+
+                if (data.error) {
+                    if (error) {
+                        error.classList.remove('hidden');
+                        const errText = document.getElementById('clusters-error-text');
+                        if (errText) errText.textContent = data.error;
+                    }
+                    return;
+                }
+
+                clustersData = data;
+                clustersLoaded = true;
+
+                const countEl = document.getElementById('clusters-count');
+                const newsCountEl = document.getElementById('clusters-news-count');
+                if (countEl) countEl.textContent = data.total_clusters;
+                if (newsCountEl) newsCountEl.textContent = data.total_news;
+                if (stats) stats.classList.remove('hidden');
+
+                renderClusters(data.clusters);
+                lucide.createIcons();
+            } catch (err) {
+                console.error('Clusters fetch error:', err);
+                if (loading) loading.classList.add('hidden');
+                if (error) {
+                    error.classList.remove('hidden');
+                    const errText = document.getElementById('clusters-error-text');
+                    if (errText) errText.textContent = err.message;
+                }
+            }
+        }
+
+        function refreshClusters() {
+            fetchClusters(true);
+        }
+
+        function renderClusters(clusters) {
+            const grid = document.getElementById('clusters-grid');
+            if (!grid) return;
+
+            if (!clusters || clusters.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full text-center py-20">
+                        <i data-lucide="inbox" class="w-16 h-16 mx-auto mb-4 text-neutral-700"></i>
+                        <p class="text-neutral-400 text-lg mb-2">لا توجد أحداث مجمّعة حالياً</p>
+                        <p class="text-neutral-600 text-sm">سيتم تجميع الأخبار عند توفر عدد كافٍ منها</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const intensityColors = {
+                conflict: { bg: 'rgba(239, 68, 68, 0.1)', border: 'rgba(239, 68, 68, 0.3)', text: '#f87171', label: 'صراع' },
+                crisis: { bg: 'rgba(245, 158, 11, 0.1)', border: 'rgba(245, 158, 11, 0.3)', text: '#fbbf24', label: 'أزمة' },
+                important: { bg: 'rgba(59, 130, 246, 0.1)', border: 'rgba(59, 130, 246, 0.3)', text: '#60a5fa', label: 'مهم' },
+                positive: { bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.3)', text: '#34d399', label: 'إيجابي' }
+            };
+
+            const typeLabels = { world: '🎬 عالمي', yemen: '🇾🇪 يمني', newspaper: '📰 صحافة' };
+
+            grid.innerHTML = clusters.map((cluster, idx) => {
+                const intensity = intensityColors[cluster.intensity] || intensityColors.important;
+                const isLarge = cluster.news_count >= 5;
+
+                const sourceTags = cluster.sources.slice(0, 5).map(s =>
+                    `<span class="cluster-source-tag">${s}</span>`
+                ).join('');
+                const extraSources = cluster.sources.length > 5 ? `<span class="cluster-source-tag">+${cluster.sources.length - 5}</span>` : '';
+
+                const typeBadges = cluster.types.map(t =>
+                    `<span class="cluster-type-dot ${t}" title="${typeLabels[t] || t}"></span>`
+                ).join('');
+
+                const newsListHtml = cluster.news.map(n => {
+                    const typeColor = n.type === 'world' ? '#3b82f6' : n.type === 'yemen' ? '#10b981' : '#f59e0b';
+                    const thumbSrc = n.image_url || '';
+                    const thumbHtml = thumbSrc ? `<img src="${thumbSrc}" class="cluster-news-thumb" loading="lazy" onerror="this.style.display='none'">` : '';
+                    const escapedLink = n.link.replace(/'/g, "\\'");
+                    return `
+                        <a href="${n.link}" target="_blank" rel="noopener" class="cluster-news-item" onclick="event.stopPropagation()">
+                            ${thumbHtml}
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="cluster-type-dot ${n.type}"></span>
+                                    <span class="text-[10px] font-mono text-neon-blue">${n.source}</span>
+                                    <span class="text-[9px] text-neutral-600">${n.published ? new Date(n.published).toLocaleDateString('ar-EG', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}) : ''}</span>
+                                </div>
+                                <p class="text-sm text-neutral-300 leading-snug line-clamp-2">${n.title}</p>
+                            </div>
+                            <i data-lucide="external-link" class="w-3.5 h-3.5 text-neutral-600 flex-shrink-0 mt-1"></i>
+                        </a>
+                    `;
+                }).join('');
+
+                return `
+                    <div class="cluster-card ${isLarge ? 'lg:col-span-2' : ''}" id="cluster-${idx}" onclick="toggleCluster(${idx})">
+                        <div class="cluster-intensity-bar ${cluster.intensity}"></div>
+                        <div class="flex items-start justify-between gap-3 mb-3">
+                            <div class="flex items-center gap-3">
+                                <span class="cluster-count-badge">${cluster.news_count}</span>
+                                <div>
+                                    <span class="text-[10px] font-mono uppercase tracking-wider" style="color: ${intensity.text}">${intensity.label}</span>
+                                    <span class="text-[10px] text-neutral-600 mr-2">${cluster.source_count} مصدر</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                ${typeBadges}
+                                <i data-lucide="chevron-down" class="w-4 h-4 text-neutral-600 cluster-expand-icon"></i>
+                            </div>
+                        </div>
+
+                        <h3 class="text-lg font-bold text-white mb-3 leading-snug">${cluster.title}</h3>
+
+                        <div class="flex flex-wrap gap-1.5 mb-2">
+                            ${sourceTags}${extraSources}
+                        </div>
+
+                        <div class="cluster-news-list" id="cluster-list-${idx}">
+                            <div class="border-t border-white/5 mt-4 pt-4 space-y-1">
+                                ${newsListHtml}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleCluster(idx) {
+            const card = document.getElementById(`cluster-${idx}`);
+            const list = document.getElementById(`cluster-list-${idx}`);
+            if (!card || !list) return;
+
+            const isOpen = list.classList.contains('open');
+            if (isOpen) {
+                list.classList.remove('open');
+                card.classList.remove('expanded');
+            } else {
+                list.classList.add('open');
+                card.classList.add('expanded');
+                lucide.createIcons();
+            }
         }
 
         function openReader(id, type) {
