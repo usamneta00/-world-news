@@ -607,14 +607,52 @@ POSITIVE_KEYWORDS_GEO = [
 ]
 INTENSITY_RANK = {"positive": 1, "important": 2, "crisis": 3, "conflict": 4}
 
+# Broad Topics for News Categorization
+NEWS_TOPICS = {
+    "أخبار اليمن": ["اليمن", "صنعاء", "عدن", "تعز", "مأرب", "الحوثي", "الحديدة", "المجلس الرئاسي"],
+    "قضية فلسطين": ["غزة", "فلسطين", "القدس", "رام الله", "الاحتلال", "حماس", "الجهاد", "الرفح"],
+    "البحر الأحمر والملاحة": ["البحر الأحمر", "باب المندب", "السفن", "الملاحة", "سنتكوم", "كيربي"],
+    "أخبار إقليمية": ["السعودية", "الإمارات", "إيران", "مصر", "الأردن", "لبنان", "سوريا", "بيروت"],
+    "أخبار دولية": ["أمريكا", "واشنطن", "بايدن", "ترامب", "روسيا", "أوكرانيا", "الصين", "بريطانيا", "فرنسا", "ألمانيا"],
+    "اقتصاد وأعمال": ["اقتصاد", "الذهب", "النفط", "الدولار", "العملات", "أسواق", "شركات", "تداول", "استثمار"],
+    "تكنولوجيا وعلوم": ["تكنولوجيا", "ذكاء اصطناعي", "آيفون", "سامسونج", "اكتشاف", "فضاء", "علمي"],
+    "رياضة": ["كأس", "مباراة", "ريال مدريد", "برشلونة", "دوري", "هدف", "كرة القدم"],
+    "منوعات وصحة": ["صحة", "طب", "فن", "فنان", "دراسة", "نصائح", "عالم", "غريب"]
+}
+
+def identify_topic(title: str, summary: str = "") -> str:
+    """Identify the broad topic of a news item based on keywords"""
+    text = (title + " " + (summary or "")).lower()
+    
+    # Track matches for each topic
+    matches = {topic: 0 for topic in NEWS_TOPICS}
+    
+    for topic, keywords in NEWS_TOPICS.items():
+        for kw in keywords:
+            if kw in text:
+                matches[topic] += 1
+                
+    # Get topic with most matches
+    best_topic = max(matches.items(), key=lambda x: x[1])
+    if best_topic[1] > 0:
+        return best_topic[0]
+    
+    return "أخبار عامة"
+
 def extract_locations_from_title(title):
     """Extract country locations mentioned in a news title"""
     found = set()
     if not title:
         return found
-    for name, country_key in NAME_TO_COUNTRY.items():
+    
+    # First check for multi-word names or priority names
+    # Sort names by length descending to match longer names first (e.g., "الولايات المتحدة" before "عمان")
+    sorted_names = sorted(NAME_TO_COUNTRY.items(), key=lambda x: len(x[0]), reverse=True)
+    
+    for name, country_key in sorted_names:
         if name in title:
             found.add(country_key)
+            
     return found
 
 def classify_news_intensity(title):
@@ -690,43 +728,81 @@ async def call_openai_embeddings(titles: List[str]) -> Optional[List[List[float]
         logger.error(f"Error calling OpenAI embeddings: {e}")
         return None
 
+def clean_news_text(text: str) -> str:
+    """Clean news text by removing common prefixes and noise"""
+    if not text:
+        return ""
+    # Remove common prefixes
+    prefixes = ["عاجل..", "عاجل:", "عاجل", "شاهد..", "شاهد:", "شاهد", "فيديو..", "بالفيديو..", "بالفيديو:", "حصري..", "خاص.."]
+    cleaned = text
+    for p in prefixes:
+        if cleaned.startswith(p):
+            cleaned = cleaned[len(p):].strip()
+    
+    # Remove source names in brackets or before |
+    import re
+    cleaned = re.sub(r'\[.*?\]', '', cleaned)
+    cleaned = re.sub(r'\(.*?\)', '', cleaned)
+    if ' | ' in cleaned:
+        cleaned = cleaned.split(' | ')[0]
+    if ' - ' in cleaned:
+        # Only take the first part if it's a short source name at the end
+        parts = cleaned.split(' - ')
+        if len(parts[-1]) < 20: # Likely a source name
+            cleaned = ' - '.join(parts[:-1])
+            
+    return cleaned.strip()
+
 async def get_embeddings_batch(db, news_items: List[dict]) -> List[List[float]]:
     """Get embeddings for news items, using DB cache when available"""
     embeddings = [None] * len(news_items)
     items_needing_embedding = []
 
     for i, item in enumerate(news_items):
-        title_hash = hashlib.md5(item["title"].encode()).hexdigest()
+        # Use both title and summary for better topic representation
+        clean_title = clean_news_text(item.get("title", ""))
+        clean_summary = clean_news_text(item.get("summary", ""))
+        
+        # Combine title and summary for embedding, but prioritize title
+        text_for_embedding = f"{clean_title}\n{clean_summary}".strip()
+        
+        # We use a hash of the combined text to check cache
+        title_hash = hashlib.md5(text_for_embedding.encode()).hexdigest()
+        
         cached = db.query(NewsEmbeddingCache).filter(
             NewsEmbeddingCache.title_hash == title_hash
         ).first()
+        
         if cached:
             try:
                 embeddings[i] = json.loads(cached.embedding)
             except:
-                items_needing_embedding.append((i, item, title_hash))
+                items_needing_embedding.append((i, text_for_embedding, title_hash, item))
         else:
-            items_needing_embedding.append((i, item, title_hash))
+            items_needing_embedding.append((i, text_for_embedding, title_hash, item))
 
     if items_needing_embedding and OPENAI_API_KEY:
         batch_size = 100
         for batch_start in range(0, len(items_needing_embedding), batch_size):
             batch = items_needing_embedding[batch_start:batch_start + batch_size]
-            titles = [item["title"] for _, item, _ in batch]
-            new_embeddings = await call_openai_embeddings(titles)
+            texts = [text for _, text, _, _ in batch]
+            new_embeddings = await call_openai_embeddings(texts)
 
             if new_embeddings:
-                for j, (i, item, title_hash) in enumerate(batch):
+                for j, (i, text_for_embedding, title_hash, item) in enumerate(batch):
                     if j < len(new_embeddings):
                         embeddings[i] = new_embeddings[j]
                         try:
-                            cache_entry = NewsEmbeddingCache(
-                                news_id=item["id"],
-                                news_type=item["type"],
-                                title_hash=title_hash,
-                                embedding=json.dumps(new_embeddings[j])
-                            )
-                            db.add(cache_entry)
+                            # Avoid duplicate hash error if multiple threads/processes run
+                            exists = db.query(NewsEmbeddingCache).filter(NewsEmbeddingCache.title_hash == title_hash).first()
+                            if not exists:
+                                cache_entry = NewsEmbeddingCache(
+                                    news_id=item["id"],
+                                    news_type=item["type"],
+                                    title_hash=title_hash,
+                                    embedding=json.dumps(new_embeddings[j])
+                                )
+                                db.add(cache_entry)
                         except Exception as e:
                             logger.error(f"Error caching embedding: {e}")
                 try:
@@ -1797,7 +1873,7 @@ async def get_heatmap_data():
 
 @app.get("/api/news/clusters")
 async def get_news_clusters():
-    """Cluster similar news from all sources using embeddings and AgglomerativeClustering"""
+    """Cluster news using semantic embeddings + topic-based fallback categorization"""
     global _cluster_cache
 
     if (_cluster_cache["data"] and _cluster_cache["timestamp"] and
@@ -1806,9 +1882,10 @@ async def get_news_clusters():
 
     db = SessionLocal()
     try:
-        world_news = db.query(NewsItem).order_by(desc(NewsItem.created_at)).limit(200).all()
-        yemen_news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(150).all()
-        newspaper_news = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(150).all()
+        # Increase limits slightly to get more coverage
+        world_news = db.query(NewsItem).order_by(desc(NewsItem.created_at)).limit(250).all()
+        yemen_news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(200).all()
+        newspaper_news = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(200).all()
 
         all_news = []
         for n in world_news:
@@ -1833,60 +1910,86 @@ async def get_news_clusters():
         if len(all_news) < 2:
             return {"clusters": [], "total_news": len(all_news), "total_clusters": 0}
 
+        # Step 1: Get Embeddings (uses Title + Summary now)
         embeddings = await get_embeddings_batch(db, all_news)
 
         all_zero = all(all(v == 0.0 for v in emb) for emb in embeddings)
         if all_zero:
-            logger.warning("All embeddings are zero vectors - cannot cluster")
-            return {"clusters": [], "total_news": len(all_news), "total_clusters": 0,
-                    "error": "Embeddings unavailable - check OPENAI_API_KEY"}
+            logger.warning("All embeddings are zero vectors")
+            # Fallback to pure topic-based categorization if embeddings fail
+            labels = [-1] * len(all_news)
+        else:
+            try:
+                from sklearn.cluster import AgglomerativeClustering
+                from sklearn.metrics.pairwise import cosine_distances
 
-        try:
-            from sklearn.cluster import AgglomerativeClustering
-            from sklearn.metrics.pairwise import cosine_distances
+                embedding_matrix = np.array(embeddings)
+                distance_matrix = cosine_distances(embedding_matrix)
 
-            embedding_matrix = np.array(embeddings)
-            distance_matrix = cosine_distances(embedding_matrix)
+                # Relaxed threshold (0.45 instead of 0.3) to group more related things
+                clustering = AgglomerativeClustering(
+                    n_clusters=None,
+                    distance_threshold=0.45,
+                    metric="precomputed",
+                    linkage="average"
+                )
+                labels = clustering.fit_predict(distance_matrix)
+            except ImportError:
+                labels = [-1] * len(all_news)
 
-            clustering = AgglomerativeClustering(
-                n_clusters=None,
-                distance_threshold=0.3,
-                metric="precomputed",
-                linkage="average"
-            )
-            labels = clustering.fit_predict(distance_matrix)
-        except ImportError:
-            logger.error("scikit-learn not installed")
-            return {"clusters": [], "total_news": len(all_news), "total_clusters": 0,
-                    "error": "scikit-learn not installed"}
-
+        # Step 2: Group by labels and identify singletons
         cluster_groups = {}
+        singletons = []
+        
         for i, label in enumerate(labels):
             label_int = int(label)
+            if label_int == -1: # Failed or noise
+                singletons.append(all_news[i])
+                continue
+                
             if label_int not in cluster_groups:
                 cluster_groups[label_int] = []
             cluster_groups[label_int].append(all_news[i])
 
-        multi_clusters = {k: v for k, v in cluster_groups.items() if len(v) >= 2}
+        # Step 3: Separate multi-item clusters and singletons
+        final_clusters_data = []
+        actual_singletons = []
+        
+        for label, items in cluster_groups.items():
+            if len(items) >= 2:
+                final_clusters_data.append(items)
+            else:
+                actual_singletons.extend(items)
+        
+        actual_singletons.extend(singletons)
 
+        # Step 4: Categorize singletons into Topic Clusters
+        topic_groups = {}
+        for item in actual_singletons:
+            topic = identify_topic(item["title"], item.get("summary", ""))
+            if topic not in topic_groups:
+                topic_groups[topic] = []
+            topic_groups[topic].append(item)
+
+        # Step 5: Build final result clusters
         result_clusters = []
-        for label, items in multi_clusters.items():
+        
+        # Add semantic clusters first (Specific Events)
+        for i, items in enumerate(final_clusters_data):
             try:
                 title = await generate_cluster_title(items)
-            except Exception as e:
-                logger.error(f"Error generating title for cluster {label}: {e}")
+            except:
                 title = items[0]["title"][:100]
 
             sources = list(set(item["source"] for item in items))
             types_in_cluster = list(set(item["type"] for item in items))
-
             items_sorted = sorted(items, key=lambda x: x["published"], reverse=True)
-
             intensity = classify_news_intensity(items[0]["title"])
-
+            
             result_clusters.append({
-                "id": label,
+                "id": f"event_{i}",
                 "title": title,
+                "is_event": True,
                 "news_count": len(items),
                 "sources": sources,
                 "source_count": len(sources),
@@ -1896,7 +1999,29 @@ async def get_news_clusters():
                 "news": items_sorted
             })
 
-        result_clusters.sort(key=lambda x: x["news_count"], reverse=True)
+        # Add topic clusters (Broad Topics)
+        for topic, items in topic_groups.items():
+            if not items: continue
+            
+            items_sorted = sorted(items, key=lambda x: x["published"], reverse=True)
+            sources = list(set(item["source"] for item in items))
+            types_in_cluster = list(set(item["type"] for item in items))
+            
+            result_clusters.append({
+                "id": f"topic_{topic}",
+                "title": f"ملخص: {topic}",
+                "is_event": False,
+                "news_count": len(items),
+                "sources": sources,
+                "source_count": len(sources),
+                "types": types_in_cluster,
+                "intensity": "important",
+                "latest_date": items_sorted[0]["published"] if items_sorted else "",
+                "news": items_sorted
+            })
+
+        # Sort: Events with most news first, then topic results
+        result_clusters.sort(key=lambda x: (x.get("is_event", False), x["news_count"]), reverse=True)
 
         result = {
             "clusters": result_clusters,
@@ -1907,10 +2032,12 @@ async def get_news_clusters():
         _cluster_cache["data"] = result
         _cluster_cache["timestamp"] = datetime.now()
 
-        logger.info(f"[Clusters] Generated {len(result_clusters)} clusters from {len(all_news)} news items")
+        logger.info(f"[Clusters] Generated {len(result_clusters)} clusters (Events \u0026 Topics) from {len(all_news)} news items")
         return result
     except Exception as e:
         logger.error(f"Error in get_news_clusters: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return {"clusters": [], "total_news": 0, "total_clusters": 0, "error": str(e)}
     finally:
         db.close()
