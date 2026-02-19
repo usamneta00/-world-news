@@ -741,6 +741,52 @@ async def get_embeddings_batch(db, news_items: List[dict]) -> List[List[float]]:
 
     return embeddings
 
+async def generate_cluster_title(cluster_items: List[dict]) -> str:
+    """Generate an Arabic title for a news cluster using GPT-4o-mini"""
+    if not OPENAI_API_KEY:
+        return cluster_items[0]["title"][:100]
+
+    try:
+        titles_text = "\n".join([f"- {item['title']}" for item in cluster_items[:10]])
+        prompt = f"""لديك مجموعة أخبار متشابهة تتحدث عن نفس الحدث:
+
+{titles_text}
+
+اكتب عنواناً واحداً قصيراً وجذاباً باللغة العربية يلخص الحدث المشترك. أجب بالعنوان فقط."""
+
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": "أنت محلل أخبار خبير. أجب بعنوان عربي قصير فقط بدون علامات تنصيص."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.3,
+            "max_tokens": 200
+        }
+
+        response = await asyncio.to_thread(
+            lambda: requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            title = result['choices'][0]['message']['content'].strip().strip('"').strip("'")
+            return title
+        return cluster_items[0]["title"][:100]
+    except Exception as e:
+        logger.error(f"Error generating cluster title: {e}")
+        return cluster_items[0]["title"][:100]
+
+
 def fetch_newspaper_articles(source_url: str, source_name: str, last_article_ids: Optional[List[str]] = None) -> List[dict]:
     """Fetch NEW articles from a newspaper website"""
     articles = []
@@ -1802,13 +1848,11 @@ async def get_news_clusters():
             embedding_matrix = np.array(embeddings)
             distance_matrix = cosine_distances(embedding_matrix)
 
-            # distance_threshold=0.5 → cosine similarity ≥ 0.5 to merge
-            # linkage="single" → merge if ANY pair between two groups is close enough
             clustering = AgglomerativeClustering(
                 n_clusters=None,
-                distance_threshold=0.5,
+                distance_threshold=0.3,
                 metric="precomputed",
-                linkage="single"
+                linkage="average"
             )
             labels = clustering.fit_predict(distance_matrix)
         except ImportError:
@@ -1827,17 +1871,18 @@ async def get_news_clusters():
 
         result_clusters = []
         for label, items in multi_clusters.items():
-            # Sort oldest first so the first-discovered news becomes the title
-            items_by_date = sorted(items, key=lambda x: x["published"])
-            title = items_by_date[0]["title"]
+            try:
+                title = await generate_cluster_title(items)
+            except Exception as e:
+                logger.error(f"Error generating title for cluster {label}: {e}")
+                title = items[0]["title"][:100]
 
             sources = list(set(item["source"] for item in items))
             types_in_cluster = list(set(item["type"] for item in items))
 
-            # Newest first for display
             items_sorted = sorted(items, key=lambda x: x["published"], reverse=True)
 
-            intensity = classify_news_intensity(items_sorted[0]["title"])
+            intensity = classify_news_intensity(items[0]["title"])
 
             result_clusters.append({
                 "id": label,
