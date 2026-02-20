@@ -972,7 +972,7 @@ def get_clusters_from_db(db):
 
 
 def store_clusters_to_db(db, result_clusters, all_news, embeddings):
-    """Store clustering results to DB with representative embeddings"""
+    """Store clustering results to DB with centroid embeddings for better matching"""
     try:
         item_embedding_map = {}
         for i, item in enumerate(all_news):
@@ -983,14 +983,22 @@ def store_clusters_to_db(db, result_clusters, all_news, embeddings):
             if not news_list:
                 continue
 
-            oldest_item = news_list[-1] if news_list else news_list[0]
-            rep_emb = item_embedding_map.get((oldest_item["id"], oldest_item["type"]))
+            # Compute centroid (average) of all member embeddings for better topic representation
+            member_embs = []
+            for news_item in news_list:
+                emb = item_embedding_map.get((news_item["id"], news_item["type"]))
+                if emb and not all(v == 0.0 for v in emb):
+                    member_embs.append(emb)
+
+            centroid = None
+            if member_embs:
+                centroid = np.mean(np.array(member_embs), axis=0).tolist()
 
             cluster = NewsCluster(
                 title=cluster_data["title"],
                 intensity=cluster_data.get("intensity", "important"),
                 is_event=1 if cluster_data.get("is_event", True) else 0,
-                representative_embedding=json.dumps(rep_emb) if rep_emb else None
+                representative_embedding=json.dumps(centroid) if centroid else None
             )
             db.add(cluster)
             db.flush()
@@ -1013,19 +1021,24 @@ def store_clusters_to_db(db, result_clusters, all_news, embeddings):
 async def assign_news_to_cluster(db, news_id: int, news_title: str, news_summary: str, news_type: str):
     """Assign a new news item to the best matching cluster, or create a new one.
     Returns dict: {cluster_id, cluster_title, is_new_cluster, cluster_data (if new)} or None on error."""
+    SIMILARITY_THRESHOLD = 0.45
     try:
         clusters = db.query(NewsCluster).all()
+        if not clusters:
+            logger.info(f"[Clusters] No clusters in DB yet, skipping assignment for {news_type}:{news_id}")
+            return None
 
         item = {"id": news_id, "type": news_type, "title": news_title, "summary": news_summary or ""}
         new_embeddings = await get_embeddings_batch(db, [item])
         new_emb = new_embeddings[0]
         has_embedding = not all(v == 0.0 for v in new_emb)
 
-        # Try to match against existing clusters by embedding similarity
-        if has_embedding and clusters:
+        best_cluster = None
+        best_sim = 0.0
+
+        # Compare against cluster centroid embeddings
+        if has_embedding:
             new_emb_np = np.array(new_emb)
-            best_cluster = None
-            best_sim = 0.0
 
             for c in clusters:
                 if not c.representative_embedding:
@@ -1034,51 +1047,60 @@ async def assign_news_to_cluster(db, news_id: int, news_title: str, news_summary
                     rep_emb = np.array(json.loads(c.representative_embedding))
                     dot = np.dot(new_emb_np, rep_emb)
                     norm = (np.linalg.norm(new_emb_np) * np.linalg.norm(rep_emb))
-                    sim = dot / norm if norm > 0 else 0
+                    sim = float(dot / norm) if norm > 0 else 0.0
                     if sim > best_sim:
                         best_sim = sim
                         best_cluster = c
                 except:
                     continue
 
-            if best_cluster and best_sim >= 0.55:
+            logger.info(f"[Clusters] Best match for '{news_title[:60]}': cluster '{best_cluster.title[:60] if best_cluster else 'None'}' sim={best_sim:.3f} (threshold={SIMILARITY_THRESHOLD})")
+
+        if best_cluster and best_sim >= SIMILARITY_THRESHOLD:
+            existing = db.query(NewsClusterMember).filter(
+                NewsClusterMember.cluster_id == best_cluster.id,
+                NewsClusterMember.news_id == news_id,
+                NewsClusterMember.news_type == news_type
+            ).first()
+            if not existing:
+                member = NewsClusterMember(cluster_id=best_cluster.id, news_id=news_id, news_type=news_type)
+                db.add(member)
+                best_cluster.updated_at = datetime.now()
+
+                # Update centroid to include the new member
+                if has_embedding and best_cluster.representative_embedding:
+                    try:
+                        old_centroid = np.array(json.loads(best_cluster.representative_embedding))
+                        member_count = db.query(NewsClusterMember).filter(
+                            NewsClusterMember.cluster_id == best_cluster.id
+                        ).count()
+                        new_centroid = ((old_centroid * (member_count - 1)) + new_emb_np) / member_count
+                        best_cluster.representative_embedding = json.dumps(new_centroid.tolist())
+                    except:
+                        pass
+
+                db.commit()
+                logger.info(f"[Clusters] ✓ Assigned {news_type}:{news_id} to cluster #{best_cluster.id} '{best_cluster.title[:50]}' (sim={best_sim:.3f})")
+                return {"cluster_id": best_cluster.id, "cluster_title": best_cluster.title, "is_new_cluster": False}
+
+        # Try to match against topic clusters by keyword
+        topic = identify_topic(news_title, news_summary or "")
+        for c in clusters:
+            if not c.is_event and c.title and topic in c.title:
                 existing = db.query(NewsClusterMember).filter(
-                    NewsClusterMember.cluster_id == best_cluster.id,
+                    NewsClusterMember.cluster_id == c.id,
                     NewsClusterMember.news_id == news_id,
                     NewsClusterMember.news_type == news_type
                 ).first()
                 if not existing:
-                    member = NewsClusterMember(cluster_id=best_cluster.id, news_id=news_id, news_type=news_type)
+                    member = NewsClusterMember(cluster_id=c.id, news_id=news_id, news_type=news_type)
                     db.add(member)
-                    best_cluster.updated_at = datetime.now()
+                    c.updated_at = datetime.now()
                     db.commit()
-                    logger.info(f"[Clusters] Assigned {news_type}:{news_id} to cluster '{best_cluster.title}' (sim={best_sim:.3f})")
-                    return {"cluster_id": best_cluster.id, "cluster_title": best_cluster.title, "is_new_cluster": False}
+                    logger.info(f"[Clusters] ✓ Assigned {news_type}:{news_id} to topic cluster '{c.title}' via topic '{topic}'")
+                    return {"cluster_id": c.id, "cluster_title": c.title, "is_new_cluster": False}
 
-        # Try to match against topic clusters
-        if clusters:
-            topic = identify_topic(news_title, news_summary or "")
-            for c in clusters:
-                if not c.is_event and c.title and topic in c.title:
-                    existing = db.query(NewsClusterMember).filter(
-                        NewsClusterMember.cluster_id == c.id,
-                        NewsClusterMember.news_id == news_id,
-                        NewsClusterMember.news_type == news_type
-                    ).first()
-                    if not existing:
-                        member = NewsClusterMember(cluster_id=c.id, news_id=news_id, news_type=news_type)
-                        db.add(member)
-                        c.updated_at = datetime.now()
-                        db.commit()
-                        logger.info(f"[Clusters] Assigned {news_type}:{news_id} to topic cluster '{c.title}'")
-                        return {"cluster_id": c.id, "cluster_title": c.title, "is_new_cluster": False}
-
-        # No match found
-        if not clusters:
-            # Initial full clustering hasn't happened yet - skip creating individual clusters
-            return None
-
-        # Create a new cluster for this news item
+        # No match found - create a new cluster
         intensity = classify_news_intensity(news_title)
         new_cluster = NewsCluster(
             title=news_title[:200],
@@ -1097,7 +1119,7 @@ async def assign_news_to_cluster(db, news_id: int, news_title: str, news_summary
         db.add(member)
         db.commit()
 
-        logger.info(f"[Clusters] Created new cluster #{new_cluster.id} for {news_type}:{news_id} '{news_title[:50]}'")
+        logger.info(f"[Clusters] ✓ Created new cluster #{new_cluster.id} for {news_type}:{news_id} '{news_title[:50]}'")
         return {
             "cluster_id": new_cluster.id,
             "cluster_title": new_cluster.title,
@@ -1117,6 +1139,8 @@ async def assign_news_to_cluster(db, news_id: int, news_title: str, news_summary
         }
     except Exception as e:
         logger.error(f"[Clusters] Error assigning news to cluster: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         try:
             db.rollback()
         except:
@@ -2317,6 +2341,59 @@ async def get_news_clusters():
         import traceback
         logger.error(traceback.format_exc())
         return {"clusters": [], "total_news": 0, "total_clusters": 0, "error": str(e)}
+    finally:
+        db.close()
+
+@app.get("/api/clusters/test-match")
+async def test_cluster_match(title: str = "", summary: str = ""):
+    """Debug: test which cluster a title would match against"""
+    if not title:
+        return {"error": "provide ?title=..."}
+    db = SessionLocal()
+    try:
+        clusters = db.query(NewsCluster).all()
+        if not clusters:
+            return {"message": "No clusters in DB yet", "clusters_count": 0}
+
+        item = {"id": 0, "type": "test", "title": title, "summary": summary}
+        embeddings = await get_embeddings_batch(db, [item])
+        new_emb = embeddings[0]
+        has_embedding = not all(v == 0.0 for v in new_emb)
+
+        if not has_embedding:
+            return {"message": "Could not generate embedding", "has_embedding": False}
+
+        new_emb_np = np.array(new_emb)
+        results = []
+        for c in clusters:
+            if not c.representative_embedding:
+                continue
+            try:
+                rep_emb = np.array(json.loads(c.representative_embedding))
+                dot = np.dot(new_emb_np, rep_emb)
+                norm = (np.linalg.norm(new_emb_np) * np.linalg.norm(rep_emb))
+                sim = float(dot / norm) if norm > 0 else 0.0
+                member_count = db.query(NewsClusterMember).filter(NewsClusterMember.cluster_id == c.id).count()
+                results.append({
+                    "cluster_id": c.id,
+                    "cluster_title": c.title[:100],
+                    "similarity": round(sim, 4),
+                    "is_event": bool(c.is_event),
+                    "member_count": member_count,
+                    "would_match": sim >= 0.45
+                })
+            except:
+                continue
+
+        results.sort(key=lambda x: x["similarity"], reverse=True)
+        topic = identify_topic(title, summary)
+        return {
+            "input_title": title,
+            "detected_topic": topic,
+            "clusters_count": len(clusters),
+            "threshold": 0.45,
+            "top_matches": results[:10]
+        }
     finally:
         db.close()
 
