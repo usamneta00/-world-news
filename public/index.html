@@ -2075,12 +2075,19 @@
         let clustersLoaded = false;
         let pendingClusterUpdates = [];
         let highlightedClusterIds = new Set();
+        let lastUpdatedClusterId = null;
 
         function showClusterBanner(count) {
             const banner = document.getElementById('cluster-updates-banner');
             const txt = document.getElementById('cluster-updates-text');
             if (banner && txt) {
-                txt.textContent = `${count} تحديث جديد في الأحداث`;
+                const lastUpdate = pendingClusterUpdates[pendingClusterUpdates.length - 1];
+                const clusterName = lastUpdate ? (lastUpdate.cluster_title || '').substring(0, 50) : '';
+                if (clusterName) {
+                    txt.textContent = `خبر جديد في: ${clusterName}${clusterName.length >= 50 ? '...' : ''}`;
+                } else {
+                    txt.textContent = `${count} تحديث جديد في الأحداث`;
+                }
                 banner.classList.remove('hidden');
                 lucide.createIcons();
             }
@@ -2094,36 +2101,40 @@
 
         function applyClusterUpdates() {
             hideClusterBanner();
-            if (clustersData) {
-                // Re-sort so updated/new clusters appear at the top
-                clustersData.clusters.sort((a, b) => {
-                    const aHL = highlightedClusterIds.has(a.id) ? 1 : 0;
-                    const bHL = highlightedClusterIds.has(b.id) ? 1 : 0;
-                    if (aHL !== bHL) return bHL - aHL;
-                    return (b.is_event === a.is_event) ? b.news_count - a.news_count : (b.is_event ? 1 : -1);
-                });
-                renderClusters(clustersData.clusters);
-                lucide.createIcons();
+            if (!clustersData) return;
 
-                // Scroll to the first highlighted cluster
+            const scrollTargetId = lastUpdatedClusterId;
+
+            renderClusters(clustersData.clusters);
+            lucide.createIcons();
+
+            // Scroll to the last updated cluster
+            if (scrollTargetId !== null) {
                 setTimeout(() => {
-                    for (let i = 0; i < clustersData.clusters.length; i++) {
-                        if (highlightedClusterIds.has(clustersData.clusters[i].id)) {
-                            const el = document.getElementById(`cluster-${i}`);
-                            if (el) {
-                                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    const idx = clustersData.clusters.findIndex(c => c.id === scrollTargetId);
+                    if (idx !== -1) {
+                        const el = document.getElementById(`cluster-${idx}`);
+                        if (el) {
+                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            // Auto-expand the cluster to show the new item
+                            const list = document.getElementById(`cluster-list-${idx}`);
+                            if (list && !list.classList.contains('open')) {
+                                toggleCluster(idx);
                             }
-                            break;
                         }
                     }
+                    lastUpdatedClusterId = null;
                     setTimeout(() => { highlightedClusterIds.clear(); }, 6000);
                 }, 400);
+            } else {
+                setTimeout(() => { highlightedClusterIds.clear(); }, 6000);
             }
         }
 
         function handleClusterWsMessage(msg) {
             const d = msg.data;
             const isNew = msg.type === 'new_cluster_created';
+            const targetClusterId = isNew ? (d.cluster_data && d.cluster_data.id) : d.cluster_id;
 
             if (clustersData) {
                 if (isNew) {
@@ -2136,7 +2147,6 @@
                     clustersData.clusters.unshift(clusterData);
                     clustersData.total_clusters = clustersData.clusters.length;
                     clustersData.total_news += 1;
-                    highlightedClusterIds.add(clusterData.id);
                 } else {
                     const cluster = clustersData.clusters.find(c => c.id === d.cluster_id);
                     if (cluster) {
@@ -2151,13 +2161,15 @@
                             cluster.latest_date = newsItem.published || cluster.latest_date;
                             clustersData.total_news += 1;
                         }
-                        highlightedClusterIds.add(d.cluster_id);
                     }
                 }
             } else {
-                // clustersData not loaded yet - mark for refresh when tab is visited
                 clustersLoaded = false;
-                highlightedClusterIds.add(d.cluster_id || (d.cluster_data && d.cluster_data.id));
+            }
+
+            if (targetClusterId) {
+                highlightedClusterIds.add(targetClusterId);
+                lastUpdatedClusterId = targetClusterId;
             }
 
             pendingClusterUpdates.push(d);

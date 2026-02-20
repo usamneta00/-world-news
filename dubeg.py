@@ -87,5 +87,5 @@ if __name__ == "__main__":
         rebuild_clusters()
     else:
         check_clusters_status()
-        test_cluster_match("رئيس الوزراء الإسرائيلي يصدر إنذاراً لحماس بشأن إعادة إعمار غزة")
-        test_cluster_match("كيف أعاد ترامب اختراع ICE")
+        test_cluster_match("مانميت سينغ جونيجا يتحدث عن الذكاء الاصطناعي والروبوتات")
+
