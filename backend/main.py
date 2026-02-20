@@ -1011,76 +1011,105 @@ def store_clusters_to_db(db, result_clusters, all_news, embeddings):
 
 
 async def assign_news_to_cluster(db, news_id: int, news_title: str, news_summary: str, news_type: str):
-    """Try to assign a new news item to the best matching existing cluster. Returns (cluster_id, cluster_title) or None."""
+    """Assign a new news item to the best matching cluster, or create a new one.
+    Returns dict: {cluster_id, cluster_title, is_new_cluster, cluster_data (if new)} or None on error."""
     try:
         clusters = db.query(NewsCluster).all()
-        if not clusters:
-            return None
 
         item = {"id": news_id, "type": news_type, "title": news_title, "summary": news_summary or ""}
         new_embeddings = await get_embeddings_batch(db, [item])
         new_emb = new_embeddings[0]
+        has_embedding = not all(v == 0.0 for v in new_emb)
 
-        if all(v == 0.0 for v in new_emb):
-            topic = identify_topic(news_title, news_summary or "")
+        # Try to match against existing clusters by embedding similarity
+        if has_embedding and clusters:
+            new_emb_np = np.array(new_emb)
+            best_cluster = None
+            best_sim = 0.0
+
             for c in clusters:
-                if not c.is_event and c.title and topic in c.title:
-                    member = NewsClusterMember(cluster_id=c.id, news_id=news_id, news_type=news_type)
-                    db.add(member)
-                    c.updated_at = datetime.now()
-                    db.commit()
-                    return (c.id, c.title)
-            return None
+                if not c.representative_embedding:
+                    continue
+                try:
+                    rep_emb = np.array(json.loads(c.representative_embedding))
+                    dot = np.dot(new_emb_np, rep_emb)
+                    norm = (np.linalg.norm(new_emb_np) * np.linalg.norm(rep_emb))
+                    sim = dot / norm if norm > 0 else 0
+                    if sim > best_sim:
+                        best_sim = sim
+                        best_cluster = c
+                except:
+                    continue
 
-        new_emb_np = np.array(new_emb)
-        best_cluster = None
-        best_sim = 0.0
-
-        for c in clusters:
-            if not c.representative_embedding:
-                continue
-            try:
-                rep_emb = np.array(json.loads(c.representative_embedding))
-                dot = np.dot(new_emb_np, rep_emb)
-                norm = (np.linalg.norm(new_emb_np) * np.linalg.norm(rep_emb))
-                sim = dot / norm if norm > 0 else 0
-                if sim > best_sim:
-                    best_sim = sim
-                    best_cluster = c
-            except:
-                continue
-
-        if best_cluster and best_sim >= 0.55:
-            existing = db.query(NewsClusterMember).filter(
-                NewsClusterMember.cluster_id == best_cluster.id,
-                NewsClusterMember.news_id == news_id,
-                NewsClusterMember.news_type == news_type
-            ).first()
-            if not existing:
-                member = NewsClusterMember(cluster_id=best_cluster.id, news_id=news_id, news_type=news_type)
-                db.add(member)
-                best_cluster.updated_at = datetime.now()
-                db.commit()
-                logger.info(f"[Clusters] Assigned {news_type}:{news_id} to cluster '{best_cluster.title}' (sim={best_sim:.3f})")
-                return (best_cluster.id, best_cluster.title)
-
-        topic = identify_topic(news_title, news_summary or "")
-        for c in clusters:
-            if not c.is_event and c.title and topic in c.title:
+            if best_cluster and best_sim >= 0.55:
                 existing = db.query(NewsClusterMember).filter(
-                    NewsClusterMember.cluster_id == c.id,
+                    NewsClusterMember.cluster_id == best_cluster.id,
                     NewsClusterMember.news_id == news_id,
                     NewsClusterMember.news_type == news_type
                 ).first()
                 if not existing:
-                    member = NewsClusterMember(cluster_id=c.id, news_id=news_id, news_type=news_type)
+                    member = NewsClusterMember(cluster_id=best_cluster.id, news_id=news_id, news_type=news_type)
                     db.add(member)
-                    c.updated_at = datetime.now()
+                    best_cluster.updated_at = datetime.now()
                     db.commit()
-                    logger.info(f"[Clusters] Assigned {news_type}:{news_id} to topic cluster '{c.title}'")
-                    return (c.id, c.title)
+                    logger.info(f"[Clusters] Assigned {news_type}:{news_id} to cluster '{best_cluster.title}' (sim={best_sim:.3f})")
+                    return {"cluster_id": best_cluster.id, "cluster_title": best_cluster.title, "is_new_cluster": False}
 
-        return None
+        # Try to match against topic clusters
+        if clusters:
+            topic = identify_topic(news_title, news_summary or "")
+            for c in clusters:
+                if not c.is_event and c.title and topic in c.title:
+                    existing = db.query(NewsClusterMember).filter(
+                        NewsClusterMember.cluster_id == c.id,
+                        NewsClusterMember.news_id == news_id,
+                        NewsClusterMember.news_type == news_type
+                    ).first()
+                    if not existing:
+                        member = NewsClusterMember(cluster_id=c.id, news_id=news_id, news_type=news_type)
+                        db.add(member)
+                        c.updated_at = datetime.now()
+                        db.commit()
+                        logger.info(f"[Clusters] Assigned {news_type}:{news_id} to topic cluster '{c.title}'")
+                        return {"cluster_id": c.id, "cluster_title": c.title, "is_new_cluster": False}
+
+        # No match found - create a new cluster for this news item
+        intensity = classify_news_intensity(news_title)
+        new_cluster = NewsCluster(
+            title=news_title[:200],
+            intensity=intensity,
+            is_event=1,
+            representative_embedding=json.dumps(new_emb) if has_embedding else None
+        )
+        db.add(new_cluster)
+        db.flush()
+
+        member = NewsClusterMember(
+            cluster_id=new_cluster.id,
+            news_id=news_id,
+            news_type=news_type
+        )
+        db.add(member)
+        db.commit()
+
+        logger.info(f"[Clusters] Created new cluster #{new_cluster.id} for {news_type}:{news_id} '{news_title[:50]}'")
+        return {
+            "cluster_id": new_cluster.id,
+            "cluster_title": new_cluster.title,
+            "is_new_cluster": True,
+            "cluster_data": {
+                "id": new_cluster.id,
+                "title": new_cluster.title,
+                "is_event": True,
+                "news_count": 1,
+                "sources": [],
+                "source_count": 0,
+                "types": [news_type],
+                "intensity": intensity,
+                "latest_date": "",
+                "news": []
+            }
+        }
     except Exception as e:
         logger.error(f"[Clusters] Error assigning news to cluster: {e}")
         try:
@@ -1309,10 +1338,11 @@ async def fetch_newspaper_feeds():
                         await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'newspaper')
                         cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'newspaper')
                         if cluster_result:
-                            await manager.broadcast(json.dumps({
-                                "type": "cluster_news_added",
-                                "data": {"cluster_id": cluster_result[0], "cluster_title": cluster_result[1], "news": item_dict, "news_type": "newspaper"}
-                            }))
+                            ws_type = "new_cluster_created" if cluster_result["is_new_cluster"] else "cluster_news_added"
+                            ws_data = {"cluster_id": cluster_result["cluster_id"], "cluster_title": cluster_result["cluster_title"], "news": item_dict, "news_type": "newspaper"}
+                            if cluster_result["is_new_cluster"]:
+                                ws_data["cluster_data"] = cluster_result["cluster_data"]
+                            await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
                 except Exception as e:
                     db.rollback()
                     logger.error(f"[Newspaper] ✗ FAILED to save article: {article['title'][:50]}... Error: {e}")
@@ -1699,10 +1729,11 @@ async def fetch_youtube_feeds():
                         await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'world')
                         cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'world')
                         if cluster_result:
-                            await manager.broadcast(json.dumps({
-                                "type": "cluster_news_added",
-                                "data": {"cluster_id": cluster_result[0], "cluster_title": cluster_result[1], "news": item_dict, "news_type": "world"}
-                            }))
+                            ws_type = "new_cluster_created" if cluster_result["is_new_cluster"] else "cluster_news_added"
+                            ws_data = {"cluster_id": cluster_result["cluster_id"], "cluster_title": cluster_result["cluster_title"], "news": item_dict, "news_type": "world"}
+                            if cluster_result["is_new_cluster"]:
+                                ws_data["cluster_data"] = cluster_result["cluster_data"]
+                            await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
                 except Exception as e:
                     db.rollback()
                     logger.error(f"✗ FAILED to save video: {video['title'][:50]}... Error: {e}")
@@ -1835,10 +1866,11 @@ async def fetch_yemen_youtube_feeds():
                         await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'yemen')
                         cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'yemen')
                         if cluster_result:
-                            await manager.broadcast(json.dumps({
-                                "type": "cluster_news_added",
-                                "data": {"cluster_id": cluster_result[0], "cluster_title": cluster_result[1], "news": item_dict, "news_type": "yemen"}
-                            }))
+                            ws_type = "new_cluster_created" if cluster_result["is_new_cluster"] else "cluster_news_added"
+                            ws_data = {"cluster_id": cluster_result["cluster_id"], "cluster_title": cluster_result["cluster_title"], "news": item_dict, "news_type": "yemen"}
+                            if cluster_result["is_new_cluster"]:
+                                ws_data["cluster_data"] = cluster_result["cluster_data"]
+                            await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
                 except Exception as e:
                     db.rollback()
                     logger.error(f"[Yemen] ✗ FAILED to save video: {video['title'][:50]}... Error: {e}")
