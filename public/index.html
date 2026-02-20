@@ -800,11 +800,11 @@
 
         .cluster-news-list {
             max-height: 0; overflow: hidden;
-            transition: max-height 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: max-height 0.5s ease-out;
             position: relative; z-index: 1;
         }
 
-        .cluster-news-list.open { max-height: 2000px; }
+        .cluster-news-list.open { overflow: visible; }
 
         .cluster-news-item {
             display: flex; gap: 16px; padding: 16px; margin-bottom: 8px;
@@ -2346,12 +2346,24 @@ function toggleCluster(idx) {
 
             const isOpen = list.classList.contains('open');
             if (isOpen) {
+                list.style.maxHeight = list.scrollHeight + 'px';
+                requestAnimationFrame(() => {
+                    list.style.maxHeight = '0px';
+                });
                 list.classList.remove('open');
                 card.classList.remove('expanded');
             } else {
+                list.style.maxHeight = list.scrollHeight + 'px';
                 list.classList.add('open');
                 card.classList.add('expanded');
                 lucide.createIcons();
+                const onEnd = () => {
+                    if (list.classList.contains('open')) {
+                        list.style.maxHeight = 'none';
+                    }
+                    list.removeEventListener('transitionend', onEnd);
+                };
+                list.addEventListener('transitionend', onEnd);
             }
         }
 
