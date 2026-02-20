@@ -1021,7 +1021,7 @@ def store_clusters_to_db(db, result_clusters, all_news, embeddings):
 async def assign_news_to_cluster(db, news_id: int, news_title: str, news_summary: str, news_type: str):
     """Assign a new news item to the best matching cluster, or create a new one.
     Returns dict: {cluster_id, cluster_title, is_new_cluster, cluster_data (if new)} or None on error."""
-    SIMILARITY_THRESHOLD = 0.45
+    SIMILARITY_THRESHOLD = 0.38
     try:
         clusters = db.query(NewsCluster).all()
         if not clusters:
@@ -2178,19 +2178,30 @@ async def get_heatmap_data():
         db.close()
 
 @app.get("/api/news/clusters")
-async def get_news_clusters():
-    """Cluster news - reads from DB if available, otherwise builds and stores"""
+async def get_news_clusters(rebuild: bool = False):
+    """Cluster news - reads from DB if available, otherwise builds and stores.
+    Pass ?rebuild=true to force rebuild with updated centroid embeddings."""
 
-    # Fast path: read persisted clusters from database
-    db_read = SessionLocal()
-    try:
-        stored = get_clusters_from_db(db_read)
-        if stored and stored["total_clusters"] > 0:
-            return stored
-    finally:
-        db_read.close()
+    if rebuild:
+        logger.info("[Clusters] Force rebuild requested - clearing stored clusters")
+        db_clear = SessionLocal()
+        try:
+            db_clear.query(NewsClusterMember).delete()
+            db_clear.query(NewsCluster).delete()
+            db_clear.commit()
+        finally:
+            db_clear.close()
+    else:
+        # Fast path: read persisted clusters from database
+        db_read = SessionLocal()
+        try:
+            stored = get_clusters_from_db(db_read)
+            if stored and stored["total_clusters"] > 0:
+                return stored
+        finally:
+            db_read.close()
 
-    # No stored clusters - build from scratch using existing algorithm
+    # No stored clusters (or rebuild) - build from scratch using existing algorithm
     db = SessionLocal()
     try:
         world_news = db.query(NewsItem).order_by(desc(NewsItem.created_at)).limit(250).all()
@@ -2380,7 +2391,7 @@ async def test_cluster_match(title: str = "", summary: str = ""):
                     "similarity": round(sim, 4),
                     "is_event": bool(c.is_event),
                     "member_count": member_count,
-                    "would_match": sim >= 0.45
+                    "would_match": sim >= 0.38
                 })
             except:
                 continue
@@ -2391,7 +2402,7 @@ async def test_cluster_match(title: str = "", summary: str = ""):
             "input_title": title,
             "detected_topic": topic,
             "clusters_count": len(clusters),
-            "threshold": 0.45,
+            "threshold": 0.38,
             "top_matches": results[:10]
         }
     finally:
