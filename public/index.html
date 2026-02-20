@@ -2095,19 +2095,29 @@
         function applyClusterUpdates() {
             hideClusterBanner();
             if (clustersData) {
+                // Re-sort so updated/new clusters appear at the top
+                clustersData.clusters.sort((a, b) => {
+                    const aHL = highlightedClusterIds.has(a.id) ? 1 : 0;
+                    const bHL = highlightedClusterIds.has(b.id) ? 1 : 0;
+                    if (aHL !== bHL) return bHL - aHL;
+                    return (b.is_event === a.is_event) ? b.news_count - a.news_count : (b.is_event ? 1 : -1);
+                });
                 renderClusters(clustersData.clusters);
+                lucide.createIcons();
+
+                // Scroll to the first highlighted cluster
                 setTimeout(() => {
-                    highlightedClusterIds.forEach(cid => {
-                        const idx = clustersData.clusters.findIndex(c => c.id === cid);
-                        if (idx !== -1) {
-                            const el = document.getElementById(`cluster-${idx}`);
+                    for (let i = 0; i < clustersData.clusters.length; i++) {
+                        if (highlightedClusterIds.has(clustersData.clusters[i].id)) {
+                            const el = document.getElementById(`cluster-${i}`);
                             if (el) {
-                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                             }
+                            break;
                         }
-                    });
+                    }
                     setTimeout(() => { highlightedClusterIds.clear(); }, 6000);
-                }, 300);
+                }, 400);
             }
         }
 
@@ -2115,33 +2125,39 @@
             const d = msg.data;
             const isNew = msg.type === 'new_cluster_created';
 
-            if (isNew && clustersData) {
-                const clusterData = d.cluster_data;
-                const newsItem = { ...d.news, type: d.news_type };
-                clusterData.news = [newsItem];
-                clusterData.sources = [newsItem.source];
-                clusterData.source_count = 1;
-                clusterData.latest_date = newsItem.published || '';
-                clustersData.clusters.unshift(clusterData);
-                clustersData.total_clusters = clustersData.clusters.length;
-                clustersData.total_news += 1;
-                highlightedClusterIds.add(clusterData.id);
-            } else if (!isNew && clustersData) {
-                const cluster = clustersData.clusters.find(c => c.id === d.cluster_id);
-                if (cluster) {
+            if (clustersData) {
+                if (isNew) {
+                    const clusterData = { ...d.cluster_data };
                     const newsItem = { ...d.news, type: d.news_type };
-                    const exists = cluster.news.some(n => n.id === newsItem.id && n.type === newsItem.type);
-                    if (!exists) {
-                        cluster.news.unshift(newsItem);
-                        cluster.news_count = cluster.news.length;
-                        cluster.sources = [...new Set(cluster.news.map(n => n.source))];
-                        cluster.source_count = cluster.sources.length;
-                        cluster.types = [...new Set(cluster.news.map(n => n.type))];
-                        cluster.latest_date = newsItem.published || cluster.latest_date;
-                        clustersData.total_news += 1;
+                    clusterData.news = [newsItem];
+                    clusterData.sources = [newsItem.source];
+                    clusterData.source_count = 1;
+                    clusterData.latest_date = newsItem.published || '';
+                    clustersData.clusters.unshift(clusterData);
+                    clustersData.total_clusters = clustersData.clusters.length;
+                    clustersData.total_news += 1;
+                    highlightedClusterIds.add(clusterData.id);
+                } else {
+                    const cluster = clustersData.clusters.find(c => c.id === d.cluster_id);
+                    if (cluster) {
+                        const newsItem = { ...d.news, type: d.news_type };
+                        const exists = cluster.news.some(n => n.id === newsItem.id && n.type === newsItem.type);
+                        if (!exists) {
+                            cluster.news.unshift(newsItem);
+                            cluster.news_count = cluster.news.length;
+                            cluster.sources = [...new Set(cluster.news.map(n => n.source))];
+                            cluster.source_count = cluster.sources.length;
+                            cluster.types = [...new Set(cluster.news.map(n => n.type))];
+                            cluster.latest_date = newsItem.published || cluster.latest_date;
+                            clustersData.total_news += 1;
+                        }
+                        highlightedClusterIds.add(d.cluster_id);
                     }
-                    highlightedClusterIds.add(d.cluster_id);
                 }
+            } else {
+                // clustersData not loaded yet - mark for refresh when tab is visited
+                clustersLoaded = false;
+                highlightedClusterIds.add(d.cluster_id || (d.cluster_data && d.cluster_data.id));
             }
 
             pendingClusterUpdates.push(d);
@@ -2415,7 +2431,7 @@ function toggleCluster(idx) {
                     const msg = JSON.parse(e.data);
                     if (msg.type === 'ping') return;
 
-                    if ((msg.type === 'cluster_news_added' || msg.type === 'new_cluster_created') && clustersData) {
+                    if (msg.type === 'cluster_news_added' || msg.type === 'new_cluster_created') {
                         handleClusterWsMessage(msg);
                         return;
                     }

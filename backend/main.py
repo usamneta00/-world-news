@@ -1073,7 +1073,12 @@ async def assign_news_to_cluster(db, news_id: int, news_title: str, news_summary
                         logger.info(f"[Clusters] Assigned {news_type}:{news_id} to topic cluster '{c.title}'")
                         return {"cluster_id": c.id, "cluster_title": c.title, "is_new_cluster": False}
 
-        # No match found - create a new cluster for this news item
+        # No match found
+        if not clusters:
+            # Initial full clustering hasn't happened yet - skip creating individual clusters
+            return None
+
+        # Create a new cluster for this news item
         intensity = classify_news_intensity(news_title)
         new_cluster = NewsCluster(
             title=news_title[:200],
@@ -2294,13 +2299,18 @@ async def get_news_clusters():
         # Persist clusters to database for fast future retrieval
         store_clusters_to_db(db, result_clusters, all_news, embeddings)
 
+        # Read back from DB to get consistent integer IDs
+        stored = get_clusters_from_db(db)
+        if stored:
+            logger.info(f"[Clusters] Built & stored {stored['total_clusters']} clusters from {len(all_news)} news items")
+            return stored
+
         result = {
             "clusters": result_clusters,
             "total_news": len(all_news),
             "total_clusters": len(result_clusters)
         }
-
-        logger.info(f"[Clusters] Built & stored {len(result_clusters)} clusters from {len(all_news)} news items")
+        logger.info(f"[Clusters] Built {len(result_clusters)} clusters from {len(all_news)} news items")
         return result
     except Exception as e:
         logger.error(f"Error in get_news_clusters: {e}")
