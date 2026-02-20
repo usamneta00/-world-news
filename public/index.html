@@ -2260,6 +2260,26 @@ function toggleCluster(idx) {
                 ws.onmessage = (e) => {
                     const msg = JSON.parse(e.data);
                     if (msg.type === 'ping') return;
+
+                    if (msg.type === 'cluster_news_added' && clustersData) {
+                        const d = msg.data;
+                        const cluster = clustersData.clusters.find(c => c.id === d.cluster_id);
+                        if (cluster) {
+                            const newsItem = { ...d.news, type: d.news_type };
+                            const exists = cluster.news.some(n => n.id === newsItem.id && n.type === newsItem.type);
+                            if (!exists) {
+                                cluster.news.unshift(newsItem);
+                                cluster.news_count = cluster.news.length;
+                                cluster.sources = [...new Set(cluster.news.map(n => n.source))];
+                                cluster.source_count = cluster.sources.length;
+                                cluster.types = [...new Set(cluster.news.map(n => n.type))];
+                                cluster.latest_date = newsItem.published || cluster.latest_date;
+                                if (activeTab === 'clusters') renderClusters(clustersData.clusters);
+                            }
+                        }
+                        return;
+                    }
+
                     let pending = activeTab === 'world' ? pendingNews : (activeTab === 'yemen' ? yemenPendingNews : newspaperPendingNews);
                     if ((msg.type === 'new_news' && activeTab === 'world') || (msg.type === 'new_yemen_news' && activeTab === 'yemen') || (msg.type === 'new_newspaper_news' && activeTab === 'newspaper')) {
                         pending.push(msg.data);

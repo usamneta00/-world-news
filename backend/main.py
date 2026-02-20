@@ -123,6 +123,24 @@ class NewsEmbeddingCache(Base):
     embedding = Column(String)
     created_at = Column(DateTime, default=datetime.now)
 
+class NewsCluster(Base):
+    __tablename__ = "news_clusters"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String)
+    intensity = Column(String, default="important")
+    is_event = Column(Integer, default=1)
+    representative_embedding = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now)
+
+class NewsClusterMember(Base):
+    __tablename__ = "news_cluster_members"
+    id = Column(Integer, primary_key=True, index=True)
+    cluster_id = Column(Integer, index=True)
+    news_id = Column(Integer, index=True)
+    news_type = Column(String)
+    added_at = Column(DateTime, default=datetime.now)
+
 Base.metadata.create_all(bind=engine)
 
 # Migration: Add video_id column and channel_last_video table
@@ -226,6 +244,20 @@ def migrate_database():
                 logger.info("Creating news_embedding_cache table...")
                 NewsEmbeddingCache.__table__.create(engine)
                 logger.info("Successfully created news_embedding_cache table")
+
+            # Check if news_clusters table exists
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='news_clusters'"))
+            if not result.fetchone():
+                logger.info("Creating news_clusters table...")
+                NewsCluster.__table__.create(engine)
+                logger.info("Successfully created news_clusters table")
+
+            # Check if news_cluster_members table exists
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='news_cluster_members'"))
+            if not result.fetchone():
+                logger.info("Creating news_cluster_members table...")
+                NewsClusterMember.__table__.create(engine)
+                logger.info("Successfully created news_cluster_members table")
 
             # Check if event_threads table exists
             result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='event_threads'"))
@@ -862,6 +894,201 @@ async def generate_cluster_title(cluster_items: List[dict]) -> str:
         logger.error(f"Error generating cluster title: {e}")
         return cluster_items[0]["title"][:100]
 
+# ============================================
+# Persistent Cluster Storage & Incremental Assignment
+# ============================================
+
+def get_clusters_from_db(db):
+    """Read stored clusters from database - fast path, no AI calls"""
+    clusters = db.query(NewsCluster).all()
+    if not clusters:
+        return None
+
+    all_members = db.query(NewsClusterMember).all()
+    members_by_cluster = {}
+    for m in all_members:
+        members_by_cluster.setdefault(m.cluster_id, []).append(m)
+
+    world_ids, yemen_ids, newspaper_ids = set(), set(), set()
+    for members in members_by_cluster.values():
+        for m in members:
+            if m.news_type == 'world': world_ids.add(m.news_id)
+            elif m.news_type == 'yemen': yemen_ids.add(m.news_id)
+            else: newspaper_ids.add(m.news_id)
+
+    world_map = {n.id: n for n in db.query(NewsItem).filter(NewsItem.id.in_(world_ids)).all()} if world_ids else {}
+    yemen_map = {n.id: n for n in db.query(YemenNewsItem).filter(YemenNewsItem.id.in_(yemen_ids)).all()} if yemen_ids else {}
+    newspaper_map = {n.id: n for n in db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id.in_(newspaper_ids)).all()} if newspaper_ids else {}
+
+    result_clusters = []
+    total_news = 0
+
+    for cluster in clusters:
+        members = members_by_cluster.get(cluster.id, [])
+        if not members:
+            continue
+
+        news_items = []
+        for m in members:
+            n = None
+            if m.news_type == 'world': n = world_map.get(m.news_id)
+            elif m.news_type == 'yemen': n = yemen_map.get(m.news_id)
+            else: n = newspaper_map.get(m.news_id)
+            if n:
+                news_items.append({
+                    "id": n.id, "type": m.news_type, "title": n.title, "link": n.link,
+                    "summary": n.summary, "source": n.source, "published": str(n.published),
+                    "image_url": n.image_url
+                })
+
+        if not news_items:
+            continue
+
+        items_sorted = sorted(news_items, key=lambda x: x["published"], reverse=True)
+        sources = list(set(item["source"] for item in news_items))
+        types_in_cluster = list(set(item["type"] for item in news_items))
+
+        result_clusters.append({
+            "id": cluster.id,
+            "title": cluster.title,
+            "is_event": bool(cluster.is_event),
+            "news_count": len(news_items),
+            "sources": sources,
+            "source_count": len(sources),
+            "types": types_in_cluster,
+            "intensity": cluster.intensity or "important",
+            "latest_date": items_sorted[0]["published"] if items_sorted else "",
+            "news": items_sorted
+        })
+        total_news += len(news_items)
+
+    result_clusters.sort(key=lambda x: (x.get("is_event", False), x["news_count"]), reverse=True)
+
+    return {
+        "clusters": result_clusters,
+        "total_news": total_news,
+        "total_clusters": len(result_clusters)
+    }
+
+
+def store_clusters_to_db(db, result_clusters, all_news, embeddings):
+    """Store clustering results to DB with representative embeddings"""
+    try:
+        item_embedding_map = {}
+        for i, item in enumerate(all_news):
+            item_embedding_map[(item["id"], item["type"])] = embeddings[i] if i < len(embeddings) else None
+
+        for cluster_data in result_clusters:
+            news_list = cluster_data.get("news", [])
+            if not news_list:
+                continue
+
+            oldest_item = news_list[-1] if news_list else news_list[0]
+            rep_emb = item_embedding_map.get((oldest_item["id"], oldest_item["type"]))
+
+            cluster = NewsCluster(
+                title=cluster_data["title"],
+                intensity=cluster_data.get("intensity", "important"),
+                is_event=1 if cluster_data.get("is_event", True) else 0,
+                representative_embedding=json.dumps(rep_emb) if rep_emb else None
+            )
+            db.add(cluster)
+            db.flush()
+
+            for news_item in news_list:
+                member = NewsClusterMember(
+                    cluster_id=cluster.id,
+                    news_id=news_item["id"],
+                    news_type=news_item["type"]
+                )
+                db.add(member)
+
+        db.commit()
+        logger.info(f"[Clusters] Stored {len(result_clusters)} clusters to database")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"[Clusters] Error storing clusters to DB: {e}")
+
+
+async def assign_news_to_cluster(db, news_id: int, news_title: str, news_summary: str, news_type: str):
+    """Try to assign a new news item to the best matching existing cluster. Returns (cluster_id, cluster_title) or None."""
+    try:
+        clusters = db.query(NewsCluster).all()
+        if not clusters:
+            return None
+
+        item = {"id": news_id, "type": news_type, "title": news_title, "summary": news_summary or ""}
+        new_embeddings = await get_embeddings_batch(db, [item])
+        new_emb = new_embeddings[0]
+
+        if all(v == 0.0 for v in new_emb):
+            topic = identify_topic(news_title, news_summary or "")
+            for c in clusters:
+                if not c.is_event and c.title and topic in c.title:
+                    member = NewsClusterMember(cluster_id=c.id, news_id=news_id, news_type=news_type)
+                    db.add(member)
+                    c.updated_at = datetime.now()
+                    db.commit()
+                    return (c.id, c.title)
+            return None
+
+        new_emb_np = np.array(new_emb)
+        best_cluster = None
+        best_sim = 0.0
+
+        for c in clusters:
+            if not c.representative_embedding:
+                continue
+            try:
+                rep_emb = np.array(json.loads(c.representative_embedding))
+                dot = np.dot(new_emb_np, rep_emb)
+                norm = (np.linalg.norm(new_emb_np) * np.linalg.norm(rep_emb))
+                sim = dot / norm if norm > 0 else 0
+                if sim > best_sim:
+                    best_sim = sim
+                    best_cluster = c
+            except:
+                continue
+
+        if best_cluster and best_sim >= 0.55:
+            existing = db.query(NewsClusterMember).filter(
+                NewsClusterMember.cluster_id == best_cluster.id,
+                NewsClusterMember.news_id == news_id,
+                NewsClusterMember.news_type == news_type
+            ).first()
+            if not existing:
+                member = NewsClusterMember(cluster_id=best_cluster.id, news_id=news_id, news_type=news_type)
+                db.add(member)
+                best_cluster.updated_at = datetime.now()
+                db.commit()
+                logger.info(f"[Clusters] Assigned {news_type}:{news_id} to cluster '{best_cluster.title}' (sim={best_sim:.3f})")
+                return (best_cluster.id, best_cluster.title)
+
+        topic = identify_topic(news_title, news_summary or "")
+        for c in clusters:
+            if not c.is_event and c.title and topic in c.title:
+                existing = db.query(NewsClusterMember).filter(
+                    NewsClusterMember.cluster_id == c.id,
+                    NewsClusterMember.news_id == news_id,
+                    NewsClusterMember.news_type == news_type
+                ).first()
+                if not existing:
+                    member = NewsClusterMember(cluster_id=c.id, news_id=news_id, news_type=news_type)
+                    db.add(member)
+                    c.updated_at = datetime.now()
+                    db.commit()
+                    logger.info(f"[Clusters] Assigned {news_type}:{news_id} to topic cluster '{c.title}'")
+                    return (c.id, c.title)
+
+        return None
+    except Exception as e:
+        logger.error(f"[Clusters] Error assigning news to cluster: {e}")
+        try:
+            db.rollback()
+        except:
+            pass
+        return None
+
 
 def fetch_newspaper_articles(source_url: str, source_name: str, last_article_ids: Optional[List[str]] = None) -> List[dict]:
     """Fetch NEW articles from a newspaper website"""
@@ -1080,6 +1307,12 @@ async def fetch_newspaper_feeds():
                     # Process event timeline only for updates (not first run)
                     if not first_run:
                         await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'newspaper')
+                        cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'newspaper')
+                        if cluster_result:
+                            await manager.broadcast(json.dumps({
+                                "type": "cluster_news_added",
+                                "data": {"cluster_id": cluster_result[0], "cluster_title": cluster_result[1], "news": item_dict, "news_type": "newspaper"}
+                            }))
                 except Exception as e:
                     db.rollback()
                     logger.error(f"[Newspaper] ✗ FAILED to save article: {article['title'][:50]}... Error: {e}")
@@ -1464,6 +1697,12 @@ async def fetch_youtube_feeds():
                     # Process event timeline only for updates (not first run)
                     if not first_run:
                         await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'world')
+                        cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'world')
+                        if cluster_result:
+                            await manager.broadcast(json.dumps({
+                                "type": "cluster_news_added",
+                                "data": {"cluster_id": cluster_result[0], "cluster_title": cluster_result[1], "news": item_dict, "news_type": "world"}
+                            }))
                 except Exception as e:
                     db.rollback()
                     logger.error(f"✗ FAILED to save video: {video['title'][:50]}... Error: {e}")
@@ -1594,6 +1833,12 @@ async def fetch_yemen_youtube_feeds():
                     # Process event timeline only for updates (not first run)
                     if not first_run:
                         await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'yemen')
+                        cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'yemen')
+                        if cluster_result:
+                            await manager.broadcast(json.dumps({
+                                "type": "cluster_news_added",
+                                "data": {"cluster_id": cluster_result[0], "cluster_title": cluster_result[1], "news": item_dict, "news_type": "yemen"}
+                            }))
                 except Exception as e:
                     db.rollback()
                     logger.error(f"[Yemen] ✗ FAILED to save video: {video['title'][:50]}... Error: {e}")
@@ -1873,16 +2118,20 @@ async def get_heatmap_data():
 
 @app.get("/api/news/clusters")
 async def get_news_clusters():
-    """Cluster news using semantic embeddings + topic-based fallback categorization"""
-    global _cluster_cache
+    """Cluster news - reads from DB if available, otherwise builds and stores"""
 
-    if (_cluster_cache["data"] and _cluster_cache["timestamp"] and
-            (datetime.now() - _cluster_cache["timestamp"]).total_seconds() < _cluster_cache["ttl"]):
-        return _cluster_cache["data"]
+    # Fast path: read persisted clusters from database
+    db_read = SessionLocal()
+    try:
+        stored = get_clusters_from_db(db_read)
+        if stored and stored["total_clusters"] > 0:
+            return stored
+    finally:
+        db_read.close()
 
+    # No stored clusters - build from scratch using existing algorithm
     db = SessionLocal()
     try:
-        # Increase limits slightly to get more coverage
         world_news = db.query(NewsItem).order_by(desc(NewsItem.created_at)).limit(250).all()
         yemen_news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(200).all()
         newspaper_news = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(200).all()
@@ -1910,13 +2159,11 @@ async def get_news_clusters():
         if len(all_news) < 2:
             return {"clusters": [], "total_news": len(all_news), "total_clusters": 0}
 
-        # Step 1: Get Embeddings (uses Title + Summary now)
         embeddings = await get_embeddings_batch(db, all_news)
 
         all_zero = all(all(v == 0.0 for v in emb) for emb in embeddings)
         if all_zero:
             logger.warning("All embeddings are zero vectors")
-            # Fallback to pure topic-based categorization if embeddings fail
             labels = [-1] * len(all_news)
         else:
             try:
@@ -1926,7 +2173,6 @@ async def get_news_clusters():
                 embedding_matrix = np.array(embeddings)
                 distance_matrix = cosine_distances(embedding_matrix)
 
-                # Relaxed threshold (0.45 instead of 0.3) to group more related things
                 clustering = AgglomerativeClustering(
                     n_clusters=None,
                     distance_threshold=0.45,
@@ -1937,21 +2183,18 @@ async def get_news_clusters():
             except ImportError:
                 labels = [-1] * len(all_news)
 
-        # Step 2: Group by labels and identify singletons
         cluster_groups = {}
         singletons = []
         
         for i, label in enumerate(labels):
             label_int = int(label)
-            if label_int == -1: # Failed or noise
+            if label_int == -1:
                 singletons.append(all_news[i])
                 continue
-                
             if label_int not in cluster_groups:
                 cluster_groups[label_int] = []
             cluster_groups[label_int].append(all_news[i])
 
-        # Step 3: Separate multi-item clusters and singletons
         final_clusters_data = []
         actual_singletons = []
         
@@ -1960,10 +2203,8 @@ async def get_news_clusters():
                 final_clusters_data.append(items)
             else:
                 actual_singletons.extend(items)
-        
         actual_singletons.extend(singletons)
 
-        # Step 4: Categorize singletons into Topic Clusters
         topic_groups = {}
         for item in actual_singletons:
             topic = identify_topic(item["title"], item.get("summary", ""))
@@ -1971,10 +2212,8 @@ async def get_news_clusters():
                 topic_groups[topic] = []
             topic_groups[topic].append(item)
 
-        # Step 5: Build final result clusters
         result_clusters = []
         
-        # Add semantic clusters first (Specific Events)
         for i, items in enumerate(final_clusters_data):
             try:
                 title = await generate_cluster_title(items)
@@ -1999,10 +2238,8 @@ async def get_news_clusters():
                 "news": items_sorted
             })
 
-        # Add topic clusters (Broad Topics)
         for topic, items in topic_groups.items():
             if not items: continue
-            
             items_sorted = sorted(items, key=lambda x: x["published"], reverse=True)
             sources = list(set(item["source"] for item in items))
             types_in_cluster = list(set(item["type"] for item in items))
@@ -2020,8 +2257,10 @@ async def get_news_clusters():
                 "news": items_sorted
             })
 
-        # Sort: Events with most news first, then topic results
         result_clusters.sort(key=lambda x: (x.get("is_event", False), x["news_count"]), reverse=True)
+
+        # Persist clusters to database for fast future retrieval
+        store_clusters_to_db(db, result_clusters, all_news, embeddings)
 
         result = {
             "clusters": result_clusters,
@@ -2029,10 +2268,7 @@ async def get_news_clusters():
             "total_clusters": len(result_clusters)
         }
 
-        _cluster_cache["data"] = result
-        _cluster_cache["timestamp"] = datetime.now()
-
-        logger.info(f"[Clusters] Generated {len(result_clusters)} clusters (Events \u0026 Topics) from {len(all_news)} news items")
+        logger.info(f"[Clusters] Built & stored {len(result_clusters)} clusters from {len(all_news)} news items")
         return result
     except Exception as e:
         logger.error(f"Error in get_news_clusters: {e}")
@@ -2093,6 +2329,8 @@ async def clear_all_news():
         db.query(NewspaperLastArticle).delete()
         db.query(EventThread).delete()
         db.query(NewsEmbeddingCache).delete()
+        db.query(NewsClusterMember).delete()
+        db.query(NewsCluster).delete()
         db.commit()
         _cluster_cache["data"] = None
         _cluster_cache["timestamp"] = None
