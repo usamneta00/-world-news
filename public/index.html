@@ -50,7 +50,19 @@
                             blue: '#2dd4bf',
                             accent: '#3b82f6'
                         },
-                        brand: '#cc0000',
+                        brand: {
+                            DEFAULT: '#cc0000',
+                            50: '#fff1f1',
+                            100: '#ffdfdf',
+                            200: '#ffc5c5',
+                            300: '#ff9d9d',
+                            400: '#ff6464',
+                            500: '#f83b3b',
+                            600: '#e61d1d',
+                            700: '#cc0000',
+                            800: '#a30000',
+                            900: '#870606'
+                        },
                         yemen: '#006633',
                         newspaper: '#1a365d'
                     },
@@ -199,16 +211,45 @@
             }
         }
 
-        .timeline-item:nth-child(1) { animation-delay: 0.1s; }
-        .timeline-item:nth-child(2) { animation-delay: 0.2s; }
-        .timeline-item:nth-child(3) { animation-delay: 0.3s; }
-        .timeline-item:nth-child(4) { animation-delay: 0.4s; }
-        .timeline-item:nth-child(5) { animation-delay: 0.5s; }
-        .timeline-item:nth-child(6) { animation-delay: 0.6s; }
-        .timeline-item:nth-child(7) { animation-delay: 0.7s; }
-        .timeline-item:nth-child(8) { animation-delay: 0.8s; }
-        .timeline-item:nth-child(9) { animation-delay: 0.9s; }
-        .timeline-item:nth-child(10) { animation-delay: 1s; }
+        .timeline-item:nth-child(1) {
+            animation-delay: 0.1s;
+        }
+
+        .timeline-item:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .timeline-item:nth-child(3) {
+            animation-delay: 0.3s;
+        }
+
+        .timeline-item:nth-child(4) {
+            animation-delay: 0.4s;
+        }
+
+        .timeline-item:nth-child(5) {
+            animation-delay: 0.5s;
+        }
+
+        .timeline-item:nth-child(6) {
+            animation-delay: 0.6s;
+        }
+
+        .timeline-item:nth-child(7) {
+            animation-delay: 0.7s;
+        }
+
+        .timeline-item:nth-child(8) {
+            animation-delay: 0.8s;
+        }
+
+        .timeline-item:nth-child(9) {
+            animation-delay: 0.9s;
+        }
+
+        .timeline-item:nth-child(10) {
+            animation-delay: 1s;
+        }
 
         @keyframes slideIn {
             to {
@@ -364,6 +405,7 @@
             background: rgba(239, 68, 68, 0.15);
             color: #f87171;
         }
+
         .timeline-action-btn.action-video:hover {
             background: rgba(239, 68, 68, 0.3);
         }
@@ -372,6 +414,7 @@
             background: rgba(245, 158, 11, 0.15);
             color: #fbbf24;
         }
+
         .timeline-action-btn.action-article:hover {
             background: rgba(245, 158, 11, 0.3);
         }
@@ -380,6 +423,7 @@
             background: rgba(59, 130, 246, 0.15);
             color: #60a5fa;
         }
+
         .timeline-action-btn.action-news:hover {
             background: rgba(59, 130, 246, 0.3);
         }
@@ -393,9 +437,11 @@
             opacity: 0.8;
             transition: opacity 0.3s ease;
         }
+
         .timeline-card:hover .timeline-thumbnail {
             opacity: 1;
         }
+
         @media (max-width: 768px) {
             .timeline-thumbnail {
                 height: 80px;
@@ -406,20 +452,25 @@
         .timeline-item.type-world .timeline-dot {
             border-color: #3b82f6;
         }
+
         .timeline-item.type-yemen .timeline-dot {
             border-color: #10b981;
         }
+
         .timeline-item.type-newspaper .timeline-dot {
             border-color: #f59e0b;
         }
+
         .timeline-item.type-world:hover .timeline-dot {
             background: #3b82f6;
             box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
         }
+
         .timeline-item.type-yemen:hover .timeline-dot {
             background: #10b981;
             box-shadow: 0 0 15px rgba(16, 185, 129, 0.5);
         }
+
         .timeline-item.type-newspaper:hover .timeline-dot {
             background: #f59e0b;
             box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
@@ -446,6 +497,7 @@
             margin-bottom: 20px;
             flex-wrap: wrap;
         }
+
         .timeline-legend-item {
             display: flex;
             align-items: center;
@@ -453,14 +505,24 @@
             font-size: 11px;
             color: #6b7280;
         }
+
         .timeline-legend-dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
         }
-        .timeline-legend-dot.world { background: #3b82f6; }
-        .timeline-legend-dot.yemen { background: #10b981; }
-        .timeline-legend-dot.newspaper { background: #f59e0b; }
+
+        .timeline-legend-dot.world {
+            background: #3b82f6;
+        }
+
+        .timeline-legend-dot.yemen {
+            background: #10b981;
+        }
+
+        .timeline-legend-dot.newspaper {
+            background: #f59e0b;
+        }
 
         .timeline-header {
             display: flex;
@@ -702,13 +764,16 @@
                 min-height: 350px;
                 border-radius: 8px;
             }
+
             .heatmap-header {
                 flex-direction: column;
                 align-items: flex-start;
             }
+
             .heatmap-stat {
                 padding: 12px 16px;
             }
+
             .heatmap-stat-number {
                 font-size: 22px;
             }
@@ -738,15 +803,20 @@
         .cluster-card::before {
             content: '';
             position: absolute;
-            top: 0; left: 0; right: 0; height: 100%;
-            background: radial-gradient(800px circle at var(--mouse-x, 0) var(--mouse-y, 0), rgba(255,255,255,0.06), transparent 40%);
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 100%;
+            background: radial-gradient(800px circle at var(--mouse-x, 0) var(--mouse-y, 0), rgba(255, 255, 255, 0.06), transparent 40%);
             opacity: 0;
             transition: opacity 0.5s;
             pointer-events: none;
             z-index: 0;
         }
 
-        .cluster-card:hover::before { opacity: 1; }
+        .cluster-card:hover::before {
+            opacity: 1;
+        }
 
         .cluster-card:hover {
             transform: translateY(-4px) scale(1.01);
@@ -761,159 +831,301 @@
         }
 
         .cluster-count-badge {
-            display: inline-flex; align-items: center; justify-content: center;
-            min-width: 42px; height: 42px;
-            background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.02));
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 42px;
+            height: 42px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 12px;
-            font-size: 18px; font-weight: 800; color: #fff;
+            font-size: 18px;
+            font-weight: 800;
+            color: #fff;
             font-family: 'JetBrains Mono', monospace;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            position: relative; z-index: 1;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            position: relative;
+            z-index: 1;
         }
 
         .cluster-source-tag {
-            display: inline-flex; align-items: center; gap: 4px;
-            padding: 4px 12px; border-radius: 20px;
-            font-size: 11px; font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.05);
-            color: #9ca3af; transition: all 0.3s ease;
-            position: relative; z-index: 1; backdrop-filter: blur(4px);
+            color: #9ca3af;
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 1;
+            backdrop-filter: blur(4px);
         }
 
         .cluster-source-tag:hover {
             background: rgba(255, 255, 255, 0.1);
             border-color: rgba(255, 255, 255, 0.2);
-            color: #fff; transform: translateY(-1px);
+            color: #fff;
+            transform: translateY(-1px);
         }
 
         .cluster-type-dot {
-            width: 8px; height: 8px; border-radius: 50%;
-            display: inline-block; box-shadow: 0 0 10px currentColor;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 10px currentColor;
         }
 
-        .cluster-type-dot.world { color: #3b82f6; background: #3b82f6; }
-        .cluster-type-dot.yemen { color: #10b981; background: #10b981; }
-        .cluster-type-dot.newspaper { color: #f59e0b; background: #f59e0b; }
+        .cluster-type-dot.world {
+            color: #3b82f6;
+            background: #3b82f6;
+        }
+
+        .cluster-type-dot.yemen {
+            color: #10b981;
+            background: #10b981;
+        }
+
+        .cluster-type-dot.newspaper {
+            color: #f59e0b;
+            background: #f59e0b;
+        }
 
         .cluster-news-list {
-            max-height: 0; overflow: hidden;
+            max-height: 0;
+            overflow: hidden;
             transition: max-height 0.5s ease-out;
-            position: relative; z-index: 1;
+            position: relative;
+            z-index: 1;
         }
 
-        .cluster-news-list.open { overflow: visible; }
+        .cluster-news-list.open {
+            overflow: visible;
+        }
 
         .cluster-news-item {
-            display: flex; gap: 16px; padding: 16px; margin-bottom: 8px;
-            border-radius: 12px; background: rgba(255, 255, 255, 0.02);
-            border: 1px solid transparent; transition: all 0.3s ease;
-            text-decoration: none; color: inherit;
+            display: flex;
+            gap: 16px;
+            padding: 16px;
+            margin-bottom: 8px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: inherit;
         }
 
         .cluster-news-item:hover {
             background: rgba(255, 255, 255, 0.06);
             border-color: rgba(255, 255, 255, 0.1);
             transform: translateX(-4px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
         .cluster-news-thumb {
-            width: 90px; height: 64px; border-radius: 8px;
-            object-fit: cover; flex-shrink: 0; opacity: 0.9;
-            transition: all 0.3s ease; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            width: 90px;
+            height: 64px;
+            border-radius: 8px;
+            object-fit: cover;
+            flex-shrink: 0;
+            opacity: 0.9;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
 
-        .cluster-news-item:hover .cluster-news-thumb { opacity: 1; transform: scale(1.05); }
+        .cluster-news-item:hover .cluster-news-thumb {
+            opacity: 1;
+            transform: scale(1.05);
+        }
 
         .cluster-intensity-bar {
-            width: 6px; border-radius: 6px; position: absolute;
-            top: 16px; bottom: 16px; right: 0; opacity: 0.8;
+            width: 6px;
+            border-radius: 6px;
+            position: absolute;
+            top: 16px;
+            bottom: 16px;
+            right: 0;
+            opacity: 0.8;
             transition: opacity 0.3s ease, width 0.3s ease;
         }
-        
-        .cluster-card:hover .cluster-intensity-bar { opacity: 1; width: 8px; }
 
-        .cluster-intensity-bar.conflict { background: linear-gradient(180deg, #ef4444, #991b1b); box-shadow: -2px 0 12px rgba(239, 68, 68, 0.5); }
-        .cluster-intensity-bar.crisis { background: linear-gradient(180deg, #f59e0b, #b45309); box-shadow: -2px 0 12px rgba(245, 158, 11, 0.5); }
-        .cluster-intensity-bar.important { background: linear-gradient(180deg, #3b82f6, #1d4ed8); box-shadow: -2px 0 12px rgba(59, 130, 246, 0.5); }
-        .cluster-intensity-bar.positive { background: linear-gradient(180deg, #10b981, #047857); box-shadow: -2px 0 12px rgba(16, 185, 129, 0.5); }
+        .cluster-card:hover .cluster-intensity-bar {
+            opacity: 1;
+            width: 8px;
+        }
+
+        .cluster-intensity-bar.conflict {
+            background: linear-gradient(180deg, #ef4444, #991b1b);
+            box-shadow: -2px 0 12px rgba(239, 68, 68, 0.5);
+        }
+
+        .cluster-intensity-bar.crisis {
+            background: linear-gradient(180deg, #f59e0b, #b45309);
+            box-shadow: -2px 0 12px rgba(245, 158, 11, 0.5);
+        }
+
+        .cluster-intensity-bar.important {
+            background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+            box-shadow: -2px 0 12px rgba(59, 130, 246, 0.5);
+        }
+
+        .cluster-intensity-bar.positive {
+            background: linear-gradient(180deg, #10b981, #047857);
+            box-shadow: -2px 0 12px rgba(16, 185, 129, 0.5);
+        }
 
         .clusters-header {
-            display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 32px; flex-wrap: wrap; gap: 16px;
-            padding-bottom: 24px; border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 16px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
 
         .clusters-stats-row {
-            display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap;
-            background: rgba(255,255,255,0.02); padding: 16px;
-            border-radius: 16px; border: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            gap: 16px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            background: rgba(255, 255, 255, 0.02);
+            padding: 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(10px);
         }
 
         .cluster-stat-pill {
-            display: inline-flex; align-items: center; gap: 10px;
-            padding: 10px 20px; background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px;
-            font-size: 14px; color: #d1d5db; transition: all 0.3s ease;
-        }
-        
-        .cluster-stat-pill:hover {
-            background: rgba(255, 255, 255, 0.08); transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            font-size: 14px;
+            color: #d1d5db;
+            transition: all 0.3s ease;
         }
 
-        .cluster-stat-pill strong { color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 16px; }
+        .cluster-stat-pill:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .cluster-stat-pill strong {
+            color: #fff;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 16px;
+        }
 
         .cluster-expand-icon {
             transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            background: rgba(255,255,255,0.05); border-radius: 50%;
-            padding: 4px; width: 28px; height: 28px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 50%;
+            padding: 4px;
+            width: 28px;
+            height: 28px;
         }
-        
-        .cluster-card:hover .cluster-expand-icon { background: rgba(255,255,255,0.1); }
-        .cluster-card.expanded .cluster-expand-icon { transform: rotate(180deg); background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+
+        .cluster-card:hover .cluster-expand-icon {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .cluster-card.expanded .cluster-expand-icon {
+            transform: rotate(180deg);
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+        }
 
         @media (max-width: 768px) {
-            .cluster-card { padding: 20px; border-radius: 16px; }
-            .clusters-header { flex-direction: column; align-items: flex-start; }
+            .cluster-card {
+                padding: 20px;
+                border-radius: 16px;
+            }
+
+            .clusters-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
         }
-        
+
         @keyframes fadeUpIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
-        .cluster-card.animate-in { animation: fadeUpIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+
+        .cluster-card.animate-in {
+            animation: fadeUpIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+        }
 
         @keyframes clusterPulse {
-            0% { box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.5); }
-            50% { box-shadow: 0 0 20px 4px rgba(45, 212, 191, 0.3); }
-            100% { box-shadow: 0 0 0 0 rgba(45, 212, 191, 0); }
+            0% {
+                box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.5);
+            }
+
+            50% {
+                box-shadow: 0 0 20px 4px rgba(45, 212, 191, 0.3);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(45, 212, 191, 0);
+            }
         }
+
         .cluster-card.cluster-highlight {
             border-color: rgba(45, 212, 191, 0.6) !important;
             animation: clusterPulse 1.5s ease-in-out 3;
         }
+
         .cluster-card.cluster-new-highlight {
             border-color: rgba(16, 185, 129, 0.7) !important;
             animation: clusterPulse 2s ease-in-out 3;
         }
+
         .cluster-new-badge {
-            position: absolute; top: 12px; left: 12px; z-index: 20;
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 20;
             background: linear-gradient(135deg, #10b981, #059669);
-            color: white; font-size: 10px; font-weight: 700;
-            padding: 3px 10px; border-radius: 6px;
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 6px;
             letter-spacing: 0.5px;
             box-shadow: 0 2px 10px rgba(16, 185, 129, 0.4);
         }
+
         .cluster-updated-badge {
-            position: absolute; top: 12px; left: 12px; z-index: 20;
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 20;
             background: linear-gradient(135deg, #3b82f6, #2563eb);
-            color: white; font-size: 10px; font-weight: 700;
-            padding: 3px 10px; border-radius: 6px;
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 6px;
             letter-spacing: 0.5px;
             box-shadow: 0 2px 10px rgba(59, 130, 246, 0.4);
         }
@@ -923,7 +1135,7 @@
             background: rgba(15, 15, 15, 0.8);
             border: 1px solid rgba(45, 212, 191, 0.3);
         }
-</style>
+    </style>
 </head>
 
 <body
@@ -977,10 +1189,12 @@
 
             <div class="flex items-center gap-4">
                 <span id="current-date" class="hidden lg:block text-[10px] font-mono opacity-50"></span>
-                <button onclick="switchTab('clusters')" class="md:hidden p-2 hover:text-neon-blue transition-colors" title="الأحداث الجارية">
+                <button onclick="switchTab('clusters')" class="md:hidden p-2 hover:text-neon-blue transition-colors"
+                    title="الأحداث الجارية">
                     <i data-lucide="layers" class="w-4 h-4"></i>
                 </button>
-                <button onclick="switchTab('heatmap')" class="md:hidden p-2 hover:text-neon-blue transition-colors" title="خريطة الحرارة الجيوسياسية">
+                <button onclick="switchTab('heatmap')" class="md:hidden p-2 hover:text-neon-blue transition-colors"
+                    title="خريطة الحرارة الجيوسياسية">
                     <i data-lucide="globe-2" class="w-4 h-4"></i>
                 </button>
                 <button onclick="clearAllNews()" class="p-2 hover:text-red-500 transition-colors" title="حذف الكل">
@@ -1094,28 +1308,34 @@
                 <div class="heatmap-header">
                     <div>
                         <h2 class="font-serif text-3xl md:text-4xl text-white mb-2 flex items-center gap-3">
-                            <span class="w-10 h-10 bg-gradient-to-br from-red-500 via-yellow-500 to-green-500 rounded-xl flex items-center justify-center">
+                            <span
+                                class="w-10 h-10 bg-gradient-to-br from-red-500 via-yellow-500 to-green-500 rounded-xl flex items-center justify-center">
                                 <i data-lucide="globe-2" class="w-5 h-5 text-white"></i>
                             </span>
                             خريطة الحرارة الجيوسياسية
                         </h2>
-                        <p class="text-sm text-neutral-400">نظرة بانورامية على توزع الأحداث حول العالم — انقر على أي منطقة لرؤية أخبارها</p>
+                        <p class="text-sm text-neutral-400">نظرة بانورامية على توزع الأحداث حول العالم — انقر على أي
+                            منطقة لرؤية أخبارها</p>
                     </div>
                     <div class="heatmap-legend">
                         <div class="heatmap-legend-item">
-                            <span class="heatmap-legend-dot" style="background:#ef4444;box-shadow:0 0 8px rgba(239,68,68,0.5)"></span>
+                            <span class="heatmap-legend-dot"
+                                style="background:#ef4444;box-shadow:0 0 8px rgba(239,68,68,0.5)"></span>
                             <span>صراع وتوتر</span>
                         </div>
                         <div class="heatmap-legend-item">
-                            <span class="heatmap-legend-dot" style="background:#f59e0b;box-shadow:0 0 8px rgba(245,158,11,0.5)"></span>
+                            <span class="heatmap-legend-dot"
+                                style="background:#f59e0b;box-shadow:0 0 8px rgba(245,158,11,0.5)"></span>
                             <span>أزمات سياسية</span>
                         </div>
                         <div class="heatmap-legend-item">
-                            <span class="heatmap-legend-dot" style="background:#3b82f6;box-shadow:0 0 8px rgba(59,130,246,0.5)"></span>
+                            <span class="heatmap-legend-dot"
+                                style="background:#3b82f6;box-shadow:0 0 8px rgba(59,130,246,0.5)"></span>
                             <span>أحداث مهمة</span>
                         </div>
                         <div class="heatmap-legend-item">
-                            <span class="heatmap-legend-dot" style="background:#10b981;box-shadow:0 0 8px rgba(16,185,129,0.5)"></span>
+                            <span class="heatmap-legend-dot"
+                                style="background:#10b981;box-shadow:0 0 8px rgba(16,185,129,0.5)"></span>
                             <span>تطورات إيجابية</span>
                         </div>
                     </div>
@@ -1123,7 +1343,9 @@
 
                 <!-- Loading -->
                 <div id="heatmap-loading" class="hidden flex items-center justify-center py-12">
-                    <div class="w-10 h-10 border-3 border-neon-blue border-t-transparent rounded-full animate-spin ml-4"></div>
+                    <div
+                        class="w-10 h-10 border-3 border-neon-blue border-t-transparent rounded-full animate-spin ml-4">
+                    </div>
                     <span class="text-sm text-neutral-400 font-mono">جارٍ تحميل بيانات الخريطة...</span>
                 </div>
 
@@ -1159,37 +1381,54 @@
                 class="hidden fixed top-32 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-full cursor-pointer hover:border-neon-blue transition-all duration-300 flex items-center gap-3 group"
                 onclick="applyClusterUpdates()">
                 <span class="relative flex h-2 w-2">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span
+                        class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
                 </span>
-                <span id="cluster-updates-text" class="text-xs font-mono tracking-widest uppercase text-neutral-200">تحديثات جديدة في الأحداث</span>
-                <i data-lucide="arrow-up" class="w-4 h-4 text-neutral-400 group-hover:text-neon-blue group-hover:-translate-y-1 transition-all duration-300"></i>
+                <span id="cluster-updates-text"
+                    class="text-xs font-mono tracking-widest uppercase text-neutral-200">تحديثات جديدة في الأحداث</span>
+                <i data-lucide="arrow-up"
+                    class="w-4 h-4 text-neutral-400 group-hover:text-neon-blue group-hover:-translate-y-1 transition-all duration-300"></i>
             </div>
             <div class="max-w-7xl mx-auto">
                 <!-- Header -->
                 <div class="clusters-header">
                     <div>
                         <h2 class="font-serif text-3xl md:text-5xl text-white mb-3 flex items-center gap-4">
-                            <span class="relative w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-blue-600 via-cyan-500 to-emerald-400 rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(45,212,191,0.3)] border border-white/20 backdrop-blur-md">
+                            <span
+                                class="relative w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-blue-600 via-cyan-500 to-emerald-400 rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(45,212,191,0.3)] border border-white/20 backdrop-blur-md">
                                 <i data-lucide="layers" class="w-6 h-6 md:w-7 md:h-7 text-white"></i>
-                                <span class="absolute -right-1 -top-1 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
-                                <span class="absolute -right-1 -top-1 w-3 h-3 bg-red-500 rounded-full border border-black"></span>
+                                <span
+                                    class="absolute -right-1 -top-1 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
+                                <span
+                                    class="absolute -right-1 -top-1 w-3 h-3 bg-red-500 rounded-full border border-black"></span>
                             </span>
                             الأحداث الجارية
                         </h2>
-                        <p class="text-sm md:text-base text-neutral-400 mt-2 max-w-2xl leading-relaxed">تجميع ذكي ومباشر للأخبار المتشابهة من مصادر متعددة باستخدام الذكاء الاصطناعي. انقر على أي حدث لرؤية تغطية أوسع.</p>
+                        <p class="text-sm md:text-base text-neutral-400 mt-2 max-w-2xl leading-relaxed">تجميع ذكي ومباشر
+                            للأخبار المتشابهة من مصادر متعددة باستخدام الذكاء الاصطناعي. انقر على أي حدث لرؤية تغطية
+                            أوسع.</p>
                     </div>
-                    <button onclick="refreshClusters()" class="px-5 py-2.5 bg-white/5 hover:bg-neon-blue/20 border border-white/10 hover:border-neon-blue/50 rounded-xl transition-all duration-300 flex items-center gap-2 text-sm text-neutral-200 hover:text-neon-blue hover:shadow-[0_0_20px_rgba(45,212,191,0.2)] hover:-translate-y-1">
-                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                        <span class="font-bold tracking-wide">تحديث المُلخص</span>
-                    </button>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="classify-btn" onclick="classifyClusterVideos()"
+                            class="px-5 py-2.5 bg-brand-500/10 hover:bg-brand-500/30 border border-brand-500/30 hover:border-brand-500 rounded-xl transition-all duration-300 flex items-center gap-2 text-sm text-brand-500 hover:shadow-[0_0_20px_rgba(204,0,0,0.2)] hover:-translate-y-1">
+                            <i data-lucide="brain-circuit" class="w-4 h-4"></i>
+                            <span class="font-bold tracking-wide">تصنيف جوجل</span>
+                        </button>
+                        <button onclick="refreshClusters()"
+                            class="px-5 py-2.5 bg-white/5 hover:bg-neon-blue/20 border border-white/10 hover:border-neon-blue/50 rounded-xl transition-all duration-300 flex items-center gap-2 text-sm text-neutral-200 hover:text-neon-blue hover:shadow-[0_0_20px_rgba(45,212,191,0.2)] hover:-translate-y-1">
+                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                            <span class="font-bold tracking-wide">تحديث المُلخص</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Loading -->
                 <div id="clusters-loading" class="hidden flex flex-col items-center justify-center py-20">
                     <div class="relative w-16 h-16 mb-6">
                         <div class="absolute top-0 w-16 h-16 border-4 border-neutral-800 rounded-full opacity-20"></div>
-                        <div class="w-16 h-16 border-4 border-neon-blue border-t-transparent rounded-full animate-spin"></div>
+                        <div class="w-16 h-16 border-4 border-neon-blue border-t-transparent rounded-full animate-spin">
+                        </div>
                     </div>
                     <p class="text-neutral-400 font-mono text-xs tracking-widest uppercase">تحليل وتجميع الأخبار...</p>
                     <p class="text-neutral-600 text-xs mt-2">يتم تحويل العناوين إلى متجهات وتجميعها حسب التشابه</p>
@@ -1200,7 +1439,8 @@
                     <i data-lucide="alert-triangle" class="w-16 h-16 mx-auto mb-4 text-red-500/50"></i>
                     <p class="text-neutral-400 text-lg mb-2">تعذر تحميل التجميعات</p>
                     <p id="clusters-error-text" class="text-neutral-600 text-sm"></p>
-                    <button onclick="fetchClusters()" class="mt-4 px-6 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-neutral-300 hover:text-neon-blue hover:border-neon-blue/50 transition-all">
+                    <button onclick="fetchClusters()"
+                        class="mt-4 px-6 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-neutral-300 hover:text-neon-blue hover:border-neon-blue/50 transition-all">
                         إعادة المحاولة
                     </button>
                 </div>
@@ -1328,23 +1568,27 @@
                                 <h3 class="timeline-section-title">الخريطة الزمنية وتطور الحدث</h3>
                                 <p id="timeline-thread-title" class="text-sm text-neutral-400 mt-1"></p>
                             </div>
-                            <button id="copy-timeline-links" onclick="copyTimelineLinks()" class="hidden px-4 py-2 bg-white/5 hover:bg-neon-blue/20 border border-white/10 hover:border-neon-blue/50 rounded-lg transition-all duration-300 flex items-center gap-2 text-xs text-neutral-300 hover:text-neon-blue" title="نسخ جميع الروابط">
+                            <button id="copy-timeline-links" onclick="copyTimelineLinks()"
+                                class="hidden px-4 py-2 bg-white/5 hover:bg-neon-blue/20 border border-white/10 hover:border-neon-blue/50 rounded-lg transition-all duration-300 flex items-center gap-2 text-xs text-neutral-300 hover:text-neon-blue"
+                                title="نسخ جميع الروابط">
                                 <i data-lucide="copy" class="w-4 h-4"></i>
                                 <span>نسخ الروابط</span>
                             </button>
                         </div>
-                        
+
                         <div id="timeline-loading" class="timeline-loading hidden">
-                            <div class="w-8 h-8 border-2 border-neon-blue border-t-transparent rounded-full animate-spin mb-3"></div>
+                            <div
+                                class="w-8 h-8 border-2 border-neon-blue border-t-transparent rounded-full animate-spin mb-3">
+                            </div>
                             <span class="text-xs font-mono">جارٍ تحميل الخريطة الزمنية...</span>
                         </div>
-                        
+
                         <div id="timeline-empty" class="timeline-empty hidden">
                             <i data-lucide="calendar-x" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
                             <p>لا توجد أخبار مرتبطة بهذا الحدث حتى الآن</p>
                             <p class="text-xs mt-2 opacity-60">ستظهر الأخبار المرتبطة عند توفرها</p>
                         </div>
-                        
+
                         <div id="timeline-content" class="timeline-container hidden">
                             <!-- Legend for news types -->
                             <div class="timeline-legend">
@@ -1366,7 +1610,7 @@
                                 <!-- Timeline items will be injected here -->
                             </div>
                         </div>
-                        
+
                         <div id="timeline-reason" class="hidden mt-6 p-4 bg-white/5 rounded-lg border border-white/10">
                             <div class="flex items-start gap-3">
                                 <i data-lucide="info" class="w-4 h-4 text-neon-blue mt-0.5 flex-shrink-0"></i>
@@ -1413,6 +1657,50 @@
         let yemenCurrentPage = 1, yemenNews = [], yemenPendingNews = [], yemenTotalItems = 0;
         let newspaperCurrentPage = 1, newspaperNews = [], newspaperPendingNews = [], newspaperTotalItems = 0;
         let currentTimelineLinks = []; // Store timeline links for copying
+        let currentReaderNewsId = null;
+        let currentReaderNewsType = null;
+        let toastTimer = null;
+
+        function getImportanceChip(item, compact = false) {
+            if (!item || !item.is_important) return '';
+            if (compact) {
+                return `<span class="px-2 py-0.5 bg-brand text-white text-[9px] font-black rounded-sm border border-white/20">مقترح</span>`;
+            }
+            return `<span class="px-2 py-0.5 bg-brand text-white text-[10px] font-black rounded-sm shadow-lg border border-white/20 flex items-center gap-1"><i data-lucide="award" class="w-3 h-3 fill-current"></i> مقترح للمشاهدة</span>`;
+        }
+
+        function showToast(message) {
+            let toast = document.getElementById('live-toast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'live-toast';
+                toast.className = 'fixed bottom-5 left-5 z-[120] px-4 py-2 rounded-lg bg-black/85 text-white text-sm border border-white/15 shadow-2xl backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-300';
+                document.body.appendChild(toast);
+            }
+            toast.textContent = message;
+            toast.classList.remove('opacity-0');
+            toast.classList.add('opacity-100');
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0');
+            }, 2200);
+        }
+
+        function refreshActiveViewAfterImportanceUpdate() {
+            if (activeTab === 'clusters') {
+                fetchClusters(true);
+            } else if (activeTab === 'world') {
+                fetchNews(currentPage);
+            } else if (activeTab === 'yemen') {
+                fetchYemenNews(yemenCurrentPage);
+            } else if (activeTab === 'newspaper') {
+                fetchNewspaperNews(newspaperCurrentPage);
+            }
+            if (currentReaderNewsId && currentReaderNewsType) {
+                fetchEventTimeline(currentReaderNewsId, currentReaderNewsType);
+            }
+        }
 
         // --- Three.js Background ---
         let scene, camera, renderer, particles, ring;
@@ -1591,11 +1879,13 @@
             const h = items[0];
             const heroMain = document.getElementById('hero-main');
             if (heroMain) {
+                const heroImportance = getImportanceChip(h, false);
                 heroMain.innerHTML = `
                     <img src="${h.image_url || getThumbnailUrl(h.link)}" class="absolute inset-0 w-full h-full object-cover opacity-90 dark:opacity-70" onclick="openReader(${h.id}, '${activeTab}')">
                     <div class="absolute inset-0 bg-gradient-to-t from-paper via-transparent to-transparent dark:from-obsidian dark:via-transparent dark:to-transparent opacity-90 pointer-events-none"></div>
                     <div class="absolute bottom-0 left-0 w-full p-8 md:p-12 text-right">
                         <div class="flex items-center justify-end gap-3 mb-4">
+                            ${heroImportance}
                             <span class="px-2 py-1 bg-neon-accent text-white text-[10px] font-mono uppercase tracking-wider">${h.source}</span>
                             <span class="text-neutral-600 dark:text-neutral-400 text-xs font-mono">${timeAgo(h.published)}</span>
                         </div>
@@ -1615,7 +1905,10 @@
                     <article class="flex-1 bg-white dark:bg-neutral-900 p-6 flex flex-col justify-center group hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer text-right" onclick="openReader(${item.id}, '${activeTab}')">
                         <div class="flex justify-between items-start mb-4">
                             <span class="text-[10px] font-mono text-neutral-400">${timeAgo(item.published)}</span>
-                            <span class="text-[10px] font-mono text-neon-accent uppercase">${item.source}</span>
+                            <div class="flex items-center gap-2">
+                                ${getImportanceChip(item, true)}
+                                <span class="text-[10px] font-mono text-neon-accent uppercase">${item.source}</span>
+                            </div>
                         </div>
                         <h2 class="font-serif text-xl font-medium mb-3 group-hover:text-neon-accent transition-colors line-clamp-2">${item.title}</h2>
                         <div class="mt-auto pt-4 border-t border-dashed border-neutral-200 dark:border-neutral-800 flex justify-between items-center text-xs text-neutral-500">
@@ -1638,6 +1931,7 @@
                         </div>
                         <div class="${isWide ? 'w-full md:w-1/2 flex flex-col justify-center' : ''} text-right">
                             <div class="flex items-center justify-end gap-2 mb-2">
+                                ${getImportanceChip(n, true)}
                                 <span class="text-[10px] font-mono uppercase text-neutral-500 tracking-wider">${n.source}</span>
                                 ${i === 0 ? '<div class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>' : ''}
                             </div>
@@ -1670,7 +1964,7 @@
             const threadTitle = document.getElementById('timeline-thread-title');
             const reasonSection = document.getElementById('timeline-reason');
             const reasonText = document.getElementById('timeline-reason-text');
-            
+
             // Reset state
             if (loading) loading.classList.remove('hidden');
             if (empty) empty.classList.add('hidden');
@@ -1678,61 +1972,61 @@
             if (reasonSection) reasonSection.classList.add('hidden');
             if (items) items.innerHTML = '';
             if (threadTitle) threadTitle.textContent = '';
-            
+
             try {
                 const response = await fetch(`${API_URL}/event-timeline/${newsType}/${newsId}`);
                 const data = await response.json();
-                
+
                 if (loading) loading.classList.add('hidden');
-                
+
                 // Reset timeline links
                 currentTimelineLinks = [];
                 const copyBtn = document.getElementById('copy-timeline-links');
                 if (copyBtn) copyBtn.classList.add('hidden');
-                
+
                 if (!data.related_news || data.related_news.length === 0) {
                     if (empty) empty.classList.remove('hidden');
                     return;
                 }
-                
+
                 // Store links for copying
                 currentTimelineLinks = data.related_news.map(news => news.link);
                 if (copyBtn && currentTimelineLinks.length > 0) {
                     copyBtn.classList.remove('hidden');
                     lucide.createIcons();
                 }
-                
+
                 // Show thread title
                 if (threadTitle && data.thread_title) {
                     threadTitle.textContent = data.thread_title;
                 }
-                
+
                 // Show reason if available
                 if (data.reason && reasonSection && reasonText) {
                     reasonText.textContent = data.reason;
                     reasonSection.classList.remove('hidden');
                 }
-                
+
                 // Build timeline items with type badges and actions
                 const timelineHTML = data.related_news.map((news, index) => {
                     const isCurrent = news.id === data.current_news_id;
                     const newsType = news.news_type || 'world';
                     const date = new Date(news.published);
-                    const formattedDate = date.toLocaleDateString('ar-EG', { 
-                        year: 'numeric', 
-                        month: 'short', 
+                    const formattedDate = date.toLocaleDateString('ar-EG', {
+                        year: 'numeric',
+                        month: 'short',
                         day: 'numeric',
                         hour: '2-digit',
                         minute: '2-digit'
                     });
-                    
+
                     // Escape the link for safe use in onclick
                     const escapedLink = news.link.replace(/'/g, "\\'");
-                    
+
                     // Determine type badge info
                     let typeBadge = '', typeIcon = '', actionBtn = '', actionClass = '';
                     const isYouTube = news.link && (news.link.includes('youtube.com') || news.link.includes('youtu.be'));
-                    
+
                     if (newsType === 'world') {
                         typeBadge = `<span class="timeline-type-badge type-world">🎬 فيديو عالمي</span>`;
                         actionBtn = `<button class="timeline-action-btn action-video" onclick="event.stopPropagation(); openTimelineLink('${escapedLink}')">
@@ -1749,7 +2043,7 @@
                             <i data-lucide="book-open" class="w-3 h-3"></i> قراءة المقال
                         </button>`;
                     }
-                    
+
                     // Get thumbnail for YouTube videos
                     let thumbnailHTML = '';
                     if (isYouTube && news.image_url) {
@@ -1757,10 +2051,18 @@
                     } else if (news.image_url && newsType === 'newspaper') {
                         thumbnailHTML = `<img src="${news.image_url}" alt="" class="timeline-thumbnail" loading="lazy" onerror="this.style.display='none'">`;
                     }
-                    
+
                     // Summary preview
                     const summaryHTML = news.summary ? `<p class="timeline-summary">${news.summary}</p>` : '';
-                    
+                    const timelineImportantBadge = news.is_important ? `
+                        <span class="px-2 py-0.5 bg-brand text-white text-[10px] font-black rounded-sm shadow-lg border border-white/20">
+                            <i data-lucide="award" class="w-3 h-3 inline-block ml-1"></i> مقترح للمشاهدة
+                        </span>
+                    ` : '';
+                    const timelineImportanceReason = news.is_important && news.importance_reason
+                        ? `<p class="text-[10px] text-brand-400 mt-2 font-bold italic opacity-90">${news.importance_reason}</p>`
+                        : '';
+
                     return `
                         <div class="timeline-item ${isCurrent ? 'current' : ''} type-${newsType}" onclick="openTimelineLink('${escapedLink}')">
                             <div class="timeline-dot"></div>
@@ -1773,10 +2075,12 @@
                                 ${thumbnailHTML}
                                 <h4 class="timeline-title">${news.title}</h4>
                                 ${summaryHTML}
+                                ${timelineImportanceReason}
                                 <div class="timeline-meta">
                                     <div class="flex items-center gap-2 flex-wrap">
-                                <span class="timeline-source">${news.source}</span>
+                                        <span class="timeline-source">${news.source}</span>
                                         ${typeBadge}
+                                        ${timelineImportantBadge}
                                     </div>
                                     ${actionBtn}
                                 </div>
@@ -1784,12 +2088,12 @@
                         </div>
                     `;
                 }).join('');
-                
+
                 if (items) items.innerHTML = timelineHTML;
                 if (content) content.classList.remove('hidden');
-                
+
                 lucide.createIcons();
-                
+
             } catch (error) {
                 console.error('Error fetching timeline:', error);
                 if (loading) loading.classList.add('hidden');
@@ -1803,15 +2107,15 @@
                 lucide.createIcons();
             }
         }
-        
+
         function openTimelineLink(link) {
             // Open the news link directly in a new tab
             window.open(link, '_blank');
         }
-        
+
         function copyTimelineLinks() {
             if (currentTimelineLinks.length === 0) return;
-            
+
             const linksText = currentTimelineLinks.join('\n');
             navigator.clipboard.writeText(linksText).then(() => {
                 // Show success feedback
@@ -1821,7 +2125,7 @@
                     btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i><span>تم النسخ!</span>';
                     btn.classList.add('bg-green-500/20', 'border-green-500/50', 'text-green-400');
                     lucide.createIcons();
-                    
+
                     setTimeout(() => {
                         btn.innerHTML = originalHTML;
                         btn.classList.remove('bg-green-500/20', 'border-green-500/50', 'text-green-400');
@@ -1869,7 +2173,7 @@
                 // Custom control buttons (Reset View + Fit All)
                 const CustomControls = L.Control.extend({
                     options: { position: 'topleft' },
-                    onAdd: function(map) {
+                    onAdd: function (map) {
                         const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
                         container.style.cssText = 'background:transparent;border:none;';
 
@@ -1881,7 +2185,7 @@
                         resetBtn.style.cssText = 'display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:rgba(15,15,15,0.9);color:#e5e5e5;border:1px solid rgba(255,255,255,0.1);border-radius:6px;margin-bottom:6px;cursor:pointer;text-decoration:none;transition:all 0.2s;';
                         resetBtn.onmouseover = () => { resetBtn.style.background = 'rgba(45,212,191,0.2)'; resetBtn.style.color = '#2dd4bf'; resetBtn.style.borderColor = 'rgba(45,212,191,0.4)'; };
                         resetBtn.onmouseout = () => { resetBtn.style.background = 'rgba(15,15,15,0.9)'; resetBtn.style.color = '#e5e5e5'; resetBtn.style.borderColor = 'rgba(255,255,255,0.1)'; };
-                        L.DomEvent.on(resetBtn, 'click', function(e) {
+                        L.DomEvent.on(resetBtn, 'click', function (e) {
                             L.DomEvent.preventDefault(e);
                             map.setView([25, 42], 3, { animate: true, duration: 0.8 });
                         });
@@ -1894,7 +2198,7 @@
                         fitBtn.style.cssText = 'display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:rgba(15,15,15,0.9);color:#e5e5e5;border:1px solid rgba(255,255,255,0.1);border-radius:6px;margin-bottom:6px;cursor:pointer;text-decoration:none;transition:all 0.2s;';
                         fitBtn.onmouseover = () => { fitBtn.style.background = 'rgba(59,130,246,0.2)'; fitBtn.style.color = '#3b82f6'; fitBtn.style.borderColor = 'rgba(59,130,246,0.4)'; };
                         fitBtn.onmouseout = () => { fitBtn.style.background = 'rgba(15,15,15,0.9)'; fitBtn.style.color = '#e5e5e5'; fitBtn.style.borderColor = 'rgba(255,255,255,0.1)'; };
-                        L.DomEvent.on(fitBtn, 'click', function(e) {
+                        L.DomEvent.on(fitBtn, 'click', function (e) {
                             L.DomEvent.preventDefault(e);
                             if (heatmapMarkers.length > 0) {
                                 const markerBounds = [];
@@ -2284,8 +2588,17 @@
                     const thumbSrc = n.image_url || '';
                     const thumbHtml = thumbSrc ? `<img src="${thumbSrc}" class="cluster-news-thumb" loading="lazy" onerror="this.style.display='none'">` : '';
                     const escapedLink = n.link.replace(/'/g, "\'");
+                    const importanceBadge = n.is_important ? `
+                        <div class="absolute top-2 right-2 z-10">
+                            <span class="px-2 py-0.5 bg-brand text-white text-[9px] font-black rounded-sm shadow-lg flex items-center gap-1 border border-white/20">
+                                <i data-lucide="award" class="w-2.5 h-2.5 fill-current"></i> مُقترح
+                            </span>
+                        </div>
+                    ` : '';
+
                     return `
-                        <a href="${n.link}" target="_blank" rel="noopener" class="cluster-news-item group" onclick="event.stopPropagation()">
+                        <a href="${n.link}" target="_blank" rel="noopener" class="cluster-news-item group relative" onclick="event.stopPropagation()">
+                            ${importanceBadge}
                             ${thumbHtml}
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-3 mb-2">
@@ -2295,10 +2608,11 @@
                                     </div>
                                     <span class="text-[10px] text-neutral-500 font-mono flex items-center gap-1">
                                         <i data-lucide="clock" class="w-2.5 h-2.5"></i>
-                                        ${n.published ? new Date(n.published).toLocaleDateString('ar-EG', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}) : ''}
+                                        ${n.published ? new Date(n.published).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
                                     </span>
                                 </div>
                                 <h4 class="text-[14px] font-bold text-neutral-200 leading-snug group-hover:text-neon-blue transition-colors line-clamp-2">${n.title}</h4>
+                                ${n.is_important && n.importance_reason ? `<p class="text-[10px] text-brand-400 mt-1 font-bold italic opacity-80">${n.importance_reason}</p>` : ''}
                             </div>
                             <div class="flex items-center justify-center w-8 h-8 rounded-full bg-white/5 group-hover:bg-neon-blue/20 transition-colors mt-auto mb-auto ml-2 opacity-0 group-hover:opacity-100">
                                 <i data-lucide="external-link" class="w-3.5 h-3.5 text-neutral-400 group-hover:text-neon-blue"></i>
@@ -2356,7 +2670,7 @@
                     </div>
                 `;
             }).join('');
-            
+
             // Add mousemove effect for glow
             document.querySelectorAll('.cluster-card').forEach(card => {
                 card.addEventListener('mousemove', e => {
@@ -2368,7 +2682,7 @@
                 });
             });
         }
-function toggleCluster(idx) {
+        function toggleCluster(idx) {
             const card = document.getElementById(`cluster-${idx}`);
             const list = document.getElementById(`cluster-list-${idx}`);
             if (!card || !list) return;
@@ -2400,6 +2714,8 @@ function toggleCluster(idx) {
             const list = (type === 'world' ? allNews : (type === 'yemen' ? yemenNews : newspaperNews));
             const item = list.find(n => n.id === id);
             if (!item) return;
+            currentReaderNewsId = id;
+            currentReaderNewsType = type;
 
             const logo = document.getElementById('reader-logo');
             const source = document.getElementById('reader-source');
@@ -2420,10 +2736,10 @@ function toggleCluster(idx) {
             const reader = document.getElementById('quick-reader');
             if (reader) reader.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
-            
+
             // Fetch event timeline
             fetchEventTimeline(id, type);
-            
+
             lucide.createIcons();
         }
 
@@ -2431,6 +2747,8 @@ function toggleCluster(idx) {
             const reader = document.getElementById('quick-reader');
             if (reader) reader.classList.add('hidden');
             document.body.style.overflow = 'auto';
+            currentReaderNewsId = null;
+            currentReaderNewsType = null;
         }
 
         function connectWS() {
@@ -2446,6 +2764,12 @@ function toggleCluster(idx) {
 
                     if (msg.type === 'cluster_news_added' || msg.type === 'new_cluster_created') {
                         handleClusterWsMessage(msg);
+                        return;
+                    }
+                    if (msg.type === 'cluster_importance_updated') {
+                        clustersLoaded = false;
+                        refreshActiveViewAfterImportanceUpdate();
+                        showToast('تم تحديث اقتراحات المشاهدة للمجموعة');
                         return;
                     }
 
@@ -2490,6 +2814,29 @@ function toggleCluster(idx) {
                 if (activeTab === 'world') fetchNews(currentPage + 1); else if (activeTab === 'yemen') fetchYemenNews(yemenCurrentPage + 1); else fetchNewspaperNews(newspaperCurrentPage + 1);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             };
+        }
+
+        async function classifyClusterVideos() {
+            const btn = document.getElementById('classify-btn');
+            if (!btn) return;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>جارٍ التصنيف...</span>';
+            btn.disabled = true;
+            lucide.createIcons();
+
+            try {
+                const r = await fetch(`${API_URL}/clusters/classify`);
+                const data = await r.json();
+                if (data.error) throw new Error(data.error);
+                refreshClusters();
+            } catch (e) {
+                console.error(e);
+                alert('حدث خطأ أثناء التصنيف: ' + e.message);
+            } finally {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                lucide.createIcons();
+            }
         }
 
         async function clearAllNews() {

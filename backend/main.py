@@ -1,14 +1,16 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from typing import List, Optional, Dict, Set
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, desc
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 import json
 import re
+import time
+import threading
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
@@ -34,6 +36,14 @@ logger.info(f"Using database at: {DB_PATH}")
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+# Dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 class NewsItem(Base):
     __tablename__ = "news"
     id = Column(Integer, primary_key=True, index=True)
@@ -44,6 +54,8 @@ class NewsItem(Base):
     source = Column(String)
     image_url = Column(String, nullable=True)
     video_id = Column(String, nullable=True)  # YouTube video ID
+    is_important = Column(Integer, default=0) # 1 if marked as important by Google/classification
+    importance_reason = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.now) # Track when added to our DB
 
 class ChannelLastVideo(Base):
@@ -65,6 +77,8 @@ class YemenNewsItem(Base):
     source = Column(String)
     image_url = Column(String, nullable=True)
     video_id = Column(String, nullable=True)
+    is_important = Column(Integer, default=0)
+    importance_reason = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.now) # Track when added to our DB
 
 class YemenChannelLastVideo(Base):
@@ -165,12 +179,36 @@ def migrate_database():
                 try: conn.commit() 
                 except: pass 
 
+            if 'is_important' not in columns:
+                logger.info("Adding is_important column to news table...")
+                conn.execute(text("ALTER TABLE news ADD COLUMN is_important INTEGER DEFAULT 0"))
+                try: conn.commit() 
+                except: pass 
+            
+            if 'importance_reason' not in columns:
+                logger.info("Adding importance_reason column to news table...")
+                conn.execute(text("ALTER TABLE news ADD COLUMN importance_reason VARCHAR"))
+                try: conn.commit() 
+                except: pass 
+
             # Check for yemen_news columns
             result = conn.execute(text("PRAGMA table_info(yemen_news)"))
             yemen_columns = [row[1] for row in result]
             if 'created_at' not in yemen_columns:
                 logger.info("Adding created_at column to yemen_news table...")
                 conn.execute(text("ALTER TABLE yemen_news ADD COLUMN created_at DATETIME"))
+                try: conn.commit() 
+                except: pass 
+
+            if 'is_important' not in yemen_columns:
+                logger.info("Adding is_important column to yemen_news table...")
+                conn.execute(text("ALTER TABLE yemen_news ADD COLUMN is_important INTEGER DEFAULT 0"))
+                try: conn.commit() 
+                except: pass 
+            
+            if 'importance_reason' not in yemen_columns:
+                logger.info("Adding importance_reason column to yemen_news table...")
+                conn.execute(text("ALTER TABLE yemen_news ADD COLUMN importance_reason VARCHAR"))
                 try: conn.commit() 
                 except: pass 
             
@@ -727,6 +765,70 @@ def translate_to_arabic(text: str) -> str:
 # News Clustering - Embedding & Clustering Logic
 # ============================================
 _cluster_cache = {"data": None, "timestamp": None, "ttl": 600}
+_search_rank_cache = {
+    "google": {},
+    "youtube": {},
+    "ttl": 7200  # 2 hours
+}
+_google_rate_lock = threading.Lock()
+_google_rate_state = {
+    "next_allowed_at": 0.0,
+    "blocked_until": 0.0,
+    "consecutive_429": 0,
+    "min_interval_sec": 2.0
+}
+
+def _get_cached_rank_result(provider: str, query: str):
+    bucket = _search_rank_cache.get(provider, {})
+    cached = bucket.get(query)
+    if not cached:
+        return None
+    if (datetime.now() - cached["timestamp"]).total_seconds() > _search_rank_cache["ttl"]:
+        bucket.pop(query, None)
+        return None
+    return cached["video_ids"]
+
+def _set_cached_rank_result(provider: str, query: str, video_ids: List[str]):
+    if provider not in _search_rank_cache:
+        return
+    _search_rank_cache[provider][query] = {
+        "video_ids": video_ids,
+        "timestamp": datetime.now()
+    }
+
+def _acquire_google_request_slot() -> bool:
+    """Global throttle/cooldown gate for Google scraping requests."""
+    with _google_rate_lock:
+        now = time.time()
+        blocked_until = _google_rate_state["blocked_until"]
+        if blocked_until > now:
+            return False
+
+        scheduled_at = max(now, _google_rate_state["next_allowed_at"])
+        _google_rate_state["next_allowed_at"] = scheduled_at + _google_rate_state["min_interval_sec"]
+
+    wait = scheduled_at - time.time()
+    if wait > 0:
+        time.sleep(wait)
+    return True
+
+def _register_google_response(status_code: int):
+    with _google_rate_lock:
+        now = time.time()
+        if status_code == 429:
+            _google_rate_state["consecutive_429"] += 1
+            strike = _google_rate_state["consecutive_429"]
+            cooldown = min(900, 60 * (2 ** min(strike - 1, 4)))  # 60s,120s,240s,480s,900s max
+            _google_rate_state["blocked_until"] = now + cooldown
+            _google_rate_state["next_allowed_at"] = _google_rate_state["blocked_until"]
+        elif 200 <= status_code < 300:
+            _google_rate_state["consecutive_429"] = 0
+            _google_rate_state["blocked_until"] = 0.0
+
+def _should_skip_google_for_title(title: str) -> bool:
+    """Skip noisy generic cluster titles to reduce unnecessary Google hits."""
+    t = clean_news_text(title or "")
+    return t.startswith("ملخص:")
 
 async def call_openai_embeddings(titles: List[str]) -> Optional[List[List[float]]]:
     """Call OpenAI embeddings API for a batch of titles"""
@@ -938,7 +1040,9 @@ def get_clusters_from_db(db):
                 news_items.append({
                     "id": n.id, "type": m.news_type, "title": n.title, "link": n.link,
                     "summary": n.summary, "source": n.source, "published": str(n.published),
-                    "image_url": n.image_url
+                    "image_url": n.image_url, "video_id": getattr(n, 'video_id', None),
+                    "is_important": getattr(n, 'is_important', 0),
+                    "importance_reason": getattr(n, 'importance_reason', None)
                 })
 
         if not news_items:
@@ -1357,7 +1461,10 @@ async def fetch_newspaper_feeds():
                         "summary": new_item.summary,
                         "published": str(new_item.published),
                         "source": new_item.source,
-                        "image_url": new_item.image_url
+                        "image_url": new_item.image_url,
+                        "video_id": None,
+                        "is_important": 0,
+                        "importance_reason": None
                     }
                     new_items_found.append(item_dict)
                     logger.info(f"[Newspaper] ✓ SAVED to DB (ID: {new_item.id}): {article['title'][:50]}... from {article['source']}")
@@ -1372,6 +1479,7 @@ async def fetch_newspaper_feeds():
                             if cluster_result["is_new_cluster"]:
                                 ws_data["cluster_data"] = cluster_result["cluster_data"]
                             await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
+                            schedule_cluster_importance_reclassify(cluster_result["cluster_id"])
                 except Exception as e:
                     db.rollback()
                     logger.error(f"[Newspaper] ✗ FAILED to save article: {article['title'][:50]}... Error: {e}")
@@ -1469,8 +1577,6 @@ manager = ConnectionManager()
 def fetch_youtube_channel_videos(channel_url: str, channel_name: str, last_video_ids: Optional[List[str]] = None, is_playlist: bool = False) -> List[dict]:
     """Fetch NEW videos from a YouTube channel/playlist - only videos newer than any in last_video_ids (last 5)"""
     videos = []
-    
-    # Convert to set for faster lookup
     last_video_ids_set = set(last_video_ids) if last_video_ids else set()
     
     try:
@@ -1478,27 +1584,20 @@ def fetch_youtube_channel_videos(channel_url: str, channel_name: str, last_video
             'quiet': True,
             'no_warnings': True,
             'extract_flat': True,
-            'playlistend': 50,  # Check up to 50 videos
+            'playlistend': 50,
             'ignoreerrors': True,
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
                 info = ydl.extract_info(channel_url, download=False)
-                
                 if info and 'entries' in info:
                     entries_list = list(info['entries']) if info['entries'] else []
-                    
-                    # For playlists, videos might be in reverse order (oldest first), so we need to handle this
-                    # For channels/videos tabs, newest videos are typically first
-                    
                     for entry in entries_list:
                         if entry:
                             video_id = entry.get('id')
                             if not video_id:
                                 continue
-                            
-                            # If we have last_video_ids, stop when we find ANY of them (videos come newest first for channels)
                             if last_video_ids_set and video_id in last_video_ids_set:
                                 logger.info(f"Found known video {video_id} for {channel_name}, stopping")
                                 break
@@ -1508,11 +1607,8 @@ def fetch_youtube_channel_videos(channel_url: str, channel_name: str, last_video
                                 continue
                                 
                             url = f"https://www.youtube.com/watch?v={video_id}"
-                            
-                            # Get thumbnail
                             thumbnail = f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
                             
-                            # Get upload date - try multiple fields
                             upload_date = entry.get('upload_date') or entry.get('release_date')
                             if upload_date:
                                 try:
@@ -1520,7 +1616,6 @@ def fetch_youtube_channel_videos(channel_url: str, channel_name: str, last_video
                                 except:
                                     published = datetime.now()
                             else:
-                                # Try timestamp
                                 timestamp = entry.get('timestamp') or entry.get('release_timestamp')
                                 if timestamp:
                                     try:
@@ -1540,76 +1635,310 @@ def fetch_youtube_channel_videos(channel_url: str, channel_name: str, last_video
                                 'summary': translate_to_arabic(f"فيديو جديد من {channel_name}")
                             })
                             
-                            # If no last_video_ids, we're in first run - collect first 5 videos
                             if not last_video_ids_set and len(videos) >= 5:
                                 logger.info(f"First run for {channel_name}, collected 5 videos")
                                 break
-                                
             except Exception as e:
                 logger.error(f"Error extracting info from {channel_name}: {e}")
-                # Fallback: Try RSS method for channels only (not playlists)
                 if not is_playlist:
                     try:
-                        # Extract channel handle
                         match = re.search(r'/@([^/]+)', channel_url)
                         if match:
                             handle = match.group(1)
-                            # Try RSS feed
                             rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={handle}"
-                            import requests
-                            from xml.etree import ElementTree as ET
-                            from dateutil import parser
-                            
                             response = requests.get(rss_url, timeout=10)
                             if response.status_code == 200:
+                                from xml.etree import ElementTree as ET
+                                from dateutil import parser
                                 root = ET.fromstring(response.content)
                                 for entry in root.findall('.//{http://www.w3.org/2005/Atom}entry')[:50]:
-                                    video_id_elem = entry.find('{http://www.youtube.com/xml/schemas/2015}videoId')
-                                    if video_id_elem is None:
-                                        continue
-                                    video_id = video_id_elem.text
+                                    v_id_elem = entry.find('{http://www.youtube.com/xml/schemas/2015}videoId')
+                                    if v_id_elem is None: continue
+                                    v_id = v_id_elem.text
                                     
-                                    # If we have last_video_ids, stop when we find ANY of them
-                                    if last_video_ids_set and video_id in last_video_ids_set:
-                                        logger.info(f"Found known video {video_id} for {channel_name} (RSS), stopping")
+                                    if last_video_ids_set and v_id in last_video_ids_set:
                                         break
                                     
-                                    title_elem = entry.find('{http://www.w3.org/2005/Atom}title')
-                                    title = title_elem.text if title_elem is not None else 'No Title'
-                                    
-                                    link_elem = entry.find('{http://www.w3.org/2005/Atom}link')
-                                    link = link_elem.get('href') if link_elem is not None else f"https://www.youtube.com/watch?v={video_id}"
-                                    
-                                    published_elem = entry.find('{http://www.w3.org/2005/Atom}published')
-                                    published_text = published_elem.text if published_elem is not None else None
+                                    t_elem = entry.find('{http://www.w3.org/2005/Atom}title')
+                                    t = t_elem.text if t_elem is not None else 'No Title'
+                                    l_elem = entry.find('{http://www.w3.org/2005/Atom}link')
+                                    l = l_elem.get('href') if l_elem is not None else f"https://www.youtube.com/watch?v={v_id}"
+                                    p_elem = entry.find('{http://www.w3.org/2005/Atom}published')
+                                    p_text = p_elem.text if p_elem is not None else None
                                     
                                     try:
-                                        published = parser.parse(published_text) if published_text else datetime.now()
+                                        pub = parser.parse(p_text) if p_text else datetime.now()
                                     except:
-                                        published = datetime.now()
-                                    
-                                    thumbnail = f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
+                                        pub = datetime.now()
                                     
                                     videos.append({
-                                        'video_id': video_id,
-                                        'title': translate_to_arabic(title),
-                                        'link': link,
-                                        'image_url': thumbnail,
+                                        'video_id': v_id,
+                                        'title': translate_to_arabic(t),
+                                        'link': l,
+                                        'image_url': f"https://img.youtube.com/vi/{v_id}/maxresdefault.jpg",
                                         'source': channel_name,
-                                        'published': published,
+                                        'published': pub,
                                         'summary': translate_to_arabic(f"فيديو جديد من {channel_name}")
                                     })
-                                    
-                                    # If no last_video_ids, we're in first run - collect first 5 videos
                                     if not last_video_ids_set and len(videos) >= 5:
                                         break
                     except Exception as e2:
                         logger.error(f"RSS fallback also failed for {channel_name}: {e2}")
-        
     except Exception as e:
         logger.error(f"Error fetching YouTube channel {channel_name}: {e}")
     
     return videos
+
+def get_google_youtube_ranking(query: str, limit: int = 10) -> List[str]:
+    """Search Google for YouTube videos using the user's preferred pattern"""
+    from urllib.parse import unquote
+    try:
+        cached = _get_cached_rank_result("google", query)
+        if cached is not None:
+            return cached[:limit]
+
+        if _should_skip_google_for_title(query):
+            return []
+
+        if not _acquire_google_request_slot():
+            logger.warning(f"[Google] Cooldown active, skipping query: '{query[:80]}'")
+            return []
+
+        # Use the specific pattern requested by the user
+        search_query = f"https://youtube.com {query}"
+        encoded_query = quote(search_query)
+        url = f"https://www.google.com/search?q={encoded_query}&num={limit*2}"
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "ar,en-US;q=0.9,en;q=0.8",
+            "Referer": "https://www.google.com/",
+            "DNT": "1"
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        _register_google_response(response.status_code)
+        if response.status_code != 200:
+            if response.status_code == 429:
+                with _google_rate_lock:
+                    retry_after = int(max(1, _google_rate_state["blocked_until"] - time.time()))
+                logger.error(f"[Google] Error 429 for '{query}' - cooling down ~{retry_after}s")
+            else:
+                logger.error(f"[Google] Error {response.status_code} for '{query}'")
+            return []
+            
+        soup = BeautifulSoup(response.text, 'html.parser')
+        video_ids = []
+        
+        # Look for any link that contains a youtube video ID
+        for a in soup.find_all('a', href=True):
+            href = a['href']
+            
+            # Google sometimes wraps links in /url?q=
+            if "/url?q=" in href:
+                try:
+                    href = unquote(href.split("/url?q=")[1].split("&")[0])
+                except:
+                    pass
+            
+            # Broad matching for various youtube URL formats
+            # Patterns: youtube.com/watch?v=ID, youtu.be/ID, youtube.com/v/ID, etc.
+            match = re.search(r'(?:v=|/v/|youtu\.be/|/embed/|/shorts/)([a-zA-Z0-9_-]{11})', href)
+            if match:
+                vid_id = match.group(1)
+                if vid_id not in video_ids:
+                    video_ids.append(vid_id)
+                    if len(video_ids) >= limit:
+                        break
+        
+        if video_ids:
+            logger.info(f"[Google] Found {len(video_ids)} videos for '{query}': {video_ids[:3]}")
+        _set_cached_rank_result("google", query, video_ids)
+        return video_ids
+    except Exception as e:
+        logger.error(f"[Google] Exception for '{query}': {e}")
+    return []
+
+def get_youtube_search_results(query: str, limit: int = 10) -> List[str]:
+    """Search YouTube for a query and return top video IDs (Google/YouTube's ranking)"""
+    try:
+        cached = _get_cached_rank_result("youtube", query)
+        if cached is not None:
+            return cached[:limit]
+
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': True,
+            'playlistend': limit,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # ytsearch: prefix allows searching
+            search_url = f"ytsearch{limit}:{query}"
+            info = ydl.extract_info(search_url, download=False)
+            if info and 'entries' in info:
+                ids = [entry.get('id') for entry in info['entries'] if entry and entry.get('id')]
+                _set_cached_rank_result("youtube", query, ids)
+                return ids
+    except Exception as e:
+        logger.error(f"Error in YouTube search for '{query}': {e}")
+    return []
+
+def _tokenize_for_match(text: str) -> Set[str]:
+    cleaned = clean_news_text(text or "")
+    tokens = [t for t in re.split(r"\s+", cleaned) if len(t) >= 2]
+    return set(tokens)
+
+def _text_overlap_score(query: str, candidate: str) -> float:
+    q = _tokenize_for_match(query)
+    c = _tokenize_for_match(candidate)
+    if not q or not c:
+        return 0.0
+    inter = len(q.intersection(c))
+    return inter / max(1, len(q))
+
+async def _classify_single_cluster_payload(cluster: dict) -> int:
+    """Classify important videos inside one cluster and persist flags."""
+    video_members = [
+        m for m in cluster["news"]
+        if m.get("video_id") and m.get("type") in ("world", "yemen")
+    ]
+    if not video_members:
+        return 0
+
+    cluster_title = cluster["title"]
+    max_picks = 3 if len(video_members) >= 6 else 2
+    score_map: Dict[str, Dict] = {}
+
+    # PHASE 1: Google ranking (primary)
+    try:
+        google_video_ids = await asyncio.to_thread(get_google_youtube_ranking, cluster_title, 20)
+        if google_video_ids:
+            for rank, vid_id in enumerate(google_video_ids):
+                match = next((m for m in video_members if m.get("video_id") == vid_id), None)
+                if not match:
+                    continue
+                key = f'{match["type"]}:{match["id"]}'
+                current = score_map.get(key, {
+                    "id": match["id"],
+                    "type": match["type"],
+                    "score": 0.0,
+                    "reasons": []
+                })
+                current["score"] += 1.25 / (rank + 1)
+                current["reasons"].append(f"ترتيب جوجل #{rank+1}")
+                score_map[key] = current
+    except Exception as e:
+        logger.error(f"[Classify] Google search error for '{cluster_title}': {e}")
+
+    # PHASE 2: YouTube ranking
+    try:
+        yt_video_ids = await asyncio.to_thread(get_youtube_search_results, cluster_title, 20)
+        if yt_video_ids:
+            for rank, vid_id in enumerate(yt_video_ids):
+                match = next((m for m in video_members if m.get("video_id") == vid_id), None)
+                if not match:
+                    continue
+                key = f'{match["type"]}:{match["id"]}'
+                current = score_map.get(key, {
+                    "id": match["id"],
+                    "type": match["type"],
+                    "score": 0.0,
+                    "reasons": []
+                })
+                current["score"] += 1.0 / (rank + 1)
+                current["reasons"].append(f"ترتيب يوتيوب #{rank+1}")
+                score_map[key] = current
+    except Exception as e:
+        logger.error(f"[Classify] YouTube search error for '{cluster_title}': {e}")
+
+    # PHASE 3: Local relevance fallback
+    if not score_map:
+        for match in video_members:
+            overlap = _text_overlap_score(cluster_title, match.get("title", ""))
+            if overlap <= 0:
+                continue
+            key = f'{match["type"]}:{match["id"]}'
+            score_map[key] = {
+                "id": match["id"],
+                "type": match["type"],
+                "score": overlap,
+                "reasons": [f"تشابه عنوان {overlap:.2f}"]
+            }
+
+    # Guarantee at least one suggested video if the cluster has videos
+    if not score_map:
+        newest = sorted(video_members, key=lambda x: x.get("published", ""), reverse=True)[0]
+        fallback_key = f'{newest["type"]}:{newest["id"]}'
+        score_map[fallback_key] = {
+            "id": newest["id"],
+            "type": newest["type"],
+            "score": 0.01,
+            "reasons": ["أحدث فيديو في المجموعة"]
+        }
+
+    ranked = sorted(score_map.values(), key=lambda x: x["score"], reverse=True)
+    selected = ranked[:max_picks]
+
+    inner_db = SessionLocal()
+    try:
+        world_ids = [m["id"] for m in video_members if m["type"] == "world"]
+        yemen_ids = [m["id"] for m in video_members if m["type"] == "yemen"]
+
+        if world_ids:
+            inner_db.query(NewsItem).filter(NewsItem.id.in_(world_ids)).update({
+                "is_important": 0,
+                "importance_reason": None
+            }, synchronize_session=False)
+        if yemen_ids:
+            inner_db.query(YemenNewsItem).filter(YemenNewsItem.id.in_(yemen_ids)).update({
+                "is_important": 0,
+                "importance_reason": None
+            }, synchronize_session=False)
+
+        updated = 0
+        for item in selected:
+            reason = " | ".join(item["reasons"][:2])
+            if item["type"] == "world":
+                inner_db.query(NewsItem).filter(NewsItem.id == item["id"]).update({
+                    "is_important": 1,
+                    "importance_reason": reason
+                }, synchronize_session=False)
+                updated += 1
+            elif item["type"] == "yemen":
+                inner_db.query(YemenNewsItem).filter(YemenNewsItem.id == item["id"]).update({
+                    "is_important": 1,
+                    "importance_reason": reason
+                }, synchronize_session=False)
+                updated += 1
+
+        inner_db.commit()
+        return updated
+    except Exception as e:
+        logger.error(f"Error updating cluster {cluster_title}: {e}")
+        inner_db.rollback()
+        return 0
+    finally:
+        inner_db.close()
+
+async def classify_cluster_by_id(cluster_id: int) -> int:
+    """Run important-video classification for one cluster."""
+    db = SessionLocal()
+    try:
+        clusters_data = get_clusters_from_db(db)
+        if not clusters_data or not clusters_data.get("clusters"):
+            return 0
+        target = next((c for c in clusters_data["clusters"] if c.get("id") == cluster_id), None)
+        if not target:
+            return 0
+    finally:
+        db.close()
+
+    updated = await _classify_single_cluster_payload(target)
+    if updated > 0:
+        _cluster_cache["data"] = None
+    return updated
 
 async def fetch_all_youtube_channels(db) -> List[dict]:
     """Fetch NEW videos from all YouTube channels/playlists in parallel, sorted from oldest to newest"""
@@ -1748,7 +2077,10 @@ async def fetch_youtube_feeds():
                         "summary": new_item.summary,
                         "published": str(new_item.published),
                         "source": new_item.source,
-                        "image_url": new_item.image_url
+                        "image_url": new_item.image_url,
+                        "video_id": new_item.video_id,
+                        "is_important": getattr(new_item, 'is_important', 0),
+                        "importance_reason": getattr(new_item, 'importance_reason', None)
                     }
                     new_items_found.append(item_dict)
                     logger.info(f"✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
@@ -1763,6 +2095,7 @@ async def fetch_youtube_feeds():
                             if cluster_result["is_new_cluster"]:
                                 ws_data["cluster_data"] = cluster_result["cluster_data"]
                             await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
+                            schedule_cluster_importance_reclassify(cluster_result["cluster_id"])
                 except Exception as e:
                     db.rollback()
                     logger.error(f"✗ FAILED to save video: {video['title'][:50]}... Error: {e}")
@@ -1885,7 +2218,10 @@ async def fetch_yemen_youtube_feeds():
                         "summary": new_item.summary,
                         "published": str(new_item.published),
                         "source": new_item.source,
-                        "image_url": new_item.image_url
+                        "image_url": new_item.image_url,
+                        "video_id": new_item.video_id,
+                        "is_important": getattr(new_item, 'is_important', 0),
+                        "importance_reason": getattr(new_item, 'importance_reason', None)
                     }
                     new_items_found.append(item_dict)
                     logger.info(f"[Yemen] ✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
@@ -1900,6 +2236,7 @@ async def fetch_yemen_youtube_feeds():
                             if cluster_result["is_new_cluster"]:
                                 ws_data["cluster_data"] = cluster_result["cluster_data"]
                             await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
+                            schedule_cluster_importance_reclassify(cluster_result["cluster_id"])
                 except Exception as e:
                     db.rollback()
                     logger.error(f"[Yemen] ✗ FAILED to save video: {video['title'][:50]}... Error: {e}")
@@ -2086,6 +2423,9 @@ async def get_event_timeline(news_type: str, news_id: int):
                         "published": str(news_item.published),
                         "source": news_item.source,
                         "image_url": news_item.image_url,
+                        "video_id": getattr(news_item, 'video_id', None),
+                        "is_important": getattr(news_item, 'is_important', 0),
+                        "importance_reason": getattr(news_item, 'importance_reason', None),
                         "news_type": rtype  # Include the type for reference
                     })
             except Exception as e:
@@ -2213,19 +2553,22 @@ async def get_news_clusters(rebuild: bool = False):
             all_news.append({
                 "id": n.id, "type": "world", "title": n.title, "link": n.link,
                 "summary": n.summary, "source": n.source, "published": str(n.published),
-                "image_url": n.image_url
+                "image_url": n.image_url, "video_id": n.video_id, 
+                "is_important": n.is_important, "importance_reason": n.importance_reason
             })
         for n in yemen_news:
             all_news.append({
                 "id": n.id, "type": "yemen", "title": n.title, "link": n.link,
                 "summary": n.summary, "source": n.source, "published": str(n.published),
-                "image_url": n.image_url
+                "image_url": n.image_url, "video_id": n.video_id,
+                "is_important": n.is_important, "importance_reason": n.importance_reason
             })
         for n in newspaper_news:
             all_news.append({
                 "id": n.id, "type": "newspaper", "title": n.title, "link": n.link,
                 "summary": n.summary, "source": n.source, "published": str(n.published),
-                "image_url": n.image_url
+                "image_url": n.image_url, "video_id": None,
+                "is_important": 0, "importance_reason": None
             })
 
         if len(all_news) < 2:
@@ -2472,6 +2815,74 @@ async def clear_all_news():
         return {"error": str(e)}, 500
     finally:
         db.close()
+
+_cluster_classify_tasks: Dict[int, asyncio.Task] = {}
+AUTO_CLASSIFY_DEBOUNCE_SECONDS = 4
+
+def schedule_cluster_importance_reclassify(cluster_id: int):
+    """Debounced background classifier per cluster to avoid duplicate heavy work."""
+    try:
+        cluster_id = int(cluster_id)
+    except Exception:
+        return
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+
+    active = _cluster_classify_tasks.get(cluster_id)
+    if active and not active.done():
+        return
+
+    async def _runner():
+        try:
+            await asyncio.sleep(AUTO_CLASSIFY_DEBOUNCE_SECONDS)
+            updated = await classify_cluster_by_id(cluster_id)
+            if updated > 0:
+                await manager.broadcast(json.dumps({
+                    "type": "cluster_importance_updated",
+                    "data": {"cluster_id": cluster_id, "updated_count": updated}
+                }))
+        except Exception as e:
+            logger.error(f"[Classify] background auto-classify failed for cluster {cluster_id}: {e}")
+        finally:
+            _cluster_classify_tasks.pop(cluster_id, None)
+
+    _cluster_classify_tasks[cluster_id] = loop.create_task(_runner())
+
+@app.get("/api/clusters/classify")
+async def classify_clusters(db: Session = Depends(get_db)):
+    """Analyze clusters and flag top important videos based on Google/YouTube ranking + local relevance."""
+    try:
+        # 1. Get all clusters and their members
+        clusters_data = get_clusters_from_db(db)
+        if not clusters_data or not clusters_data.get("clusters"):
+            return {"message": "No clusters to classify", "count": 0}
+            
+        # 2. Define a worker function for parallel processing
+        semaphore = asyncio.Semaphore(6)
+
+        async def process_single_cluster(cluster):
+            async with semaphore:
+                return await _classify_single_cluster_payload(cluster)
+
+        # 3. Run all cluster processing tasks in parallel (limited by semaphore)
+        tasks = [process_single_cluster(cluster) for cluster in clusters_data["clusters"]]
+        results = await asyncio.gather(*tasks)
+        classified_count = sum(results)
+        
+        # Clear cache
+        _cluster_cache["data"] = None
+        
+        return {
+            "message": f"تم الانتهاء من التصنيف. تم تحديد {classified_count} فيديوهات مهمة داخل المجموعات.",
+            "count": classified_count,
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(f"Error in classify_clusters endpoint: {e}")
+        return {"error": str(e)}, 500
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
