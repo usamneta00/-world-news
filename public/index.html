@@ -1177,6 +1177,10 @@
                     class="hover:text-neon-accent transition-colors">Yemen</button>
                 <button id="tab-newspaper" onclick="switchTab('newspaper')"
                     class="hover:text-neon-accent transition-colors">Press</button>
+                <button id="tab-recommended" onclick="switchTab('recommended')"
+                    class="hover:text-neon-accent transition-colors flex items-center gap-1">
+                    <i data-lucide="star" class="w-3.5 h-3.5"></i> Suggested
+                </button>
                 <button id="tab-clusters" onclick="switchTab('clusters')"
                     class="hover:text-neon-accent transition-colors flex items-center gap-1">
                     <i data-lucide="layers" class="w-3.5 h-3.5"></i> Events
@@ -1192,6 +1196,10 @@
                 <button onclick="switchTab('clusters')" class="md:hidden p-2 hover:text-neon-blue transition-colors"
                     title="الأحداث الجارية">
                     <i data-lucide="layers" class="w-4 h-4"></i>
+                </button>
+                <button onclick="switchTab('recommended')" class="md:hidden p-2 hover:text-neon-blue transition-colors"
+                    title="المقترح للمشاهدة">
+                    <i data-lucide="star" class="w-4 h-4"></i>
                 </button>
                 <button onclick="switchTab('heatmap')" class="md:hidden p-2 hover:text-neon-blue transition-colors"
                     title="خريطة الحرارة الجيوسياسية">
@@ -1656,6 +1664,7 @@
         let currentPage = 1, allNews = [], pendingNews = [], totalItems = 0;
         let yemenCurrentPage = 1, yemenNews = [], yemenPendingNews = [], yemenTotalItems = 0;
         let newspaperCurrentPage = 1, newspaperNews = [], newspaperPendingNews = [], newspaperTotalItems = 0;
+        let recommendedCurrentPage = 1, recommendedNews = [], recommendedTotalItems = 0;
         let currentTimelineLinks = []; // Store timeline links for copying
         let currentReaderNewsId = null;
         let currentReaderNewsType = null;
@@ -1696,6 +1705,8 @@
                 fetchYemenNews(yemenCurrentPage);
             } else if (activeTab === 'newspaper') {
                 fetchNewspaperNews(newspaperCurrentPage);
+            } else if (activeTab === 'recommended') {
+                fetchRecommendedNews(recommendedCurrentPage);
             }
         }
 
@@ -1789,7 +1800,7 @@
 
         function switchTab(tab) {
             activeTab = tab;
-            const tabs = ['world', 'yemen', 'newspaper', 'clusters', 'heatmap'];
+            const tabs = ['world', 'yemen', 'newspaper', 'recommended', 'clusters', 'heatmap'];
             tabs.forEach(t => {
                 const el = document.getElementById(`tab-${t}`);
                 if (el) {
@@ -1838,7 +1849,8 @@
             const labels = {
                 world: ['Trending Intelligence'],
                 yemen: ['أخبار اليمن الميدانية'],
-                newspaper: ['نظرة على الصحافة العالمية']
+                newspaper: ['نظرة على الصحافة العالمية'],
+                recommended: ['المقترح للمشاهدة من كل المصادر']
             };
 
             const secTitle = document.getElementById('section-title');
@@ -1848,12 +1860,14 @@
 
             if (tab === 'world') fetchNews(currentPage);
             else if (tab === 'yemen') fetchYemenNews(yemenCurrentPage);
-            else fetchNewspaperNews(newspaperCurrentPage);
+            else if (tab === 'newspaper') fetchNewspaperNews(newspaperCurrentPage);
+            else fetchRecommendedNews(recommendedCurrentPage);
         }
 
         async function fetchNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/news?page=${p}&limit=20`); const d = await r.json(); allNews = d.items; totalItems = d.total; currentPage = d.page; renderUI(allNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
         async function fetchYemenNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/yemen-news?page=${p}&limit=20`); const d = await r.json(); yemenNews = d.items; yemenTotalItems = d.total; yemenCurrentPage = d.page; renderUI(yemenNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
         async function fetchNewspaperNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/newspaper-news?page=${p}&limit=20`); const d = await r.json(); newspaperNews = d.items; newspaperTotalItems = d.total; newspaperCurrentPage = d.page; renderUI(newspaperNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
+        async function fetchRecommendedNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/recommended-news?page=${p}&limit=20`); const d = await r.json(); recommendedNews = d.items; recommendedTotalItems = d.total; recommendedCurrentPage = d.page; renderUI(recommendedNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
 
         function setLoading(l) {
             const loader = document.getElementById('loading-state');
@@ -1867,6 +1881,7 @@
 
         function renderUI(items) {
             if (!items || !items.length) return;
+            const resolveType = (item) => (activeTab === 'recommended' ? (item.type || 'world') : activeTab);
 
             // Ticker
             const ticker = document.getElementById('ticker-text');
@@ -1877,8 +1892,9 @@
             const heroMain = document.getElementById('hero-main');
             if (heroMain) {
                 const heroImportance = getImportanceChip(h, false);
+                const heroType = resolveType(h);
                 heroMain.innerHTML = `
-                    <img src="${h.image_url || getThumbnailUrl(h.link)}" class="absolute inset-0 w-full h-full object-cover opacity-90 dark:opacity-70" onclick="openReader(${h.id}, '${activeTab}')">
+                    <img src="${h.image_url || getThumbnailUrl(h.link)}" class="absolute inset-0 w-full h-full object-cover opacity-90 dark:opacity-70" onclick="openReader(${h.id}, '${heroType}')">
                     <div class="absolute inset-0 bg-gradient-to-t from-paper via-transparent to-transparent dark:from-obsidian dark:via-transparent dark:to-transparent opacity-90 pointer-events-none"></div>
                     <div class="absolute bottom-0 left-0 w-full p-8 md:p-12 text-right">
                         <div class="flex items-center justify-end gap-3 mb-4">
@@ -1886,9 +1902,9 @@
                             <span class="px-2 py-1 bg-neon-accent text-white text-[10px] font-mono uppercase tracking-wider">${h.source}</span>
                             <span class="text-neutral-600 dark:text-neutral-400 text-xs font-mono">${timeAgo(h.published)}</span>
                         </div>
-                        <h1 class="font-serif text-3xl md:text-5xl font-medium leading-tight mb-4 text-neutral-900 dark:text-white" onclick="openReader(${h.id}, '${activeTab}')">${h.title}</h1>
+                        <h1 class="font-serif text-3xl md:text-5xl font-medium leading-tight mb-4 text-neutral-900 dark:text-white" onclick="openReader(${h.id}, '${heroType}')">${h.title}</h1>
                         <p class="text-neutral-700 dark:text-neutral-300 max-w-xl mr-auto text-lg font-light leading-relaxed mb-6 line-clamp-2">${h.summary || ''}</p>
-                        <div class="flex items-center justify-end gap-2 text-xs font-bold uppercase tracking-widest text-neutral-900 dark:text-white cursor-pointer hover:text-neon-accent transition-colors" onclick="openReader(${h.id}, '${activeTab}')">
+                        <div class="flex items-center justify-end gap-2 text-xs font-bold uppercase tracking-widest text-neutral-900 dark:text-white cursor-pointer hover:text-neon-accent transition-colors" onclick="openReader(${h.id}, '${heroType}')">
                             Read Full Story <i data-lucide="arrow-left" class="w-4 h-4"></i>
                         </div>
                     </div>
@@ -1899,7 +1915,7 @@
             const heroSide = document.getElementById('hero-side');
             if (heroSide) {
                 heroSide.innerHTML = items.slice(1, 4).map(item => `
-                    <article class="flex-1 bg-white dark:bg-neutral-900 p-6 flex flex-col justify-center group hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer text-right" onclick="openReader(${item.id}, '${activeTab}')">
+                    <article class="flex-1 bg-white dark:bg-neutral-900 p-6 flex flex-col justify-center group hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer text-right" onclick="openReader(${item.id}, '${resolveType(item)}')">
                         <div class="flex justify-between items-start mb-4">
                             <span class="text-[10px] font-mono text-neutral-400">${timeAgo(item.published)}</span>
                             <div class="flex items-center gap-2">
@@ -1921,8 +1937,9 @@
             if (latestFeed) {
                 const gridHTML = items.slice(4).map((n, i) => {
                     const isWide = i === 2; // Make the 3rd item wide
+                    const itemType = resolveType(n);
                     return `
-                    <div class="glass-panel p-6 rounded-sm group cursor-pointer hover:border-neutral-400 dark:hover:border-neutral-600 transition-all duration-300 ${isWide ? 'lg:col-span-2 flex flex-col md:flex-row gap-6' : ''}" onclick="openReader(${n.id}, '${activeTab}')">
+                    <div class="glass-panel p-6 rounded-sm group cursor-pointer hover:border-neutral-400 dark:hover:border-neutral-600 transition-all duration-300 ${isWide ? 'lg:col-span-2 flex flex-col md:flex-row gap-6' : ''}" onclick="openReader(${n.id}, '${itemType}')">
                         <div class="${isWide ? 'w-full md:w-1/2 aspect-video' : 'aspect-video mb-4'} overflow-hidden rounded-sm">
                             <img src="${n.image_url || getThumbnailUrl(n.link)}" class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700">
                         </div>
@@ -1940,8 +1957,8 @@
                 latestFeed.innerHTML = gridHTML;
             }
 
-            const curr = activeTab === 'world' ? currentPage : (activeTab === 'yemen' ? yemenCurrentPage : newspaperCurrentPage);
-            const total = activeTab === 'world' ? totalItems : (activeTab === 'yemen' ? yemenTotalItems : newspaperTotalItems);
+            const curr = activeTab === 'world' ? currentPage : (activeTab === 'yemen' ? yemenCurrentPage : (activeTab === 'newspaper' ? newspaperCurrentPage : recommendedCurrentPage));
+            const total = activeTab === 'world' ? totalItems : (activeTab === 'yemen' ? yemenTotalItems : (activeTab === 'newspaper' ? newspaperTotalItems : recommendedTotalItems));
             const pageInfo = document.getElementById('page-info');
             if (pageInfo) pageInfo.textContent = `${curr} / ${Math.ceil(total / 20) || 1}`;
 
@@ -2709,7 +2726,10 @@
 
         function openReader(id, type) {
             const list = (type === 'world' ? allNews : (type === 'yemen' ? yemenNews : newspaperNews));
-            const item = list.find(n => n.id === id);
+            let item = list.find(n => n.id === id);
+            if (!item && recommendedNews && recommendedNews.length) {
+                item = recommendedNews.find(n => n.id === id && (n.type || type) === type);
+            }
             if (!item) return;
             currentReaderNewsId = id;
             currentReaderNewsType = type;
@@ -2798,8 +2818,13 @@
         const prevBtn = document.getElementById('prev-btn');
         if (prevBtn) {
             prevBtn.onclick = () => {
-                const cp = activeTab === 'world' ? currentPage : (activeTab === 'yemen' ? yemenCurrentPage : newspaperCurrentPage);
-                if (cp > 1) { if (activeTab === 'world') fetchNews(currentPage - 1); else if (activeTab === 'yemen') fetchYemenNews(yemenCurrentPage - 1); else fetchNewspaperNews(newspaperCurrentPage - 1); }
+                const cp = activeTab === 'world' ? currentPage : (activeTab === 'yemen' ? yemenCurrentPage : (activeTab === 'newspaper' ? newspaperCurrentPage : recommendedCurrentPage));
+                if (cp > 1) {
+                    if (activeTab === 'world') fetchNews(currentPage - 1);
+                    else if (activeTab === 'yemen') fetchYemenNews(yemenCurrentPage - 1);
+                    else if (activeTab === 'newspaper') fetchNewspaperNews(newspaperCurrentPage - 1);
+                    else fetchRecommendedNews(recommendedCurrentPage - 1);
+                }
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             };
         }
@@ -2807,8 +2832,10 @@
         const nextBtn = document.getElementById('next-btn');
         if (nextBtn) {
             nextBtn.onclick = () => {
-                const cp = activeTab === 'world' ? currentPage : (activeTab === 'yemen' ? yemenCurrentPage : newspaperCurrentPage);
-                if (activeTab === 'world') fetchNews(currentPage + 1); else if (activeTab === 'yemen') fetchYemenNews(yemenCurrentPage + 1); else fetchNewspaperNews(newspaperCurrentPage + 1);
+                if (activeTab === 'world') fetchNews(currentPage + 1);
+                else if (activeTab === 'yemen') fetchYemenNews(yemenCurrentPage + 1);
+                else if (activeTab === 'newspaper') fetchNewspaperNews(newspaperCurrentPage + 1);
+                else fetchRecommendedNews(recommendedCurrentPage + 1);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             };
         }

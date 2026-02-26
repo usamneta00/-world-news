@@ -100,6 +100,8 @@ class NewspaperNewsItem(Base):
     source = Column(String)
     image_url = Column(String, nullable=True)
     article_id = Column(String, nullable=True)  # Unique article identifier
+    is_important = Column(Integer, default=0)
+    importance_reason = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
 
 class NewspaperLastArticle(Base):
@@ -268,6 +270,19 @@ def migrate_database():
                 logger.info("Creating newspaper_news table...")
                 NewspaperNewsItem.__table__.create(engine)
                 logger.info("Successfully created newspaper_news table")
+            else:
+                result = conn.execute(text("PRAGMA table_info(newspaper_news)"))
+                newspaper_columns = [row[1] for row in result]
+                if 'is_important' not in newspaper_columns:
+                    logger.info("Adding is_important column to newspaper_news table...")
+                    conn.execute(text("ALTER TABLE newspaper_news ADD COLUMN is_important INTEGER DEFAULT 0"))
+                    try: conn.commit()
+                    except: pass
+                if 'importance_reason' not in newspaper_columns:
+                    logger.info("Adding importance_reason column to newspaper_news table...")
+                    conn.execute(text("ALTER TABLE newspaper_news ADD COLUMN importance_reason VARCHAR"))
+                    try: conn.commit()
+                    except: pass
             
             # Check if newspaper_last_article table exists
             result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='newspaper_last_article'"))
@@ -1799,63 +1814,69 @@ def _text_overlap_score(query: str, candidate: str) -> float:
     return inter / max(1, len(q))
 
 async def _classify_single_cluster_payload(cluster: dict) -> int:
-    """Classify important videos inside one cluster and persist flags."""
-    video_members = [
+    """Classify important/suggested items inside one cluster and persist flags."""
+    candidate_members = [
         m for m in cluster["news"]
-        if m.get("video_id") and m.get("type") in ("world", "yemen")
+        if m.get("type") in ("world", "yemen", "newspaper")
     ]
-    if not video_members:
+    if not candidate_members:
         return 0
 
     cluster_title = cluster["title"]
-    max_picks = 3 if len(video_members) >= 6 else 2
+    max_picks = 3 if len(candidate_members) >= 6 else 2
+    youtube_members = [
+        m for m in candidate_members
+        if m.get("video_id") and m.get("type") in ("world", "yemen")
+    ]
     score_map: Dict[str, Dict] = {}
 
     # PHASE 1: Google ranking (primary)
-    try:
-        google_video_ids = await asyncio.to_thread(get_google_youtube_ranking, cluster_title, 20)
-        if google_video_ids:
-            for rank, vid_id in enumerate(google_video_ids):
-                match = next((m for m in video_members if m.get("video_id") == vid_id), None)
-                if not match:
-                    continue
-                key = f'{match["type"]}:{match["id"]}'
-                current = score_map.get(key, {
-                    "id": match["id"],
-                    "type": match["type"],
-                    "score": 0.0,
-                    "reasons": []
-                })
-                current["score"] += 1.25 / (rank + 1)
-                current["reasons"].append(f"ترتيب جوجل #{rank+1}")
-                score_map[key] = current
-    except Exception as e:
-        logger.error(f"[Classify] Google search error for '{cluster_title}': {e}")
+    if youtube_members:
+        try:
+            google_video_ids = await asyncio.to_thread(get_google_youtube_ranking, cluster_title, 20)
+            if google_video_ids:
+                for rank, vid_id in enumerate(google_video_ids):
+                    match = next((m for m in youtube_members if m.get("video_id") == vid_id), None)
+                    if not match:
+                        continue
+                    key = f'{match["type"]}:{match["id"]}'
+                    current = score_map.get(key, {
+                        "id": match["id"],
+                        "type": match["type"],
+                        "score": 0.0,
+                        "reasons": []
+                    })
+                    current["score"] += 1.25 / (rank + 1)
+                    current["reasons"].append(f"ترتيب جوجل #{rank+1}")
+                    score_map[key] = current
+        except Exception as e:
+            logger.error(f"[Classify] Google search error for '{cluster_title}': {e}")
 
     # PHASE 2: YouTube ranking
-    try:
-        yt_video_ids = await asyncio.to_thread(get_youtube_search_results, cluster_title, 20)
-        if yt_video_ids:
-            for rank, vid_id in enumerate(yt_video_ids):
-                match = next((m for m in video_members if m.get("video_id") == vid_id), None)
-                if not match:
-                    continue
-                key = f'{match["type"]}:{match["id"]}'
-                current = score_map.get(key, {
-                    "id": match["id"],
-                    "type": match["type"],
-                    "score": 0.0,
-                    "reasons": []
-                })
-                current["score"] += 1.0 / (rank + 1)
-                current["reasons"].append(f"ترتيب يوتيوب #{rank+1}")
-                score_map[key] = current
-    except Exception as e:
-        logger.error(f"[Classify] YouTube search error for '{cluster_title}': {e}")
+    if youtube_members:
+        try:
+            yt_video_ids = await asyncio.to_thread(get_youtube_search_results, cluster_title, 20)
+            if yt_video_ids:
+                for rank, vid_id in enumerate(yt_video_ids):
+                    match = next((m for m in youtube_members if m.get("video_id") == vid_id), None)
+                    if not match:
+                        continue
+                    key = f'{match["type"]}:{match["id"]}'
+                    current = score_map.get(key, {
+                        "id": match["id"],
+                        "type": match["type"],
+                        "score": 0.0,
+                        "reasons": []
+                    })
+                    current["score"] += 1.0 / (rank + 1)
+                    current["reasons"].append(f"ترتيب يوتيوب #{rank+1}")
+                    score_map[key] = current
+        except Exception as e:
+            logger.error(f"[Classify] YouTube search error for '{cluster_title}': {e}")
 
     # PHASE 3: Local relevance fallback
     if not score_map:
-        for match in video_members:
+        for match in candidate_members:
             overlap = _text_overlap_score(cluster_title, match.get("title", ""))
             if overlap <= 0:
                 continue
@@ -1867,9 +1888,9 @@ async def _classify_single_cluster_payload(cluster: dict) -> int:
                 "reasons": [f"تشابه عنوان {overlap:.2f}"]
             }
 
-    # Guarantee at least one suggested video if the cluster has videos
+    # Guarantee at least one suggestion if cluster has members
     if not score_map:
-        newest = sorted(video_members, key=lambda x: x.get("published", ""), reverse=True)[0]
+        newest = sorted(candidate_members, key=lambda x: x.get("published", ""), reverse=True)[0]
         fallback_key = f'{newest["type"]}:{newest["id"]}'
         score_map[fallback_key] = {
             "id": newest["id"],
@@ -1883,8 +1904,9 @@ async def _classify_single_cluster_payload(cluster: dict) -> int:
 
     inner_db = SessionLocal()
     try:
-        world_ids = [m["id"] for m in video_members if m["type"] == "world"]
-        yemen_ids = [m["id"] for m in video_members if m["type"] == "yemen"]
+        world_ids = [m["id"] for m in candidate_members if m["type"] == "world"]
+        yemen_ids = [m["id"] for m in candidate_members if m["type"] == "yemen"]
+        newspaper_ids = [m["id"] for m in candidate_members if m["type"] == "newspaper"]
 
         if world_ids:
             inner_db.query(NewsItem).filter(NewsItem.id.in_(world_ids)).update({
@@ -1893,6 +1915,11 @@ async def _classify_single_cluster_payload(cluster: dict) -> int:
             }, synchronize_session=False)
         if yemen_ids:
             inner_db.query(YemenNewsItem).filter(YemenNewsItem.id.in_(yemen_ids)).update({
+                "is_important": 0,
+                "importance_reason": None
+            }, synchronize_session=False)
+        if newspaper_ids:
+            inner_db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id.in_(newspaper_ids)).update({
                 "is_important": 0,
                 "importance_reason": None
             }, synchronize_session=False)
@@ -1908,6 +1935,12 @@ async def _classify_single_cluster_payload(cluster: dict) -> int:
                 updated += 1
             elif item["type"] == "yemen":
                 inner_db.query(YemenNewsItem).filter(YemenNewsItem.id == item["id"]).update({
+                    "is_important": 1,
+                    "importance_reason": reason
+                }, synchronize_session=False)
+                updated += 1
+            elif item["type"] == "newspaper":
+                inner_db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id == item["id"]).update({
                     "is_important": 1,
                     "importance_reason": reason
                 }, synchronize_session=False)
@@ -2352,6 +2385,54 @@ async def get_newspaper_news(page: int = 1, limit: int = 20):
         "limit": limit
     }
 
+@app.get("/api/recommended-news")
+async def get_recommended_news(page: int = 1, limit: int = 20):
+    """Return only suggested/important items across world, yemen, and newspaper."""
+    db = SessionLocal()
+    try:
+        take = max(limit * 4, 60)
+        world_items = db.query(NewsItem).filter(NewsItem.is_important == 1).order_by(
+            desc(NewsItem.created_at), desc(NewsItem.id)
+        ).limit(take).all()
+        yemen_items = db.query(YemenNewsItem).filter(YemenNewsItem.is_important == 1).order_by(
+            desc(YemenNewsItem.created_at), desc(YemenNewsItem.id)
+        ).limit(take).all()
+        newspaper_items = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.is_important == 1).order_by(
+            desc(NewspaperNewsItem.created_at), desc(NewspaperNewsItem.id)
+        ).limit(take).all()
+
+        all_items = []
+        for n in world_items:
+            all_items.append({
+                "id": n.id, "type": "world", "title": n.title, "link": n.link,
+                "summary": n.summary, "published": str(n.published), "source": n.source,
+                "image_url": n.image_url, "video_id": n.video_id,
+                "is_important": n.is_important, "importance_reason": n.importance_reason
+            })
+        for n in yemen_items:
+            all_items.append({
+                "id": n.id, "type": "yemen", "title": n.title, "link": n.link,
+                "summary": n.summary, "published": str(n.published), "source": n.source,
+                "image_url": n.image_url, "video_id": n.video_id,
+                "is_important": n.is_important, "importance_reason": n.importance_reason
+            })
+        for n in newspaper_items:
+            all_items.append({
+                "id": n.id, "type": "newspaper", "title": n.title, "link": n.link,
+                "summary": n.summary, "published": str(n.published), "source": n.source,
+                "image_url": n.image_url, "video_id": None,
+                "is_important": getattr(n, 'is_important', 0),
+                "importance_reason": getattr(n, 'importance_reason', None)
+            })
+
+        all_items.sort(key=lambda x: x.get("published", ""), reverse=True)
+        total = len(all_items)
+        skip = (page - 1) * limit
+        paged = all_items[skip: skip + limit]
+        return {"items": paged, "total": total, "page": page, "limit": limit}
+    finally:
+        db.close()
+
 @app.get("/api/event-timeline/{news_type}/{news_id}")
 async def get_event_timeline(news_type: str, news_id: int):
     """Get the event timeline for a specific news item - includes ALL related news from all types"""
@@ -2568,7 +2649,8 @@ async def get_news_clusters(rebuild: bool = False):
                 "id": n.id, "type": "newspaper", "title": n.title, "link": n.link,
                 "summary": n.summary, "source": n.source, "published": str(n.published),
                 "image_url": n.image_url, "video_id": None,
-                "is_important": 0, "importance_reason": None
+                "is_important": getattr(n, 'is_important', 0),
+                "importance_reason": getattr(n, 'importance_reason', None)
             })
 
         if len(all_news) < 2:
