@@ -1696,18 +1696,50 @@
             }, 2200);
         }
 
-        function refreshActiveViewAfterImportanceUpdate() {
-            if (activeTab === 'clusters') {
-                fetchClusters(true);
-            } else if (activeTab === 'world') {
-                fetchNews(currentPage);
-            } else if (activeTab === 'yemen') {
-                fetchYemenNews(yemenCurrentPage);
-            } else if (activeTab === 'newspaper') {
-                fetchNewspaperNews(newspaperCurrentPage);
-            } else if (activeTab === 'recommended') {
-                fetchRecommendedNews(recommendedCurrentPage);
+        async function syncRecommendedBadgesFromServer() {
+            try {
+                const r = await fetch(`${API_URL}/recommended-index`);
+                const d = await r.json();
+                const items = Array.isArray(d.items) ? d.items : [];
+                const recMap = new Map(items.map(x => [`${x.type}:${x.id}`, x.importance_reason || null]));
+
+                const applyFlags = (arr, defaultType = null) => {
+                    if (!Array.isArray(arr)) return;
+                    arr.forEach(item => {
+                        const itemType = item.type || defaultType || 'world';
+                        const key = `${itemType}:${item.id}`;
+                        if (recMap.has(key)) {
+                            item.is_important = 1;
+                            item.importance_reason = recMap.get(key);
+                        } else {
+                            item.is_important = 0;
+                            item.importance_reason = null;
+                        }
+                    });
+                };
+
+                applyFlags(allNews, 'world');
+                applyFlags(pendingNews, 'world');
+                applyFlags(yemenNews, 'yemen');
+                applyFlags(yemenPendingNews, 'yemen');
+                applyFlags(newspaperNews, 'newspaper');
+                applyFlags(newspaperPendingNews, 'newspaper');
+                applyFlags(recommendedNews);
+
+                if (clustersData && Array.isArray(clustersData.clusters)) {
+                    clustersData.clusters.forEach(c => applyFlags(c.news));
+                }
+
+                return true;
+            } catch (e) {
+                console.error('syncRecommendedBadgesFromServer error:', e);
+                return false;
             }
+        }
+
+        function refreshActiveViewAfterImportanceUpdate() {
+            // Keep UI stable while user is browsing; only mark data stale for next manual refresh/tab visit.
+            clustersLoaded = false;
         }
 
         // --- Three.js Background ---
@@ -2785,6 +2817,7 @@
                     }
                     if (msg.type === 'cluster_importance_updated') {
                         clustersLoaded = false;
+                        syncRecommendedBadgesFromServer();
                         refreshActiveViewAfterImportanceUpdate();
                         showToast('تم تحديث اقتراحات المشاهدة للمجموعة');
                         return;
@@ -2807,7 +2840,8 @@
 
         const banner = document.getElementById('new-news-banner');
         if (banner) {
-            banner.onclick = function () {
+            banner.onclick = async function () {
+                await syncRecommendedBadgesFromServer();
                 if (activeTab === 'world') { allNews = [...pendingNews, ...allNews]; pendingNews = []; renderUI(allNews); }
                 else if (activeTab === 'yemen') { yemenNews = [...yemenPendingNews, ...yemenNews]; yemenPendingNews = []; renderUI(yemenNews); }
                 else { newspaperNews = [...newspaperPendingNews, ...newspaperNews]; newspaperPendingNews = []; renderUI(newspaperNews); }

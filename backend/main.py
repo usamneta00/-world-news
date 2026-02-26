@@ -2433,6 +2433,22 @@ async def get_recommended_news(page: int = 1, limit: int = 20):
     finally:
         db.close()
 
+@app.get("/api/recommended-index")
+async def get_recommended_index():
+    """Lightweight index of suggested items for fast UI badge sync."""
+    db = SessionLocal()
+    try:
+        rows = []
+        for n in db.query(NewsItem.id, NewsItem.importance_reason).filter(NewsItem.is_important == 1).all():
+            rows.append({"type": "world", "id": n.id, "importance_reason": n.importance_reason})
+        for n in db.query(YemenNewsItem.id, YemenNewsItem.importance_reason).filter(YemenNewsItem.is_important == 1).all():
+            rows.append({"type": "yemen", "id": n.id, "importance_reason": n.importance_reason})
+        for n in db.query(NewspaperNewsItem.id, NewspaperNewsItem.importance_reason).filter(NewspaperNewsItem.is_important == 1).all():
+            rows.append({"type": "newspaper", "id": n.id, "importance_reason": n.importance_reason})
+        return {"items": rows, "total": len(rows)}
+    finally:
+        db.close()
+
 @app.get("/api/event-timeline/{news_type}/{news_id}")
 async def get_event_timeline(news_type: str, news_id: int):
     """Get the event timeline for a specific news item - includes ALL related news from all types"""
