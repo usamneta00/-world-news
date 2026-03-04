@@ -3081,29 +3081,38 @@ async def analyze_trends(db: Session):
         yesterday = now - timedelta(hours=24)
         day_before = yesterday - timedelta(hours=24)
         
-        # Period A: Last 24h (Current)
-        # Period B: Previous 24h (Baseline)
-        
+        # Period A: Last 24h (Current). Period B: Previous 24h (Baseline).
         def get_all_news(start_date, end_date):
-            world = db.query(NewsItem).filter(NewsItem.created_at >= start_date).all()
-            yemen = db.query(YemenNewsItem).filter(YemenNewsItem.created_at >= start_date).all()
-            paper = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.created_at >= start_date).all()
+            world = db.query(NewsItem).filter(
+                NewsItem.created_at >= start_date,
+                NewsItem.created_at < end_date
+            ).all()
+            yemen = db.query(YemenNewsItem).filter(
+                YemenNewsItem.created_at >= start_date,
+                YemenNewsItem.created_at < end_date
+            ).all()
+            paper = db.query(NewspaperNewsItem).filter(
+                NewspaperNewsItem.created_at >= start_date,
+                NewspaperNewsItem.created_at < end_date
+            ).all()
             return world + yemen + paper
 
         recent_news = get_all_news(yesterday, now)
         baseline_news = get_all_news(day_before, yesterday)
-        
+
         logger.info(f"[Trends] Found {len(recent_news)} items in last 24h and {len(baseline_news)} in baseline.")
 
-        # If 24h is too narrow, try last 7 days as a fallback for 'recent'
+        # If 24h is too narrow, use last 7 days vs previous 7 days so we still get trends
         if not recent_news:
-            logger.info("[Trends] No news in last 24h, broadening search to last 7 days...")
+            logger.info("[Trends] No news in last 24h, using last 7 days vs previous 7 days...")
             week_ago = now - timedelta(days=7)
+            two_weeks_ago = now - timedelta(days=14)
             recent_news = get_all_news(week_ago, now)
-            logger.info(f"[Trends] Found {len(recent_news)} items in last 7 days.")
+            baseline_news = get_all_news(two_weeks_ago, week_ago)
+            logger.info(f"[Trends] Found {len(recent_news)} items in last 7 days and {len(baseline_news)} in previous 7 days.")
 
         if not recent_news:
-            logger.warning("[Trends] Still no news found after broadening search.")
+            logger.warning("[Trends] No news found in any time window.")
             return
             
         # Frequency counters
@@ -3128,12 +3137,13 @@ async def analyze_trends(db: Session):
             for kw in keywords:
                 baseline_freq[kw] = baseline_freq.get(kw, 0) + 1
         
-        # Calculate scores and velocity
+        # Calculate scores and velocity (allow single mention when data is sparse)
         trending_results = []
+        min_count = 2 if len(recent_news) >= 20 else 1
         for kw, count in recent_freq.items():
-            if count < 2: continue # Lowered threshold from 3 to 2
-            
-            baseline_count = baseline_freq.get(kw, 1) # Use 1 to avoid div by zero
+            if count < min_count:
+                continue
+            baseline_count = baseline_freq.get(kw, 1)
             velocity = (count - baseline_count) / baseline_count
             
             # Sort news by publication date to find the "root"
@@ -3179,8 +3189,16 @@ async def analyze_trends(db: Session):
         logger.error(f"Error in analyze_trends: {e}")
         db.rollback()
 
-# Periodic Trend Task
+# Periodic Trend Task: run once at startup (for existing DB), then after 90s, then every 30 min
 async def trend_background_task():
+    # First run soon so existing DB shows trends; second run after fetch has time to add news
+    try:
+        db = SessionLocal()
+        await analyze_trends(db)
+        db.close()
+    except Exception as e:
+        logger.error(f"Trend initial run error: {e}")
+    await asyncio.sleep(90)  # Let first news fetch complete
     while True:
         try:
             db = SessionLocal()
@@ -3188,7 +3206,7 @@ async def trend_background_task():
             db.close()
         except Exception as e:
             logger.error(f"Background trend task error: {e}")
-        await asyncio.sleep(3600) # Run every hour
+        await asyncio.sleep(1800)  # Every 30 minutes
 
 # Trends API and static files (single app - no duplicate app creation)
 @app.get("/api/trends")
