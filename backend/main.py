@@ -3239,18 +3239,50 @@ async def trend_background_task():
         await asyncio.sleep(1800)  # Every 30 minutes
 
 # Trends API and static files (single app - no duplicate app creation)
+def _get_news_item(db: Session, news_type: str, news_id: int):
+    """Fetch one news item by type and id; return dict with title, source, link, image_url, video_id."""
+    if news_type == 'world':
+        item = db.query(NewsItem).filter(NewsItem.id == news_id).first()
+    elif news_type == 'yemen':
+        item = db.query(YemenNewsItem).filter(YemenNewsItem.id == news_id).first()
+    else:
+        item = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id == news_id).first()
+    if not item:
+        return None
+    return {
+        "title": item.title,
+        "source": item.source,
+        "link": item.link,
+        "image_url": item.image_url,
+        "video_id": getattr(item, 'video_id', None),
+    }
+
 @app.get("/api/trends")
-async def get_trends(db: Session = Depends(get_db)):
+async def get_trends(
+    db: Session = Depends(get_db),
+    prefer_non_world: bool = False,
+    include_digest: bool = False,
+):
+    """
+    prefer_non_world: when True, root_news for each trend prefers Yemen/newspaper over world (no repetition with World tab).
+    include_digest: when True, response includes top_events_today (أهم 5 أحداث اليوم) from Yemen + newspaper only.
+    """
     trends = db.query(TrendingTopic).order_by(desc(TrendingTopic.velocity), desc(TrendingTopic.heat_score)).limit(15).all()
     result = []
     for t in trends:
+        related_list = json.loads(t.related_items_json or "[]")
         news_item = None
-        if t.representative_news_type == 'world':
-            news_item = db.query(NewsItem).filter(NewsItem.id == t.representative_news_id).first()
-        elif t.representative_news_type == 'yemen':
-            news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == t.representative_news_id).first()
-        else:
-            news_item = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id == t.representative_news_id).first()
+        root_type = t.representative_news_type
+        if prefer_non_world and related_list:
+            for r in related_list:
+                if r.get("type") in ("yemen", "newspaper"):
+                    news_item = _get_news_item(db, r["type"], r["id"])
+                    if news_item:
+                        root_type = r["type"]
+                        break
+        if news_item is None:
+            news_item = _get_news_item(db, t.representative_news_type, t.representative_news_id)
+            root_type = t.representative_news_type
         try:
             vel = float(t.velocity) if t.velocity is not None else 0.0
         except (TypeError, ValueError):
@@ -3263,15 +3295,34 @@ async def get_trends(db: Session = Depends(get_db)):
             "velocity": vel,
             "first_seen": t.first_seen_at,
             "root_news": {
-                "title": news_item.title if news_item else "Unknown",
-                "source": news_item.source if news_item else "Unknown",
-                "link": news_item.link if news_item else "#",
-                "image_url": news_item.image_url if news_item else None,
-                "video_id": getattr(news_item, 'video_id', None) if news_item else None
+                "title": news_item.get("title", "Unknown") if news_item else "Unknown",
+                "source": news_item.get("source", "Unknown") if news_item else "Unknown",
+                "link": news_item.get("link", "#") if news_item else "#",
+                "image_url": news_item.get("image_url") if news_item else None,
+                "video_id": news_item.get("video_id") if news_item else None,
+                "type": root_type,
             },
-            "related": json.loads(t.related_items_json or "[]")
+            "related": related_list,
         })
-    return result
+    out = {"trends": result}
+    if include_digest:
+        yemen = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(5).all()
+        paper = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(5).all()
+        digest_items = []
+        for item in yemen:
+            digest_items.append({"title": item.title, "link": item.link, "source": item.source, "type": "yemen"})
+        for item in paper:
+            digest_items.append({"title": item.title, "link": item.link, "source": item.source, "type": "newspaper"})
+        digest_items.sort(key=lambda x: x.get("title", ""))
+        by_date_y = [(n.created_at, n) for n in yemen]
+        by_date_p = [(n.created_at, n) for n in paper]
+        merged = sorted(by_date_y + by_date_p, key=lambda t: t[0] or datetime.min, reverse=True)
+        top_events_today = []
+        for _, item in merged[:5]:
+            t = "yemen" if isinstance(item, YemenNewsItem) else "newspaper"
+            top_events_today.append({"title": item.title, "link": item.link, "source": item.source, "type": t})
+        out["top_events_today"] = top_events_today
+    return out
 
 @app.get("/api/trends/force")
 async def force_trends(db: Session = Depends(get_db)):

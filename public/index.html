@@ -1481,7 +1481,11 @@
                 </button>
             </div>
 
-            <!-- Trends Grid -->
+            <!-- أهم 5 أحداث اليوم (Yemen + Press only, no world repetition) -->
+            <div id="trends-digest" class="hidden mb-10 p-6 rounded-2xl border border-white/5 bg-zinc-900/40 backdrop-blur-xl">
+                <!-- Filled by fetchTrends -->
+            </div>
+            <!-- Trends Grid (root_news prefers Yemen/Press when prefer_non_world=1) -->
             <div id="trends-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-20">
                 <!-- Trends will be loaded here -->
             </div>
@@ -2052,12 +2056,35 @@
 
         async function fetchTrends() {
             const container = document.getElementById('trends-container');
+            const digestEl = document.getElementById('trends-digest');
             if (!container) return;
             setLoading(true);
             try {
-                const r = await fetch(`${API_URL}/trends`);
+                const r = await fetch(`${API_URL}/trends?prefer_non_world=1&include_digest=1`);
                 const d = await r.json();
-                renderTrends(d);
+                const trends = Array.isArray(d) ? d : (d.trends || []);
+                if (digestEl && d.top_events_today && d.top_events_today.length) {
+                    digestEl.classList.remove('hidden');
+                    digestEl.innerHTML = `
+                        <h3 class="text-sm font-bold text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                            <i data-lucide="sparkles" class="w-4 h-4 text-neon-blue"></i>
+                            أهم 5 أحداث اليوم
+                        </h3>
+                        <ul class="space-y-2">
+                            ${d.top_events_today.map(ev => `
+                                <li><a href="${ev.link}" target="_blank" class="flex items-start gap-2 p-2 rounded-lg hover:bg-white/5 text-right group">
+                                    <span class="shrink-0 w-1.5 h-1.5 rounded-full mt-1.5 ${ev.type === 'yemen' ? 'bg-yemen' : 'bg-amber-500'}"></span>
+                                    <span class="text-sm text-zinc-300 group-hover:text-neon-blue line-clamp-2">${ev.title}</span>
+                                    <span class="text-[10px] text-zinc-500 font-mono shrink-0">${ev.source}</span>
+                                </a></li>
+                            `).join('')}
+                        </ul>
+                    `;
+                    if (window.lucide) lucide.createIcons();
+                } else if (digestEl) {
+                    digestEl.classList.add('hidden');
+                }
+                renderTrends(trends);
             } catch (e) {
                 console.error(e);
             } finally {
@@ -2118,7 +2145,7 @@
                         <span class="text-[10px] font-mono text-zinc-500">${t.heat || 0}pts</span>
                     </div>
                     
-                    ${rootNews.title && rootNews.title !== 'Unknown' ? `
+                    ${rootNews.title && rootNews.title !== 'Unknown' && rootNews.type !== 'world' ? `
                     <div class="mt-4 pt-4 border-t border-white/5 text-right flex flex-col gap-3">
                         ${rootNews.image_url || rootNews.video_id ? `
                         <div class="relative w-full aspect-video rounded-xl overflow-hidden bg-white/5 cursor-pointer" onclick="window.open('${rootNews.link}', '_blank')">
