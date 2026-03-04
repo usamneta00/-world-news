@@ -2091,12 +2091,24 @@
                     </div>
                     
                     ${rootNews.title && rootNews.title !== 'Unknown' ? `
-                    <div class="mt-4 pt-4 border-t border-white/5 text-right">
-                        <p class="text-[10px] text-zinc-500 uppercase tracking-widest mb-2">بداية الانتشار:</p>
-                        <a href="${rootNews.link}" target="_blank" class="block group/link">
-                            <p class="text-sm text-zinc-300 line-clamp-2 group-hover/link:text-neon-blue transition-colors mb-1">${rootNews.title}</p>
-                            <span class="text-[10px] text-zinc-600 font-mono">${rootNews.source}</span>
-                        </a>
+                    <div class="mt-4 pt-4 border-t border-white/5 text-right flex flex-col gap-3">
+                        ${rootNews.image_url || rootNews.video_id ? `
+                        <div class="relative w-full aspect-video rounded-xl overflow-hidden bg-white/5 cursor-pointer" onclick="window.open('${rootNews.link}', '_blank')">
+                            <img src="${rootNews.image_url || `https://img.youtube.com/vi/${rootNews.video_id}/mqdefault.jpg`}" class="w-full h-full object-cover">
+                            ${rootNews.video_id ? `
+                            <div class="absolute inset-0 flex items-center justify-center bg-black/20">
+                                <i data-lucide="play" class="w-8 h-8 text-white fill-white"></i>
+                            </div>
+                            ` : ''}
+                        </div>
+                        ` : ''}
+                        <div>
+                            <p class="text-[10px] text-zinc-500 uppercase tracking-widest mb-2">بداية الانتشار:</p>
+                            <a href="${rootNews.link}" target="_blank" class="block group/link">
+                                <p class="text-sm text-zinc-300 line-clamp-2 group-hover/link:text-neon-blue transition-colors mb-1">${rootNews.title}</p>
+                                <span class="text-[10px] text-zinc-600 font-mono">${rootNews.source}</span>
+                            </a>
+                        </div>
                     </div>
                     ` : ''}
                     

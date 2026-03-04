@@ -349,6 +349,14 @@ def migrate_database():
                     try: conn.commit()
                     except: pass
                     logger.info("Successfully added related_news_type column")
+            
+            # Fix missing created_at values to ensure Trends work immediately
+            conn.execute(text("UPDATE news SET created_at = published WHERE created_at IS NULL"))
+            conn.execute(text("UPDATE yemen_news SET created_at = published WHERE created_at IS NULL"))
+            conn.execute(text("UPDATE newspaper_news SET created_at = published WHERE created_at IS NULL"))
+            try: conn.commit() 
+            except: pass 
+
     except Exception as e:
         logger.error(f"Migration error: {e}")
 
@@ -3077,9 +3085,9 @@ async def analyze_trends(db: Session):
         # Period B: Previous 24h (Baseline)
         
         def get_all_news(start_date, end_date):
-            world = db.query(NewsItem).filter(NewsItem.created_at >= start_date, NewsItem.created_at < end_date).all()
-            yemen = db.query(YemenNewsItem).filter(YemenNewsItem.created_at >= start_date, YemenNewsItem.created_at < end_date).all()
-            paper = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.created_at >= start_date, NewspaperNewsItem.created_at < end_date).all()
+            world = db.query(NewsItem).filter(NewsItem.created_at >= start_date).all()
+            yemen = db.query(YemenNewsItem).filter(YemenNewsItem.created_at >= start_date).all()
+            paper = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.created_at >= start_date).all()
             return world + yemen + paper
 
         recent_news = get_all_news(yesterday, now)
@@ -3113,7 +3121,7 @@ async def analyze_trends(db: Session):
         # Calculate scores and velocity
         trending_results = []
         for kw, count in recent_freq.items():
-            if count < 3: continue # Minimum threshold
+            if count < 2: continue # Lowered threshold from 3 to 2
             
             baseline_count = baseline_freq.get(kw, 1) # Use 1 to avoid div by zero
             velocity = (count - baseline_count) / baseline_count
@@ -3194,7 +3202,9 @@ async def get_trends(db: Session = Depends(get_db)):
             "root_news": {
                 "title": news_item.title if news_item else "Unknown",
                 "source": news_item.source if news_item else "Unknown",
-                "link": news_item.link if news_item else "#"
+                "link": news_item.link if news_item else "#",
+                "image_url": news_item.image_url if news_item else None,
+                "video_id": getattr(news_item, 'video_id', None) if news_item else None
             },
             "related": json.loads(t.related_items_json or "[]")
         })
