@@ -3161,24 +3161,31 @@ async def analyze_trends(db: Session):
         # Sort by heat and velocity
         trending_results.sort(key=lambda x: (x['velocity'], x['heat']), reverse=True)
         
+        # Serialize related items for JSON (datetime is not JSON-serializable)
+        def _serialize_related(related_list):
+            return [{"id": r["id"], "type": r["type"], "published": str(r["published"]) if r.get("published") else None, "title": r.get("title", "")} for r in related_list]
+
         # Update Database
         for trend in trending_results[:20]: # Top 20 trends
             existing = db.query(TrendingTopic).filter(TrendingTopic.keyword == trend['keyword']).first()
-            
+            related_serialized = _serialize_related(trend['related'])
+            rep = trend['representative']
+            first_seen = rep.get('published') or now
+
             if existing:
                 existing.heat_score = trend['heat']
                 existing.velocity = trend['velocity']
                 existing.last_updated = now
-                existing.related_items_json = json.dumps(trend['related'])
+                existing.related_items_json = json.dumps(related_serialized)
             else:
                 new_trend = TrendingTopic(
                     keyword=trend['keyword'],
                     heat_score=trend['heat'],
                     velocity=trend['velocity'],
-                    representative_news_id=trend['representative']['id'],
-                    representative_news_type=trend['representative']['type'],
-                    first_seen_at=trend['representative']['published'] or now,
-                    related_items_json = json.dumps(trend['related'])
+                    representative_news_id=rep['id'],
+                    representative_news_type=rep['type'],
+                    first_seen_at=first_seen,
+                    related_items_json=json.dumps(related_serialized)
                 )
                 db.add(new_trend)
         
