@@ -1132,16 +1132,82 @@
             box-shadow: 0 2px 10px rgba(59, 130, 246, 0.4);
         }
 
-        #cluster-updates-banner {
-            backdrop-filter: blur(16px);
-            background: rgba(15, 15, 15, 0.8);
-            border: 1px solid rgba(45, 212, 191, 0.3);
+        #sidebar-menu {
+            transform: translateX(100%);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        #sidebar-menu.active {
+            transform: translateX(0);
+        }
+
+        .sidebar-overlay {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .sidebar-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
         }
     </style>
 </head>
 
 <body
     class="bg-paper dark:bg-obsidian text-neutral-900 dark:text-neutral-200 antialiased selection:bg-neon-blue selection:text-black transition-colors duration-500">
+
+    <!-- Sidebar Menu (Mobile) -->
+    <div id="sidebar-overlay" class="sidebar-overlay fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
+        onclick="toggleSidebar()"></div>
+    <div id="sidebar-menu"
+        class="fixed top-0 right-0 h-full w-72 bg-obsidian border-l border-white/5 z-[70] p-8 flex flex-col">
+        <div class="flex items-center justify-between mb-12">
+            <span class="font-serif text-xl font-bold tracking-tight text-white">NEXUS</span>
+            <button onclick="toggleSidebar()" class="p-2 hover:bg-white/5 rounded-full transition-colors">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <div class="space-y-6 flex-1">
+            <button onclick="switchTab('world'); toggleSidebar();"
+                class="flex items-center gap-4 text-sm font-mono tracking-widest uppercase hover:text-neon-blue transition-colors">
+                <i data-lucide="globe" class="w-4 h-4"></i> World Intelligence
+            </button>
+            <button onclick="switchTab('yemen'); toggleSidebar();"
+                class="flex items-center gap-4 text-sm font-mono tracking-widest uppercase hover:text-neon-blue transition-colors">
+                <i data-lucide="map-pin" class="w-4 h-4"></i> Field Reports
+            </button>
+            <button onclick="switchTab('newspaper'); toggleSidebar();"
+                class="flex items-center gap-4 text-sm font-mono tracking-widest uppercase hover:text-neon-blue transition-colors">
+                <i data-lucide="file-text" class="w-4 h-4"></i> World Press
+            </button>
+            <div class="h-px bg-white/5 my-4"></div>
+            <button onclick="switchTab('trends'); toggleSidebar();"
+                class="flex items-center gap-4 text-sm font-mono tracking-widest uppercase text-neon-blue font-bold">
+                <i data-lucide="trending-up" class="w-4 h-4"></i> Early Trends
+            </button>
+            <button onclick="switchTab('clusters'); toggleSidebar();"
+                class="flex items-center gap-4 text-sm font-mono tracking-widest uppercase hover:text-neon-blue transition-colors">
+                <i data-lucide="layers" class="w-4 h-4"></i> Live Events
+            </button>
+            <button onclick="switchTab('heatmap'); toggleSidebar();"
+                class="flex items-center gap-4 text-sm font-mono tracking-widest uppercase hover:text-neon-blue transition-colors">
+                <i data-lucide="globe-2" class="w-4 h-4"></i> Geo Heatmap
+            </button>
+        </div>
+
+        <div class="mt-auto space-y-4 pt-8 border-t border-white/5">
+            <button onclick="toggleDarkMode(); toggleSidebar();"
+                class="flex items-center gap-4 text-xs text-neutral-400 font-mono">
+                <i data-lucide="moon" class="w-4 h-4"></i> Theme Mode
+            </button>
+            <button onclick="clearAllNews(); toggleSidebar();"
+                class="flex items-center gap-4 text-xs text-red-400 font-mono">
+                <i data-lucide="trash-2" class="w-4 h-4"></i> Reset Data
+            </button>
+        </div>
+    </div>
 
     <!-- 3D Background -->
     <div id="canvas-container" class="fixed inset-0 z-0 opacity-40 dark:opacity-60"></div>
@@ -1162,7 +1228,7 @@
     <nav class="fixed top-10 w-full z-40 glass-panel border-b-0 border-t-0">
         <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
             <div class="flex items-center gap-4">
-                <button id="menu-btn"
+                <button id="menu-btn" onclick="toggleSidebar()"
                     class="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors">
                     <i data-lucide="menu" class="w-5 h-5"></i>
                 </button>
@@ -1199,23 +1265,25 @@
 
             <div class="flex items-center gap-4">
                 <span id="current-date" class="hidden lg:block text-[10px] font-mono opacity-50"></span>
-                <button onclick="switchTab('clusters')" class="md:hidden p-2 hover:text-neon-blue transition-colors"
-                    title="الأحداث الجارية">
+                <button onclick="switchTab('clusters')"
+                    class="hidden md:block p-2 hover:text-neon-blue transition-colors" title="الأحداث الجارية">
                     <i data-lucide="layers" class="w-4 h-4"></i>
                 </button>
-                <button onclick="switchTab('recommended')" class="md:hidden p-2 hover:text-neon-blue transition-colors"
-                    title="المقترح للمشاهدة">
+                <button onclick="switchTab('recommended')"
+                    class="hidden md:block p-2 hover:text-neon-blue transition-colors" title="المقترح للمشاهدة">
                     <i data-lucide="star" class="w-4 h-4"></i>
                 </button>
-                <button onclick="switchTab('trends')" class="md:hidden p-2 hover:text-neon-blue transition-colors"
+                <button onclick="switchTab('trends')" class="p-2 hover:text-neon-blue transition-colors"
                     title="تحليل التريند">
                     <i data-lucide="trending-up" class="w-4 h-4"></i>
                 </button>
-                <button onclick="switchTab('heatmap')" class="md:hidden p-2 hover:text-neon-blue transition-colors"
+                <button onclick="switchTab('heatmap')"
+                    class="hidden md:block p-2 hover:text-neon-blue transition-colors"
                     title="خريطة الحرارة الجيوسياسية">
                     <i data-lucide="globe-2" class="w-4 h-4"></i>
                 </button>
-                <button onclick="clearAllNews()" class="p-2 hover:text-red-500 transition-colors" title="حذف الكل">
+                <button onclick="clearAllNews()" class="hidden md:block p-2 hover:text-red-500 transition-colors"
+                    title="حذف الكل">
                     <i data-lucide="trash-2" class="w-4 h-4"></i>
                 </button>
                 <button id="theme-toggle" onclick="toggleDarkMode()"
@@ -1226,7 +1294,7 @@
                         class="w-4 h-4 block dark:hidden group-hover:-rotate-12 transition-transform"></i>
                 </button>
                 <button
-                    class="px-5 py-2 border border-neutral-300 dark:border-neutral-700 rounded-full text-[10px] font-medium hover:bg-neutral-900 hover:text-white dark:hover:bg-white dark:hover:text-black transition-all">
+                    class="hidden md:block px-5 py-2 border border-neutral-300 dark:border-neutral-700 rounded-full text-[10px] font-medium hover:bg-neutral-900 hover:text-white dark:hover:bg-white dark:hover:text-black transition-all">
                     SUBSCRIBE
                 </button>
             </div>
@@ -1682,318 +1750,330 @@
         </div>
     </footer>
 
+    <!-- Main Logic Script moved here and fixed structure -->
+    <div id="live-toast"
+        class="fixed bottom-5 left-5 z-[120] px-4 py-2 rounded-lg bg-black/85 text-white text-sm border border-white/15 shadow-2xl backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-300">
     </div>
+    <script>
+        // --- Logic Configuration ---
+        const API_URL = '/api';
+        const WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
 
-    <script src="app.js"></script>
-</body>
+        const SOURCE_LOGOS = {
+            'Reuters': 'https://www.reuters.com/pf/resources/images/reuters/logo-vertical-default-dark.svg?d=190',
+            'BBC News': 'https://nav.files.bbci.co.uk/search/2.1.25/img/bbc_logo_black.png',
+            'Al Jazeera': 'https://www.aljazeera.net/favicon.ico',
+            'الحدث': 'https://www.alhadath.net/favicon.ico',
+            'العربية': 'https://www.alarabiya.net/favicon.ico',
+            'CNN': 'https://upload.wikimedia.org/wikipedia/commons/b/b1/CNN.svg',
+            'Associated Press': 'https://apnews.com/pf/resources/images/ap-logo-black.svg?d=190',
+            'DW News': 'https://www.dw.com/resource/image/1655024/logo/4/200/200/7751f893a7c66d8e27f001306b3a2386/logo.png',
+            'NY Times': 'https://help.nytimes.com/hc/article_attachments/360020083232/The_New_York_Times_Logo.png'
+        };
 
-</html>
-<script>
-    // --- Logic Configuration ---
-    const API_URL = '/api';
-    const WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
-
-    const SOURCE_LOGOS = {
-        'Reuters': 'https://www.reuters.com/pf/resources/images/reuters/logo-vertical-default-dark.svg?d=190',
-        'BBC News': 'https://nav.files.bbci.co.uk/search/2.1.25/img/bbc_logo_black.png',
-        'Al Jazeera': 'https://www.aljazeera.net/favicon.ico',
-        'الحدث': 'https://www.alhadath.net/favicon.ico',
-        'العربية': 'https://www.alarabiya.net/favicon.ico',
-        'CNN': 'https://upload.wikimedia.org/wikipedia/commons/b/b1/CNN.svg',
-        'Associated Press': 'https://apnews.com/pf/resources/images/ap-logo-black.svg?d=190',
-        'DW News': 'https://www.dw.com/resource/image/1655024/logo/4/200/200/7751f893a7c66d8e27f001306b3a2386/logo.png',
-        'NY Times': 'https://help.nytimes.com/hc/article_attachments/360020083232/The_New_York_Times_Logo.png'
-    };
-
-    function getSourceLogo(sourceName) {
-        if (SOURCE_LOGOS[sourceName]) return SOURCE_LOGOS[sourceName];
-        return `https://www.google.com/s2/favicons?domain=${sourceName.toLowerCase().replace(/\s+/g, '')}.com&sz=128`;
-    }
-
-    let activeTab = 'world';
-    let currentPage = 1, allNews = [], pendingNews = [], totalItems = 0;
-    let yemenCurrentPage = 1, yemenNews = [], yemenPendingNews = [], yemenTotalItems = 0;
-    let newspaperCurrentPage = 1, newspaperNews = [], newspaperPendingNews = [], newspaperTotalItems = 0;
-    let recommendedCurrentPage = 1, recommendedNews = [], recommendedTotalItems = 0;
-    let currentTimelineLinks = []; // Store timeline links for copying
-    let currentReaderNewsId = null;
-    let currentReaderNewsType = null;
-    let toastTimer = null;
-
-    function getImportanceChip(item, compact = false) {
-        if (!item || !item.is_important) return '';
-        if (compact) {
-            return `<span class="px-2 py-0.5 bg-brand text-white text-[9px] font-black rounded-sm border border-white/20">مقترح</span>`;
+        function getSourceLogo(sourceName) {
+            if (SOURCE_LOGOS[sourceName]) return SOURCE_LOGOS[sourceName];
+            return `https://www.google.com/s2/favicons?domain=${sourceName.toLowerCase().replace(/\s+/g, '')}.com&sz=128`;
         }
-        return `<span class="px-2 py-0.5 bg-brand text-white text-[10px] font-black rounded-sm shadow-lg border border-white/20 flex items-center gap-1"><i data-lucide="award" class="w-3 h-3 fill-current"></i> مقترح للمشاهدة</span>`;
-    }
 
-    function showToast(message) {
-        let toast = document.getElementById('live-toast');
-        if (!toast) {
-            toast = document.createElement('div');
-            toast.id = 'live-toast';
-            toast.className = 'fixed bottom-5 left-5 z-[120] px-4 py-2 rounded-lg bg-black/85 text-white text-sm border border-white/15 shadow-2xl backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-300';
-            document.body.appendChild(toast);
+        let activeTab = 'world';
+        let currentPage = 1, allNews = [], pendingNews = [], totalItems = 0;
+        let yemenCurrentPage = 1, yemenNews = [], yemenPendingNews = [], yemenTotalItems = 0;
+        let newspaperCurrentPage = 1, newspaperNews = [], newspaperPendingNews = [], newspaperTotalItems = 0;
+        let recommendedCurrentPage = 1, recommendedNews = [], recommendedTotalItems = 0;
+        let currentTimelineLinks = []; // Store timeline links for copying
+        let currentReaderNewsId = null;
+        let currentReaderNewsType = null;
+        let toastTimer = null;
+
+        function getImportanceChip(item, compact = false) {
+            if (!item || !item.is_important) return '';
+            if (compact) {
+                return `<span class="px-2 py-0.5 bg-brand text-white text-[9px] font-black rounded-sm border border-white/20">مقترح</span>`;
+            }
+            return `<span class="px-2 py-0.5 bg-brand text-white text-[10px] font-black rounded-sm shadow-lg border border-white/20 flex items-center gap-1"><i data-lucide="award" class="w-3 h-3 fill-current"></i> مقترح للمشاهدة</span>`;
         }
-        toast.textContent = message;
-        toast.classList.remove('opacity-0');
-        toast.classList.add('opacity-100');
-        if (toastTimer) clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => {
-            toast.classList.remove('opacity-100');
-            toast.classList.add('opacity-0');
-        }, 2200);
-    }
 
-    async function syncRecommendedBadgesFromServer() {
-        try {
-            const r = await fetch(`${API_URL}/recommended-index`);
-            const d = await r.json();
-            const items = Array.isArray(d.items) ? d.items : [];
-            const recMap = new Map(items.map(x => [`${x.type}:${x.id}`, x.importance_reason || null]));
+        function showToast(message) {
+            let toast = document.getElementById('live-toast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'live-toast';
+                toast.className = 'fixed bottom-5 left-5 z-[120] px-4 py-2 rounded-lg bg-black/85 text-white text-sm border border-white/15 shadow-2xl backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-300';
+                document.body.appendChild(toast);
+            }
+            toast.textContent = message;
+            toast.classList.remove('opacity-0');
+            toast.classList.add('opacity-100');
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0');
+            }, 2200);
+        }
 
-            const applyFlags = (arr, defaultType = null) => {
-                if (!Array.isArray(arr)) return;
-                arr.forEach(item => {
-                    const itemType = item.type || defaultType || 'world';
-                    const key = `${itemType}:${item.id}`;
-                    if (recMap.has(key)) {
-                        item.is_important = 1;
-                        item.importance_reason = recMap.get(key);
-                    } else {
-                        item.is_important = 0;
-                        item.importance_reason = null;
-                    }
-                });
+        async function syncRecommendedBadgesFromServer() {
+            try {
+                const r = await fetch(`${API_URL}/recommended-index`);
+                const d = await r.json();
+                const items = Array.isArray(d.items) ? d.items : [];
+                const recMap = new Map(items.map(x => [`${x.type}:${x.id}`, x.importance_reason || null]));
+
+                const applyFlags = (arr, defaultType = null) => {
+                    if (!Array.isArray(arr)) return;
+                    arr.forEach(item => {
+                        const itemType = item.type || defaultType || 'world';
+                        const key = `${itemType}:${item.id}`;
+                        if (recMap.has(key)) {
+                            item.is_important = 1;
+                            item.importance_reason = recMap.get(key);
+                        } else {
+                            item.is_important = 0;
+                            item.importance_reason = null;
+                        }
+                    });
+                };
+
+                applyFlags(allNews, 'world');
+                applyFlags(pendingNews, 'world');
+                applyFlags(yemenNews, 'yemen');
+                applyFlags(yemenPendingNews, 'yemen');
+                applyFlags(newspaperNews, 'newspaper');
+                applyFlags(newspaperPendingNews, 'newspaper');
+                applyFlags(recommendedNews);
+
+                if (clustersData && Array.isArray(clustersData.clusters)) {
+                    clustersData.clusters.forEach(c => applyFlags(c.news));
+                }
+
+                return true;
+            } catch (e) {
+                console.error('syncRecommendedBadgesFromServer error:', e);
+                return false;
+            }
+        }
+
+        function refreshActiveViewAfterImportanceUpdate() {
+            // Keep UI stable while user is browsing; only mark data stale for next manual refresh/tab visit.
+            clustersLoaded = false;
+        }
+
+        // --- Three.js Background ---
+        let scene, camera, renderer, particles, ring;
+        const STATE = { isDark: document.documentElement.classList.contains('dark'), mouseX: 0, mouseY: 0 };
+
+        async function initThree() {
+            const THREE = await import('three');
+            const container = document.getElementById('canvas-container');
+            if (!container) return;
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 100;
+
+            renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            const count = 1500, radius = 40;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+            for (let i = 0; i < count; i++) {
+                const phi = Math.acos(-1 + (2 * i) / count), theta = Math.sqrt(count * Math.PI) * phi;
+                positions[i * 3] = radius * Math.cos(theta) * Math.sin(phi);
+                positions[i * 3 + 1] = radius * Math.sin(theta) * Math.sin(phi);
+                positions[i * 3 + 2] = radius * Math.cos(phi);
+            }
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+            const getMat = (dark) => new THREE.PointsMaterial({
+                color: dark ? 0x3b82f6 : 0x1a1a1a,
+                size: 0.8, transparent: true, opacity: dark ? 0.6 : 0.3
+            });
+            particles = new THREE.Points(geometry, getMat(STATE.isDark));
+            scene.add(particles);
+
+            ring = new THREE.Mesh(new THREE.TorusGeometry(60, 0.2, 16, 100), new THREE.MeshBasicMaterial({
+                color: STATE.isDark ? 0x2dd4bf : 0x000000, transparent: true, opacity: 0.1, wireframe: true
+            }));
+            ring.rotation.x = Math.PI / 2;
+            scene.add(ring);
+
+            window.addEventListener('mousemove', (e) => {
+                STATE.mouseX = (e.clientX - window.innerWidth / 2) * 0.001;
+                STATE.mouseY = (e.clientY - window.innerHeight / 2) * 0.001;
+            });
+
+            const animate = () => {
+                requestAnimationFrame(animate);
+                particles.rotation.y += 0.0005 + STATE.mouseX * 0.05;
+                particles.rotation.x += 0.0001 + STATE.mouseY * 0.05;
+                ring.rotation.z -= 0.001;
+                renderer.render(scene, camera);
+            };
+            animate();
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        function updateThreeTheme() {
+            if (!particles) return;
+            const dark = document.documentElement.classList.contains('dark');
+            particles.material.color.set(dark ? 0x3b82f6 : 0x1a1a1a);
+            particles.material.opacity = dark ? 0.6 : 0.3;
+            ring.material.color.set(dark ? 0x2dd4bf : 0x000000);
+        }
+
+        // --- Core Logic ---
+        function toggleDarkMode() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled');
+            updateThreeTheme();
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar-menu');
+            const overlay = document.getElementById('sidebar-overlay');
+            if (sidebar && overlay) {
+                sidebar.classList.toggle('active');
+                overlay.classList.toggle('active');
+                lucide.createIcons();
+            }
+        }
+
+        function initDate() {
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const el = document.getElementById('current-date');
+            if (el) el.innerText = new Date().toLocaleDateString('ar-EG', options);
+        }
+
+        function getThumbnailUrl(v) {
+            const id = v?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/)?.[1];
+            return id ? `https://img.youtube.com/vi/${id}/maxresdefault.jpg` : 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=2070';
+        }
+
+        function timeAgo(d) { return new Date(d).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }); }
+
+        function switchTab(tab) {
+            activeTab = tab;
+            const tabs = ['world', 'yemen', 'newspaper', 'recommended', 'clusters', 'heatmap', 'trends'];
+            tabs.forEach(t => {
+                const el = document.getElementById(`tab-${t}`);
+                if (el) {
+                    el.classList.remove('text-neon-accent', 'font-bold');
+                    el.classList.add('text-neutral-500');
+                }
+            });
+            const activeEl = document.getElementById(`tab-${tab}`);
+            if (activeEl) {
+                activeEl.classList.add('text-neon-accent', 'font-bold');
+                activeEl.classList.remove('text-neutral-500');
+            }
+
+            const newsContent = document.getElementById('news-content');
+            const heatmapView = document.getElementById('heatmap-view');
+            const clustersView = document.getElementById('clusters-view');
+            const loader = document.getElementById('loading-state');
+
+            if (tab === 'heatmap') {
+                if (newsContent) newsContent.classList.add('hidden');
+                if (heatmapView) heatmapView.classList.remove('hidden');
+                if (clustersView) clustersView.classList.add('hidden');
+                if (loader) loader.classList.add('hidden');
+                initHeatmap();
+                return;
+            }
+
+            if (tab === 'trends') {
+                if (newsContent) newsContent.classList.add('hidden');
+                if (heatmapView) heatmapView.classList.add('hidden');
+                if (clustersView) clustersView.classList.add('hidden');
+                if (loader) loader.classList.add('hidden');
+                const trendsView = document.getElementById('trends-view');
+                if (trendsView) trendsView.classList.remove('hidden');
+                fetchTrends();
+                return;
+            }
+
+            if (tab === 'clusters') {
+                if (newsContent) newsContent.classList.add('hidden');
+                if (heatmapView) heatmapView.classList.add('hidden');
+                if (clustersView) clustersView.classList.remove('hidden');
+                if (loader) loader.classList.add('hidden');
+                fetchClusters();
+                if (pendingClusterUpdates.length > 0) {
+                    showClusterBanner(pendingClusterUpdates.length);
+                }
+                return;
+            }
+
+            const trendsView = document.getElementById('trends-view');
+            if (trendsView) trendsView.classList.add('hidden');
+
+            hideClusterBanner();
+
+            // For news tabs: show news content, hide others
+            if (heatmapView) heatmapView.classList.add('hidden');
+            if (clustersView) clustersView.classList.add('hidden');
+
+            const labels = {
+                world: ['Trending Intelligence'],
+                yemen: ['أخبار اليمن الميدانية'],
+                newspaper: ['نظرة على الصحافة العالمية'],
+                recommended: ['المقترح للمشاهدة من كل المصادر']
             };
 
-            applyFlags(allNews, 'world');
-            applyFlags(pendingNews, 'world');
-            applyFlags(yemenNews, 'yemen');
-            applyFlags(yemenPendingNews, 'yemen');
-            applyFlags(newspaperNews, 'newspaper');
-            applyFlags(newspaperPendingNews, 'newspaper');
-            applyFlags(recommendedNews);
-
-            if (clustersData && Array.isArray(clustersData.clusters)) {
-                clustersData.clusters.forEach(c => applyFlags(c.news));
+            const secTitle = document.getElementById('section-title');
+            if (secTitle) {
+                secTitle.innerHTML = `<span class="hidden md:block w-32 h-px bg-neutral-300 dark:bg-neutral-700"></span>${labels[tab][0]}`;
             }
 
-            return true;
-        } catch (e) {
-            console.error('syncRecommendedBadgesFromServer error:', e);
-            return false;
-        }
-    }
-
-    function refreshActiveViewAfterImportanceUpdate() {
-        // Keep UI stable while user is browsing; only mark data stale for next manual refresh/tab visit.
-        clustersLoaded = false;
-    }
-
-    // --- Three.js Background ---
-    let scene, camera, renderer, particles, ring;
-    const STATE = { isDark: document.documentElement.classList.contains('dark'), mouseX: 0, mouseY: 0 };
-
-    async function initThree() {
-        const THREE = await import('three');
-        const container = document.getElementById('canvas-container');
-        if (!container) return;
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 100;
-
-        renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        container.appendChild(renderer.domElement);
-
-        const count = 1500, radius = 40;
-        const geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(count * 3);
-        for (let i = 0; i < count; i++) {
-            const phi = Math.acos(-1 + (2 * i) / count), theta = Math.sqrt(count * Math.PI) * phi;
-            positions[i * 3] = radius * Math.cos(theta) * Math.sin(phi);
-            positions[i * 3 + 1] = radius * Math.sin(theta) * Math.sin(phi);
-            positions[i * 3 + 2] = radius * Math.cos(phi);
-        }
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-        const getMat = (dark) => new THREE.PointsMaterial({
-            color: dark ? 0x3b82f6 : 0x1a1a1a,
-            size: 0.8, transparent: true, opacity: dark ? 0.6 : 0.3
-        });
-        particles = new THREE.Points(geometry, getMat(STATE.isDark));
-        scene.add(particles);
-
-        ring = new THREE.Mesh(new THREE.TorusGeometry(60, 0.2, 16, 100), new THREE.MeshBasicMaterial({
-            color: STATE.isDark ? 0x2dd4bf : 0x000000, transparent: true, opacity: 0.1, wireframe: true
-        }));
-        ring.rotation.x = Math.PI / 2;
-        scene.add(ring);
-
-        window.addEventListener('mousemove', (e) => {
-            STATE.mouseX = (e.clientX - window.innerWidth / 2) * 0.001;
-            STATE.mouseY = (e.clientY - window.innerHeight / 2) * 0.001;
-        });
-
-        const animate = () => {
-            requestAnimationFrame(animate);
-            particles.rotation.y += 0.0005 + STATE.mouseX * 0.05;
-            particles.rotation.x += 0.0001 + STATE.mouseY * 0.05;
-            ring.rotation.z -= 0.001;
-            renderer.render(scene, camera);
-        };
-        animate();
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-    }
-
-    function updateThreeTheme() {
-        if (!particles) return;
-        const dark = document.documentElement.classList.contains('dark');
-        particles.material.color.set(dark ? 0x3b82f6 : 0x1a1a1a);
-        particles.material.opacity = dark ? 0.6 : 0.3;
-        ring.material.color.set(dark ? 0x2dd4bf : 0x000000);
-    }
-
-    // --- Core Logic ---
-    function toggleDarkMode() {
-        const isDark = document.documentElement.classList.toggle('dark');
-        localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled');
-        updateThreeTheme();
-    }
-
-    function initDate() {
-        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-        const el = document.getElementById('current-date');
-        if (el) el.innerText = new Date().toLocaleDateString('ar-EG', options);
-    }
-
-    function getThumbnailUrl(v) {
-        const id = v?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/)?.[1];
-        return id ? `https://img.youtube.com/vi/${id}/maxresdefault.jpg` : 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=2070';
-    }
-
-    function timeAgo(d) { return new Date(d).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }); }
-
-    function switchTab(tab) {
-        activeTab = tab;
-        const tabs = ['world', 'yemen', 'newspaper', 'recommended', 'clusters', 'heatmap'];
-        tabs.forEach(t => {
-            const el = document.getElementById(`tab-${t}`);
-            if (el) {
-                el.classList.remove('text-neon-accent', 'font-bold');
-                el.classList.add('text-neutral-500');
+            try {
+                if (tab === 'world') fetchNews(currentPage);
+                else if (tab === 'yemen') fetchYemenNews(yemenCurrentPage);
+                else if (tab === 'newspaper') fetchNewspaperNews(newspaperCurrentPage);
+                else fetchRecommendedNews(recommendedCurrentPage);
+            } catch (e) {
+                console.error("Tab switch error:", e);
             }
-        });
-        const activeEl = document.getElementById(`tab-${tab}`);
-        if (activeEl) {
-            activeEl.classList.add('text-neon-accent', 'font-bold');
-            activeEl.classList.remove('text-neutral-500');
         }
 
-        const newsContent = document.getElementById('news-content');
-        const heatmapView = document.getElementById('heatmap-view');
-        const clustersView = document.getElementById('clusters-view');
-        const loader = document.getElementById('loading-state');
+        async function fetchNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/news?page=${p}&limit=20`); const d = await r.json(); allNews = d.items; totalItems = d.total; currentPage = d.page; renderUI(allNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
+        async function fetchYemenNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/yemen-news?page=${p}&limit=20`); const d = await r.json(); yemenNews = d.items; yemenTotalItems = d.total; yemenCurrentPage = d.page; renderUI(yemenNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
+        async function fetchNewspaperNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/newspaper-news?page=${p}&limit=20`); const d = await r.json(); newspaperNews = d.items; newspaperTotalItems = d.total; newspaperCurrentPage = d.page; renderUI(newspaperNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
+        async function fetchRecommendedNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/recommended-news?page=${p}&limit=20`); const d = await r.json(); recommendedNews = d.items; recommendedTotalItems = d.total; recommendedCurrentPage = d.page; renderUI(recommendedNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
 
-        if (tab === 'heatmap') {
-            if (newsContent) newsContent.classList.add('hidden');
-            if (heatmapView) heatmapView.classList.remove('hidden');
-            if (clustersView) clustersView.classList.add('hidden');
-            if (loader) loader.classList.add('hidden');
-            initHeatmap();
-            return;
-        }
-
-        if (tab === 'trends') {
-            if (newsContent) newsContent.classList.add('hidden');
-            if (heatmapView) heatmapView.classList.add('hidden');
-            if (clustersView) clustersView.classList.add('hidden');
-            if (loader) loader.classList.add('hidden');
-            const trendsView = document.getElementById('trends-view');
-            if (trendsView) trendsView.classList.remove('hidden');
-            fetchTrends();
-            return;
-        }
-
-        if (tab === 'clusters') {
-            if (newsContent) newsContent.classList.add('hidden');
-            if (heatmapView) heatmapView.classList.add('hidden');
-            if (clustersView) clustersView.classList.remove('hidden');
-            if (loader) loader.classList.add('hidden');
-            fetchClusters();
-            if (pendingClusterUpdates.length > 0) {
-                showClusterBanner(pendingClusterUpdates.length);
+        async function fetchTrends() {
+            const container = document.getElementById('trends-container');
+            if (!container) return;
+            setLoading(true);
+            try {
+                const r = await fetch(`${API_URL}/trends`);
+                const d = await r.json();
+                renderTrends(d);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
             }
-            return;
         }
 
-        const trendsView = document.getElementById('trends-view');
-        if (trendsView) trendsView.classList.add('hidden');
+        function renderTrends(trends) {
+            const container = document.getElementById('trends-container');
+            if (!container) return;
+            if (!trends || !trends.length) {
+                container.innerHTML = '<div class="col-span-full py-20 text-center text-neutral-500">لا يوجد بيانات تريند حالياً</div>';
+                return;
+            }
+            container.innerHTML = trends.map(t => {
+                const velocity = parseFloat(t.velocity) || 0;
+                const heatWidth = Math.min((t.heat || 1) * 5, 100);
+                const rootNews = t.root_news || {};
+                const related = t.related || [];
 
-        hideClusterBanner();
-
-        // For news tabs: show news content, hide others
-        if (heatmapView) heatmapView.classList.add('hidden');
-        if (clustersView) clustersView.classList.add('hidden');
-
-        const labels = {
-            world: ['Trending Intelligence'],
-            yemen: ['أخبار اليمن الميدانية'],
-            newspaper: ['نظرة على الصحافة العالمية'],
-            recommended: ['المقترح للمشاهدة من كل المصادر']
-        };
-
-        const secTitle = document.getElementById('section-title');
-        if (secTitle) {
-            secTitle.innerHTML = `<span class="hidden md:block w-32 h-px bg-neutral-300 dark:bg-neutral-700"></span>${labels[tab][0]}`;
-        }
-
-        if (tab === 'world') fetchNews(currentPage);
-        else if (tab === 'yemen') fetchYemenNews(yemenCurrentPage);
-        else if (tab === 'newspaper') fetchNewspaperNews(newspaperCurrentPage);
-        else fetchRecommendedNews(recommendedCurrentPage);
-    }
-
-    async function fetchNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/news?page=${p}&limit=20`); const d = await r.json(); allNews = d.items; totalItems = d.total; currentPage = d.page; renderUI(allNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
-    async function fetchYemenNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/yemen-news?page=${p}&limit=20`); const d = await r.json(); yemenNews = d.items; yemenTotalItems = d.total; yemenCurrentPage = d.page; renderUI(yemenNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
-    async function fetchNewspaperNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/newspaper-news?page=${p}&limit=20`); const d = await r.json(); newspaperNews = d.items; newspaperTotalItems = d.total; newspaperCurrentPage = d.page; renderUI(newspaperNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
-    async function fetchRecommendedNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/recommended-news?page=${p}&limit=20`); const d = await r.json(); recommendedNews = d.items; recommendedTotalItems = d.total; recommendedCurrentPage = d.page; renderUI(recommendedNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
-
-    async function fetchTrends() {
-        const container = document.getElementById('trends-container');
-        if (!container) return;
-        setLoading(true);
-        try {
-            const r = await fetch(`${API_URL}/trends`);
-            const d = await r.json();
-            renderTrends(d);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    function renderTrends(trends) {
-        const container = document.getElementById('trends-container');
-        if (!container) return;
-        if (!trends || !trends.length) {
-            container.innerHTML = '<div class="col-span-full py-20 text-center text-neutral-500">لا يوجد بيانات تريند حالياً</div>';
-            return;
-        }
-        container.innerHTML = trends.map(t => {
-            const velocity = parseFloat(t.velocity) || 0;
-            const heatWidth = Math.min((t.heat || 1) * 5, 100);
-            const rootNews = t.root_news || {};
-            const related = t.related || [];
-
-            return `
+                return `
                 <div class="glass-panel p-6 rounded-[24px] border border-white/5 hover:border-neon-blue/30 transition-all group bg-zinc-900/40 backdrop-blur-xl">
                     <div class="flex items-center justify-between mb-4">
                         <span class="px-3 py-1 bg-white/5 rounded-full text-[10px] font-mono text-zinc-400">#ROOT_SEARCH</span>
@@ -2029,35 +2109,40 @@
                     </div>
                 </div>
             `;
-        }).join('');
-        lucide.createIcons();
-    }
-
-    function setLoading(l) {
-        const loader = document.getElementById('loading-state');
-        const content = document.getElementById('news-content');
-        if (loader) loader.classList.toggle('hidden', !l);
-        if (activeTab !== 'heatmap' && activeTab !== 'clusters') {
-            if (content) content.classList.toggle('hidden', l);
+            }).join('');
+            if (window.lucide) lucide.createIcons();
         }
-        if (!l) lucide.createIcons();
-    }
 
-    function renderUI(items) {
-        if (!items || !items.length) return;
-        const resolveType = (item) => (activeTab === 'recommended' ? (item.type || 'world') : activeTab);
+        function setLoading(l) {
+            const loader = document.getElementById('loading-state');
+            const content = document.getElementById('news-content');
+            if (loader) loader.classList.toggle('hidden', !l);
+            if (activeTab !== 'heatmap' && activeTab !== 'clusters') {
+                if (content) content.classList.toggle('hidden', l);
+            }
+            if (!l) {
+                // Delay icon creation slightly to allow DOM to finish rendering
+                setTimeout(() => {
+                    if (window.lucide) lucide.createIcons();
+                }, 100);
+            }
+        }
 
-        // Ticker
-        const ticker = document.getElementById('ticker-text');
-        if (ticker) ticker.innerHTML = items.slice(0, 10).map(n => `<span>${n.title}</span>`).join('<span>::</span>');
+        function renderUI(items) {
+            if (!items || !items.length) return;
+            const resolveType = (item) => (activeTab === 'recommended' ? (item.type || 'world') : activeTab);
 
-        // Hero
-        const h = items[0];
-        const heroMain = document.getElementById('hero-main');
-        if (heroMain) {
-            const heroImportance = getImportanceChip(h, false);
-            const heroType = resolveType(h);
-            heroMain.innerHTML = `
+            // Ticker
+            const ticker = document.getElementById('ticker-text');
+            if (ticker) ticker.innerHTML = items.slice(0, 10).map(n => `<span>${n.title}</span>`).join('<span>::</span>');
+
+            // Hero
+            const h = items[0];
+            const heroMain = document.getElementById('hero-main');
+            if (heroMain) {
+                const heroImportance = getImportanceChip(h, false);
+                const heroType = resolveType(h);
+                heroMain.innerHTML = `
                     <img src="${h.image_url || getThumbnailUrl(h.link)}" class="absolute inset-0 w-full h-full object-cover opacity-90 dark:opacity-70" onclick="openReader(${h.id}, '${heroType}')">
                     <div class="absolute inset-0 bg-gradient-to-t from-paper via-transparent to-transparent dark:from-obsidian dark:via-transparent dark:to-transparent opacity-90 pointer-events-none"></div>
                     <div class="absolute bottom-0 left-0 w-full p-8 md:p-12 text-right">
@@ -2073,12 +2158,12 @@
                         </div>
                     </div>
                 `;
-        }
+            }
 
-        // Side Feed
-        const heroSide = document.getElementById('hero-side');
-        if (heroSide) {
-            heroSide.innerHTML = items.slice(1, 4).map(item => `
+            // Side Feed
+            const heroSide = document.getElementById('hero-side');
+            if (heroSide) {
+                heroSide.innerHTML = items.slice(1, 4).map(item => `
                     <article class="flex-1 bg-white dark:bg-neutral-900 p-6 flex flex-col justify-center group hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer text-right" onclick="openReader(${item.id}, '${resolveType(item)}')">
                         <div class="flex justify-between items-start mb-4">
                             <span class="text-[10px] font-mono text-neutral-400">${timeAgo(item.published)}</span>
@@ -2094,15 +2179,15 @@
                         </div>
                     </article>
                 `).join('');
-        }
+            }
 
-        // Bento Grid
-        const latestFeed = document.getElementById('latest-feed');
-        if (latestFeed) {
-            const gridHTML = items.slice(4).map((n, i) => {
-                const isWide = i === 2; // Make the 3rd item wide
-                const itemType = resolveType(n);
-                return `
+            // Bento Grid
+            const latestFeed = document.getElementById('latest-feed');
+            if (latestFeed) {
+                const gridHTML = items.slice(4).map((n, i) => {
+                    const isWide = i === 2; // Make the 3rd item wide
+                    const itemType = resolveType(n);
+                    return `
                     <div class="glass-panel p-6 rounded-sm group cursor-pointer hover:border-neutral-400 dark:hover:border-neutral-600 transition-all duration-300 ${isWide ? 'lg:col-span-2 flex flex-col md:flex-row gap-6' : ''}" onclick="openReader(${n.id}, '${itemType}')">
                         <div class="${isWide ? 'w-full md:w-1/2 aspect-video' : 'aspect-video mb-4'} overflow-hidden rounded-sm">
                             <img src="${n.image_url || getThumbnailUrl(n.link)}" class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700">
@@ -2117,131 +2202,131 @@
                             <p class="text-sm text-neutral-500 dark:text-neutral-400 line-clamp-3 leading-relaxed">${n.summary || ''}</p>
                         </div>
                     </div>`;
-            }).join('');
-            latestFeed.innerHTML = gridHTML;
+                }).join('');
+                latestFeed.innerHTML = gridHTML;
+            }
+
+            const curr = activeTab === 'world' ? currentPage : (activeTab === 'yemen' ? yemenCurrentPage : (activeTab === 'newspaper' ? newspaperCurrentPage : recommendedCurrentPage));
+            const total = activeTab === 'world' ? totalItems : (activeTab === 'yemen' ? yemenTotalItems : (activeTab === 'newspaper' ? newspaperTotalItems : recommendedTotalItems));
+            const pageInfo = document.getElementById('page-info');
+            if (pageInfo) pageInfo.textContent = `${curr} / ${Math.ceil(total / 20) || 1}`;
+
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            if (prevBtn) prevBtn.disabled = curr === 1;
+            if (nextBtn) nextBtn.disabled = curr >= Math.ceil(total / 20);
+
+            if (window.lucide) lucide.createIcons();
         }
 
-        const curr = activeTab === 'world' ? currentPage : (activeTab === 'yemen' ? yemenCurrentPage : (activeTab === 'newspaper' ? newspaperCurrentPage : recommendedCurrentPage));
-        const total = activeTab === 'world' ? totalItems : (activeTab === 'yemen' ? yemenTotalItems : (activeTab === 'newspaper' ? newspaperTotalItems : recommendedTotalItems));
-        const pageInfo = document.getElementById('page-info');
-        if (pageInfo) pageInfo.textContent = `${curr} / ${Math.ceil(total / 20) || 1}`;
+        async function fetchEventTimeline(newsId, newsType) {
+            const loading = document.getElementById('timeline-loading');
+            const empty = document.getElementById('timeline-empty');
+            const content = document.getElementById('timeline-content');
+            const items = document.getElementById('timeline-items');
+            const threadTitle = document.getElementById('timeline-thread-title');
+            const reasonSection = document.getElementById('timeline-reason');
+            const reasonText = document.getElementById('timeline-reason-text');
 
-        const prevBtn = document.getElementById('prev-btn');
-        const nextBtn = document.getElementById('next-btn');
-        if (prevBtn) prevBtn.disabled = curr === 1;
-        if (nextBtn) nextBtn.disabled = curr >= Math.ceil(total / 20);
+            // Reset state
+            if (loading) loading.classList.remove('hidden');
+            if (empty) empty.classList.add('hidden');
+            if (content) content.classList.add('hidden');
+            if (reasonSection) reasonSection.classList.add('hidden');
+            if (items) items.innerHTML = '';
+            if (threadTitle) threadTitle.textContent = '';
 
-        lucide.createIcons();
-    }
+            try {
+                const response = await fetch(`${API_URL}/event-timeline/${newsType}/${newsId}`);
+                const data = await response.json();
 
-    async function fetchEventTimeline(newsId, newsType) {
-        const loading = document.getElementById('timeline-loading');
-        const empty = document.getElementById('timeline-empty');
-        const content = document.getElementById('timeline-content');
-        const items = document.getElementById('timeline-items');
-        const threadTitle = document.getElementById('timeline-thread-title');
-        const reasonSection = document.getElementById('timeline-reason');
-        const reasonText = document.getElementById('timeline-reason-text');
+                if (loading) loading.classList.add('hidden');
 
-        // Reset state
-        if (loading) loading.classList.remove('hidden');
-        if (empty) empty.classList.add('hidden');
-        if (content) content.classList.add('hidden');
-        if (reasonSection) reasonSection.classList.add('hidden');
-        if (items) items.innerHTML = '';
-        if (threadTitle) threadTitle.textContent = '';
+                // Reset timeline links
+                currentTimelineLinks = [];
+                const copyBtn = document.getElementById('copy-timeline-links');
+                if (copyBtn) copyBtn.classList.add('hidden');
 
-        try {
-            const response = await fetch(`${API_URL}/event-timeline/${newsType}/${newsId}`);
-            const data = await response.json();
+                if (!data.related_news || data.related_news.length === 0) {
+                    if (empty) empty.classList.remove('hidden');
+                    return;
+                }
 
-            if (loading) loading.classList.add('hidden');
+                // Store links for copying
+                currentTimelineLinks = data.related_news.map(news => news.link);
+                if (copyBtn && currentTimelineLinks.length > 0) {
+                    copyBtn.classList.remove('hidden');
+                    if (window.lucide) lucide.createIcons();
+                }
 
-            // Reset timeline links
-            currentTimelineLinks = [];
-            const copyBtn = document.getElementById('copy-timeline-links');
-            if (copyBtn) copyBtn.classList.add('hidden');
+                // Show thread title
+                if (threadTitle && data.thread_title) {
+                    threadTitle.textContent = data.thread_title;
+                }
 
-            if (!data.related_news || data.related_news.length === 0) {
-                if (empty) empty.classList.remove('hidden');
-                return;
-            }
+                // Show reason if available
+                if (data.reason && reasonSection && reasonText) {
+                    reasonText.textContent = data.reason;
+                    reasonSection.classList.remove('hidden');
+                }
 
-            // Store links for copying
-            currentTimelineLinks = data.related_news.map(news => news.link);
-            if (copyBtn && currentTimelineLinks.length > 0) {
-                copyBtn.classList.remove('hidden');
-                lucide.createIcons();
-            }
+                // Build timeline items with type badges and actions
+                const timelineHTML = data.related_news.map((news, index) => {
+                    const isCurrent = news.id === data.current_news_id;
+                    const newsType = news.news_type || 'world';
+                    const date = new Date(news.published);
+                    const formattedDate = date.toLocaleDateString('ar-EG', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
 
-            // Show thread title
-            if (threadTitle && data.thread_title) {
-                threadTitle.textContent = data.thread_title;
-            }
+                    // Escape the link for safe use in onclick
+                    const escapedLink = news.link.replace(/'/g, "\\'");
 
-            // Show reason if available
-            if (data.reason && reasonSection && reasonText) {
-                reasonText.textContent = data.reason;
-                reasonSection.classList.remove('hidden');
-            }
+                    // Determine type badge info
+                    let typeBadge = '', typeIcon = '', actionBtn = '', actionClass = '';
+                    const isYouTube = news.link && (news.link.includes('youtube.com') || news.link.includes('youtu.be'));
 
-            // Build timeline items with type badges and actions
-            const timelineHTML = data.related_news.map((news, index) => {
-                const isCurrent = news.id === data.current_news_id;
-                const newsType = news.news_type || 'world';
-                const date = new Date(news.published);
-                const formattedDate = date.toLocaleDateString('ar-EG', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-
-                // Escape the link for safe use in onclick
-                const escapedLink = news.link.replace(/'/g, "\\'");
-
-                // Determine type badge info
-                let typeBadge = '', typeIcon = '', actionBtn = '', actionClass = '';
-                const isYouTube = news.link && (news.link.includes('youtube.com') || news.link.includes('youtu.be'));
-
-                if (newsType === 'world') {
-                    typeBadge = `<span class="timeline-type-badge type-world">🎬 فيديو عالمي</span>`;
-                    actionBtn = `<button class="timeline-action-btn action-video" onclick="event.stopPropagation(); openTimelineLink('${escapedLink}')">
+                    if (newsType === 'world') {
+                        typeBadge = `<span class="timeline-type-badge type-world">🎬 فيديو عالمي</span>`;
+                        actionBtn = `<button class="timeline-action-btn action-video" onclick="event.stopPropagation(); openTimelineLink('${escapedLink}')">
                             <i data-lucide="play-circle" class="w-3 h-3"></i> مشاهدة
                         </button>`;
-                } else if (newsType === 'yemen') {
-                    typeBadge = `<span class="timeline-type-badge type-yemen">🇾🇪 خبر يمني</span>`;
-                    actionBtn = `<button class="timeline-action-btn action-news" onclick="event.stopPropagation(); openTimelineLink('${escapedLink}')">
+                    } else if (newsType === 'yemen') {
+                        typeBadge = `<span class="timeline-type-badge type-yemen">🇾🇪 خبر يمني</span>`;
+                        actionBtn = `<button class="timeline-action-btn action-news" onclick="event.stopPropagation(); openTimelineLink('${escapedLink}')">
                             <i data-lucide="${isYouTube ? 'play-circle' : 'external-link'}" class="w-3 h-3"></i> ${isYouTube ? 'مشاهدة' : 'قراءة'}
                         </button>`;
-                } else if (newsType === 'newspaper') {
-                    typeBadge = `<span class="timeline-type-badge type-newspaper">📰 صحيفة عالمية</span>`;
-                    actionBtn = `<button class="timeline-action-btn action-article" onclick="event.stopPropagation(); openTimelineLink('${escapedLink}')">
+                    } else if (newsType === 'newspaper') {
+                        typeBadge = `<span class="timeline-type-badge type-newspaper">📰 صحيفة عالمية</span>`;
+                        actionBtn = `<button class="timeline-action-btn action-article" onclick="event.stopPropagation(); openTimelineLink('${escapedLink}')">
                             <i data-lucide="book-open" class="w-3 h-3"></i> قراءة المقال
                         </button>`;
-                }
+                    }
 
-                // Get thumbnail for YouTube videos
-                let thumbnailHTML = '';
-                if (isYouTube && news.image_url) {
-                    thumbnailHTML = `<img src="${news.image_url}" alt="" class="timeline-thumbnail" loading="lazy" onerror="this.style.display='none'">`;
-                } else if (news.image_url && newsType === 'newspaper') {
-                    thumbnailHTML = `<img src="${news.image_url}" alt="" class="timeline-thumbnail" loading="lazy" onerror="this.style.display='none'">`;
-                }
+                    // Get thumbnail for YouTube videos
+                    let thumbnailHTML = '';
+                    if (isYouTube && news.image_url) {
+                        thumbnailHTML = `<img src="${news.image_url}" class="timeline-thumbnail" loading="lazy" onerror="this.style.display='none'">`;
+                    } else if (news.image_url && newsType === 'newspaper') {
+                        thumbnailHTML = `<img src="${news.image_url}" class="timeline-thumbnail" loading="lazy" onerror="this.style.display='none'">`;
+                    }
 
-                // Summary preview
-                const summaryHTML = news.summary ? `<p class="timeline-summary">${news.summary}</p>` : '';
-                const timelineImportantBadge = news.is_important ? `
+                    // Summary preview
+                    const summaryHTML = news.summary ? `<p class="timeline-summary">${news.summary}</p>` : '';
+                    const timelineImportantBadge = news.is_important ? `
                         <span class="px-2 py-0.5 bg-brand text-white text-[10px] font-black rounded-sm shadow-lg border border-white/20">
                             <i data-lucide="award" class="w-3 h-3 inline-block ml-1"></i> مقترح للمشاهدة
                         </span>
                     ` : '';
-                const timelineImportanceReason = news.is_important && news.importance_reason
-                    ? `<p class="text-[10px] text-brand-400 mt-2 font-bold italic opacity-90">${news.importance_reason}</p>`
-                    : '';
+                    const timelineImportanceReason = news.is_important && news.importance_reason
+                        ? `<p class="text-[10px] text-brand-400 mt-2 font-bold italic opacity-90">${news.importance_reason}</p>`
+                        : '';
 
-                return `
+                    return `
                         <div class="timeline-item ${isCurrent ? 'current' : ''} type-${newsType}" onclick="openTimelineLink('${escapedLink}')">
                             <div class="timeline-dot"></div>
                             <div class="timeline-card">
@@ -2265,508 +2350,509 @@
                             </div>
                         </div>
                     `;
-            }).join('');
+                }).join('');
 
-            if (items) items.innerHTML = timelineHTML;
-            if (content) content.classList.remove('hidden');
+                if (items) items.innerHTML = timelineHTML;
+                if (content) content.classList.remove('hidden');
 
-            lucide.createIcons();
+                if (window.lucide) lucide.createIcons();
 
-        } catch (error) {
-            console.error('Error fetching timeline:', error);
-            if (loading) loading.classList.add('hidden');
-            if (empty) {
-                empty.classList.remove('hidden');
-                empty.innerHTML = `
+            } catch (error) {
+                console.error('Error fetching timeline:', error);
+                if (loading) loading.classList.add('hidden');
+                if (empty) {
+                    empty.classList.remove('hidden');
+                    empty.innerHTML = `
                         <i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
                         <p>حدث خطأ أثناء تحميل الخريطة الزمنية</p>
                     `;
-            }
-            lucide.createIcons();
-        }
-    }
-
-    function openTimelineLink(link) {
-        // Open the news link directly in a new tab
-        window.open(link, '_blank');
-    }
-
-    function copyTimelineLinks() {
-        if (currentTimelineLinks.length === 0) return;
-
-        const linksText = currentTimelineLinks.join('\n');
-        navigator.clipboard.writeText(linksText).then(() => {
-            // Show success feedback
-            const btn = document.getElementById('copy-timeline-links');
-            if (btn) {
-                const originalHTML = btn.innerHTML;
-                btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i><span>تم النسخ!</span>';
-                btn.classList.add('bg-green-500/20', 'border-green-500/50', 'text-green-400');
-                lucide.createIcons();
-
-                setTimeout(() => {
-                    btn.innerHTML = originalHTML;
-                    btn.classList.remove('bg-green-500/20', 'border-green-500/50', 'text-green-400');
-                    lucide.createIcons();
-                }, 2000);
-            }
-        }).catch(err => {
-            console.error('Failed to copy links:', err);
-            alert('فشل نسخ الروابط');
-        });
-    }
-
-    // ========================================
-    // Geopolitical Heatmap Functions
-    // ========================================
-    let heatmapMap = null;
-    let heatmapMarkers = [];
-    let heatmapInitialized = false;
-
-    async function initHeatmap() {
-        if (typeof L === 'undefined') {
-            console.error('Leaflet library not loaded');
-            return;
-        }
-
-        if (!heatmapInitialized) {
-            const mapEl = document.getElementById('heatmap-map');
-            if (!mapEl) return;
-
-            heatmapMap = L.map('heatmap-map', {
-                center: [25, 42],
-                zoom: 3,
-                zoomControl: true,
-                attributionControl: true,
-                minZoom: 2,
-                maxZoom: 10
-            });
-
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-                subdomains: 'abcd',
-                maxZoom: 20
-            }).addTo(heatmapMap);
-
-            // Custom control buttons (Reset View + Fit All)
-            const CustomControls = L.Control.extend({
-                options: { position: 'topleft' },
-                onAdd: function (map) {
-                    const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
-                    container.style.cssText = 'background:transparent;border:none;';
-
-                    // Reset to default view button
-                    const resetBtn = L.DomUtil.create('a', '', container);
-                    resetBtn.href = '#';
-                    resetBtn.title = 'العودة للعرض الافتراضي';
-                    resetBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>';
-                    resetBtn.style.cssText = 'display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:rgba(15,15,15,0.9);color:#e5e5e5;border:1px solid rgba(255,255,255,0.1);border-radius:6px;margin-bottom:6px;cursor:pointer;text-decoration:none;transition:all 0.2s;';
-                    resetBtn.onmouseover = () => { resetBtn.style.background = 'rgba(45,212,191,0.2)'; resetBtn.style.color = '#2dd4bf'; resetBtn.style.borderColor = 'rgba(45,212,191,0.4)'; };
-                    resetBtn.onmouseout = () => { resetBtn.style.background = 'rgba(15,15,15,0.9)'; resetBtn.style.color = '#e5e5e5'; resetBtn.style.borderColor = 'rgba(255,255,255,0.1)'; };
-                    L.DomEvent.on(resetBtn, 'click', function (e) {
-                        L.DomEvent.preventDefault(e);
-                        map.setView([25, 42], 3, { animate: true, duration: 0.8 });
-                    });
-
-                    // Fit all markers button
-                    const fitBtn = L.DomUtil.create('a', '', container);
-                    fitBtn.href = '#';
-                    fitBtn.title = 'عرض جميع المواقع';
-                    fitBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>';
-                    fitBtn.style.cssText = 'display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:rgba(15,15,15,0.9);color:#e5e5e5;border:1px solid rgba(255,255,255,0.1);border-radius:6px;margin-bottom:6px;cursor:pointer;text-decoration:none;transition:all 0.2s;';
-                    fitBtn.onmouseover = () => { fitBtn.style.background = 'rgba(59,130,246,0.2)'; fitBtn.style.color = '#3b82f6'; fitBtn.style.borderColor = 'rgba(59,130,246,0.4)'; };
-                    fitBtn.onmouseout = () => { fitBtn.style.background = 'rgba(15,15,15,0.9)'; fitBtn.style.color = '#e5e5e5'; fitBtn.style.borderColor = 'rgba(255,255,255,0.1)'; };
-                    L.DomEvent.on(fitBtn, 'click', function (e) {
-                        L.DomEvent.preventDefault(e);
-                        if (heatmapMarkers.length > 0) {
-                            const markerBounds = [];
-                            heatmapMarkers.forEach(m => { if (m.getLatLng) markerBounds.push(m.getLatLng()); });
-                            if (markerBounds.length > 0) {
-                                map.fitBounds(L.latLngBounds(markerBounds).pad(0.15), { animate: true, duration: 0.8 });
-                            }
-                        }
-                    });
-
-                    L.DomEvent.disableClickPropagation(container);
-                    return container;
                 }
-            });
-            heatmapMap.addControl(new CustomControls());
-
-            heatmapInitialized = true;
-        }
-
-        // Force map to recalculate size (needed when container was hidden)
-        setTimeout(() => {
-            if (heatmapMap) heatmapMap.invalidateSize();
-        }, 250);
-
-        await fetchHeatmapData();
-    }
-
-    async function fetchHeatmapData() {
-        const loading = document.getElementById('heatmap-loading');
-        if (loading) loading.classList.remove('hidden');
-
-        try {
-            const response = await fetch(`${API_URL}/heatmap`);
-            const data = await response.json();
-
-            if (loading) loading.classList.add('hidden');
-
-            // Update stats
-            const statTotal = document.getElementById('stat-total');
-            const statCountries = document.getElementById('stat-countries');
-            const statConflicts = document.getElementById('stat-conflicts');
-            const statPositive = document.getElementById('stat-positive');
-
-            if (statTotal) statTotal.textContent = data.total_news || 0;
-            if (statCountries) statCountries.textContent = data.mapped_countries || 0;
-
-            const conflictCount = data.locations ? data.locations.filter(l => l.intensity === 'conflict').length : 0;
-            const positiveCount = data.locations ? data.locations.filter(l => l.intensity === 'positive').length : 0;
-            if (statConflicts) statConflicts.textContent = conflictCount;
-            if (statPositive) statPositive.textContent = positiveCount;
-
-            if (data.locations) {
-                renderHeatmapMarkers(data.locations);
+                if (window.lucide) lucide.createIcons();
             }
-        } catch (error) {
-            console.error('Heatmap fetch error:', error);
-            if (loading) loading.classList.add('hidden');
         }
-    }
 
-    function renderHeatmapMarkers(locations) {
-        if (!heatmapMap) return;
+        function openTimelineLink(link) {
+            // Open the news link directly in a new tab
+            window.open(link, '_blank');
+        }
 
-        // Clear existing markers
-        heatmapMarkers.forEach(m => heatmapMap.removeLayer(m));
-        heatmapMarkers = [];
+        function copyTimelineLinks() {
+            if (currentTimelineLinks.length === 0) return;
 
-        const intensityColors = {
-            conflict: '#ef4444',
-            crisis: '#f59e0b',
-            important: '#3b82f6',
-            positive: '#10b981'
-        };
+            const linksText = currentTimelineLinks.join('\n');
+            navigator.clipboard.writeText(linksText).then(() => {
+                // Show success feedback
+                const btn = document.getElementById('copy-timeline-links');
+                if (btn) {
+                    const originalHTML = btn.innerHTML;
+                    btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i><span>تم النسخ!</span>';
+                    btn.classList.add('bg-green-500/20', 'border-green-500/50', 'text-green-400');
+                    if (window.lucide) lucide.createIcons();
 
-        const intensityGlows = {
-            conflict: 'rgba(239, 68, 68, 0.4)',
-            crisis: 'rgba(245, 158, 11, 0.3)',
-            important: 'rgba(59, 130, 246, 0.3)',
-            positive: 'rgba(16, 185, 129, 0.3)'
-        };
+                    setTimeout(() => {
+                        btn.innerHTML = originalHTML;
+                        btn.classList.remove('bg-green-500/20', 'border-green-500/50', 'text-green-400');
+                        if (window.lucide) lucide.createIcons();
+                    }, 2000);
+                }
+            }).catch(err => {
+                console.error('Failed to copy links:', err);
+                alert('فشل نسخ الروابط');
+            });
+        }
 
-        const intensityLabels = {
-            conflict: 'صراع وتوتر عالٍ',
-            crisis: 'أزمة سياسية',
-            important: 'أحداث مهمة',
-            positive: 'تطورات إيجابية'
-        };
+        // ========================================
+        // Geopolitical Heatmap Functions
+        // ========================================
+        let heatmapMap = null;
+        let heatmapMarkers = [];
+        let heatmapInitialized = false;
 
-        const typeColors = { world: '#3b82f6', yemen: '#10b981', newspaper: '#f59e0b' };
-        const typeLabels = { world: 'عالمي', yemen: 'يمني', newspaper: 'صحافة' };
+        async function initHeatmap() {
+            if (typeof L === 'undefined') {
+                console.error('Leaflet library not loaded');
+                return;
+            }
 
-        locations.forEach((loc, idx) => {
-            const color = intensityColors[loc.intensity] || '#3b82f6';
-            const glow = intensityGlows[loc.intensity] || 'rgba(59, 130, 246, 0.3)';
-            const radius = Math.min(Math.max(loc.news_count * 4, 10), 40);
+            if (!heatmapInitialized) {
+                const mapEl = document.getElementById('heatmap-map');
+                if (!mapEl) return;
 
-            // Outer glow ring (non-interactive so clicks pass through to main marker)
-            const glowMarker = L.circleMarker([loc.lat, loc.lng], {
-                radius: radius + 10,
-                fillColor: color,
-                color: 'transparent',
-                weight: 0,
-                fillOpacity: 0.12,
-                interactive: false
-            }).addTo(heatmapMap);
-            heatmapMarkers.push(glowMarker);
+                heatmapMap = L.map('heatmap-map', {
+                    center: [25, 42],
+                    zoom: 3,
+                    zoomControl: true,
+                    attributionControl: true,
+                    minZoom: 2,
+                    maxZoom: 10
+                });
 
-            // Main marker
-            const marker = L.circleMarker([loc.lat, loc.lng], {
-                radius: radius,
-                fillColor: color,
-                color: color,
-                weight: 2,
-                opacity: 0.9,
-                fillOpacity: 0.35
-            }).addTo(heatmapMap);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+                    subdomains: 'abcd',
+                    maxZoom: 20
+                }).addTo(heatmapMap);
 
-            // Build popup content — render ALL items, hide extras beyond first 8
-            const initialCount = 8;
-            const newsListHTML = loc.news.map((n, i) => {
-                const typeColor = typeColors[n.type] || '#3b82f6';
-                const typeLabel = typeLabels[n.type] || n.type;
-                const isHidden = i >= initialCount;
-                return `<a href="${n.link}" target="_blank" rel="noopener" class="popup-news-item${isHidden ? ' popup-more-item' : ''}" ${isHidden ? 'style="display:none"' : ''} onclick="event.stopPropagation()">
+                // Custom control buttons (Reset View + Fit All)
+                const CustomControls = L.Control.extend({
+                    options: { position: 'topleft' },
+                    onAdd: function (map) {
+                        const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+                        container.style.cssText = 'background:transparent;border:none;';
+
+                        // Reset to default view button
+                        const resetBtn = L.DomUtil.create('a', '', container);
+                        resetBtn.href = '#';
+                        resetBtn.title = 'العودة للعرض الافتراضي';
+                        resetBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>';
+                        resetBtn.style.cssText = 'display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:rgba(15,15,15,0.9);color:#e5e5e5;border:1px solid rgba(255,255,255,0.1);border-radius:6px;margin-bottom:6px;cursor:pointer;text-decoration:none;transition:all 0.2s;';
+                        resetBtn.onmouseover = () => { resetBtn.style.background = 'rgba(45,212,191,0.2)'; resetBtn.style.color = '#2dd4bf'; resetBtn.style.borderColor = 'rgba(45,212,191,0.4)'; };
+                        resetBtn.onmouseout = () => { resetBtn.style.background = 'rgba(15,15,15,0.9)'; resetBtn.style.color = '#e5e5e5'; resetBtn.style.borderColor = 'rgba(255,255,255,0.1)'; };
+                        L.DomEvent.on(resetBtn, 'click', function (e) {
+                            L.DomEvent.preventDefault(e);
+                            map.setView([25, 42], 3, { animate: true, duration: 0.8 });
+                        });
+
+                        // Fit all markers button
+                        const fitBtn = L.DomUtil.create('a', '', container);
+                        fitBtn.href = '#';
+                        fitBtn.title = 'عرض جميع المواقع';
+                        fitBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>';
+                        fitBtn.style.cssText = 'display:flex;align-items:center;justify-content:center;width:34px;height:34px;background:rgba(15,15,15,0.9);color:#e5e5e5;border:1px solid rgba(255,255,255,0.1);border-radius:6px;margin-bottom:6px;cursor:pointer;text-decoration:none;transition:all 0.2s;';
+                        fitBtn.onmouseover = () => { fitBtn.style.background = 'rgba(59,130,246,0.2)'; fitBtn.style.color = '#3b82f6'; fitBtn.style.borderColor = 'rgba(59,130,246,0.4)'; };
+                        fitBtn.onmouseout = () => { fitBtn.style.background = 'rgba(15,15,15,0.9)'; fitBtn.style.color = '#e5e5e5'; fitBtn.style.borderColor = 'rgba(255,255,255,0.1)'; };
+                        L.DomEvent.on(fitBtn, 'click', function (e) {
+                            L.DomEvent.preventDefault(e);
+                            if (heatmapMarkers.length > 0) {
+                                const markerBounds = [];
+                                heatmapMarkers.forEach(m => { if (m.getLatLng) markerBounds.push(m.getLatLng()); });
+                                if (markerBounds.length > 0) {
+                                    map.fitBounds(L.latLngBounds(markerBounds).pad(0.15), { animate: true, duration: 0.8 });
+                                }
+                            }
+                        });
+
+                        L.DomEvent.disableClickPropagation(container);
+                        return container;
+                    }
+                });
+                heatmapMap.addControl(new CustomControls());
+
+                heatmapInitialized = true;
+            }
+
+            // Force map to recalculate size (needed when container was hidden)
+            setTimeout(() => {
+                if (heatmapMap) heatmapMap.invalidateSize();
+            }, 250);
+
+            await fetchHeatmapData();
+        }
+
+        async function fetchHeatmapData() {
+            const loading = document.getElementById('heatmap-loading');
+            if (loading) loading.classList.remove('hidden');
+
+            try {
+                const response = await fetch(`${API_URL}/heatmap`);
+                const data = await response.json();
+
+                if (loading) loading.classList.add('hidden');
+
+                // Update stats
+                const statTotal = document.getElementById('stat-total');
+                const statCountries = document.getElementById('stat-countries');
+                const statConflicts = document.getElementById('stat-conflicts');
+                const statPositive = document.getElementById('stat-positive');
+
+                if (statTotal) statTotal.textContent = data.total_news || 0;
+                if (statCountries) statCountries.textContent = data.mapped_countries || 0;
+
+                const conflictCount = data.locations ? data.locations.filter(l => l.intensity === 'conflict').length : 0;
+                const positiveCount = data.locations ? data.locations.filter(l => l.intensity === 'positive').length : 0;
+                if (statConflicts) statConflicts.textContent = conflictCount;
+                if (statPositive) statPositive.textContent = positiveCount;
+
+                if (data.locations) {
+                    renderHeatmapMarkers(data.locations);
+                }
+            } catch (error) {
+                console.error('Heatmap fetch error:', error);
+                if (loading) loading.classList.add('hidden');
+            }
+        }
+
+        function renderHeatmapMarkers(locations) {
+            if (!heatmapMap) return;
+
+            // Clear existing markers
+            heatmapMarkers.forEach(m => heatmapMap.removeLayer(m));
+            heatmapMarkers = [];
+
+            const intensityColors = {
+                conflict: '#ef4444',
+                crisis: '#f59e0b',
+                important: '#3b82f6',
+                positive: '#10b981'
+            };
+
+            const intensityGlows = {
+                conflict: 'rgba(239, 68, 68, 0.4)',
+                crisis: 'rgba(245, 158, 11, 0.3)',
+                important: 'rgba(59, 130, 246, 0.3)',
+                positive: 'rgba(16, 185, 129, 0.3)'
+            };
+
+            const intensityLabels = {
+                conflict: 'صراع وتوتر عالٍ',
+                crisis: 'أزمة سياسية',
+                important: 'أحداث مهمة',
+                positive: 'تطورات إيجابية'
+            };
+
+            const typeColors = { world: '#3b82f6', yemen: '#10b981', newspaper: '#f59e0b' };
+            const typeLabels = { world: 'عالمي', yemen: 'يمني', newspaper: 'صحافة' };
+
+            locations.forEach((loc, idx) => {
+                const color = intensityColors[loc.intensity] || '#3b82f6';
+                const glow = intensityGlows[loc.intensity] || 'rgba(59, 130, 246, 0.3)';
+                const radius = Math.min(Math.max(loc.news_count * 4, 10), 40);
+
+                // Outer glow ring (non-interactive so clicks pass through to main marker)
+                const glowMarker = L.circleMarker([loc.lat, loc.lng], {
+                    radius: radius + 10,
+                    fillColor: color,
+                    color: 'transparent',
+                    weight: 0,
+                    fillOpacity: 0.12,
+                    interactive: false
+                }).addTo(heatmapMap);
+                heatmapMarkers.push(glowMarker);
+
+                // Main marker
+                const marker = L.circleMarker([loc.lat, loc.lng], {
+                    radius: radius,
+                    fillColor: color,
+                    color: color,
+                    weight: 2,
+                    opacity: 0.9,
+                    fillOpacity: 0.35
+                }).addTo(heatmapMap);
+
+                // Build popup content — render ALL items, hide extras beyond first 8
+                const initialCount = 8;
+                const newsListHTML = loc.news.map((n, i) => {
+                    const typeColor = typeColors[n.type] || '#3b82f6';
+                    const typeLabel = typeLabels[n.type] || n.type;
+                    const isHidden = i >= initialCount;
+                    return `<a href="${n.link}" target="_blank" rel="noopener" class="popup-news-item${isHidden ? ' popup-more-item' : ''}" ${isHidden ? 'style="display:none"' : ''} onclick="event.stopPropagation()">
                         <div class="popup-news-title">${n.title}</div>
                         <div class="popup-news-meta">
                             <span><span class="popup-type-dot" style="background:${typeColor}"></span>${typeLabel} · ${n.source}</span>
                         </div>
                     </a>`;
-            }).join('');
+                }).join('');
 
-            const extraCount = loc.news.length - initialCount;
-            const moreBtn = extraCount > 0
-                ? `<div class="popup-load-more" onclick="this.parentNode.querySelectorAll('.popup-more-item').forEach(function(el){el.style.display=\'block\'});this.style.display=\'none\'" style="text-align:center;font-size:11px;color:#2dd4bf;padding:10px 0;margin-top:4px;border-top:1px solid rgba(255,255,255,0.08);cursor:pointer;font-weight:600;transition:color 0.2s" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#2dd4bf'">▼ عرض ${extraCount} خبر آخر</div>`
-                : '';
+                const extraCount = loc.news.length - initialCount;
+                const moreBtn = extraCount > 0
+                    ? `<div class="popup-load-more" onclick="this.parentNode.querySelectorAll('.popup-more-item').forEach(function(el){el.style.display=\'block\'});this.style.display=\'none\'" style="text-align:center;font-size:11px;color:#2dd4bf;padding:10px 0;margin-top:4px;border-top:1px solid rgba(255,255,255,0.08);cursor:pointer;font-weight:600;transition:color 0.2s" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#2dd4bf'">▼ عرض ${extraCount} خبر آخر</div>`
+                    : '';
 
-            const popupContent = `
+                const popupContent = `
                     <div class="popup-country">${loc.country} <span style="font-size:11px;color:#6b7280;font-weight:400">${loc.country_en}</span></div>
                     <div class="popup-count">${loc.news_count} خبر · ${intensityLabels[loc.intensity] || loc.intensity}</div>
                     <div style="max-height:400px;overflow-y:auto;direction:rtl">${newsListHTML}${moreBtn}</div>
                 `;
 
-            marker.bindPopup(popupContent, { maxWidth: 340, minWidth: 260 });
-            heatmapMarkers.push(marker);
+                marker.bindPopup(popupContent, { maxWidth: 340, minWidth: 260 });
+                heatmapMarkers.push(marker);
 
-            // Country label
-            const label = L.marker([loc.lat, loc.lng], {
-                icon: L.divIcon({
-                    className: 'country-label-icon',
-                    html: `<div style="font-size:10px;color:${color};font-weight:700;text-shadow:0 1px 4px rgba(0,0,0,0.9),0 0 8px rgba(0,0,0,0.7);white-space:nowrap;text-align:center;transform:translateX(-50%);font-family:'Noto Sans Arabic',sans-serif;pointer-events:none">${loc.country}<br><span style="font-size:9px;font-weight:400;color:#9ca3af">${loc.news_count}</span></div>`,
-                    iconSize: [0, 0],
-                    iconAnchor: [0, -radius - 10]
-                }),
-                interactive: false
-            }).addTo(heatmapMap);
-            heatmapMarkers.push(label);
-
-            // Extra pulsing ring for conflict zones
-            if (loc.intensity === 'conflict') {
-                const pulseRing = L.circleMarker([loc.lat, loc.lng], {
-                    radius: radius + 18,
-                    fillColor: 'transparent',
-                    color: color,
-                    weight: 1,
-                    opacity: 0.2,
-                    fillOpacity: 0,
+                // Country label
+                const label = L.marker([loc.lat, loc.lng], {
+                    icon: L.divIcon({
+                        className: 'country-label-icon',
+                        html: `<div style="font-size:10px;color:${color};font-weight:700;text-shadow:0 1px 4px rgba(0,0,0,0.9),0 0 8px rgba(0,0,0,0.7);white-space:nowrap;text-align:center;transform:translateX(-50%);font-family:'Noto Sans Arabic',sans-serif;pointer-events:none">${loc.country}<br><span style="font-size:9px;font-weight:400;color:#9ca3af">${loc.news_count}</span></div>`,
+                        iconSize: [0, 0],
+                        iconAnchor: [0, -radius - 10]
+                    }),
                     interactive: false
                 }).addTo(heatmapMap);
-                heatmapMarkers.push(pulseRing);
-            }
-        });
-    }
+                heatmapMarkers.push(label);
 
-    // ========================================
-    // News Clustering Functions
-    // ========================================
-    let clustersData = null;
-    let clustersLoaded = false;
-    let pendingClusterUpdates = [];
-    let highlightedClusterIds = new Set();
-    let lastUpdatedClusterId = null;
-
-    function showClusterBanner(count) {
-        const banner = document.getElementById('cluster-updates-banner');
-        const txt = document.getElementById('cluster-updates-text');
-        if (banner && txt) {
-            const lastUpdate = pendingClusterUpdates[pendingClusterUpdates.length - 1];
-            const clusterName = lastUpdate ? (lastUpdate.cluster_title || '').substring(0, 50) : '';
-            if (clusterName) {
-                txt.textContent = `خبر جديد في: ${clusterName}${clusterName.length >= 50 ? '...' : ''}`;
-            } else {
-                txt.textContent = `${count} تحديث جديد في الأحداث`;
-            }
-            banner.classList.remove('hidden');
-            lucide.createIcons();
+                // Extra pulsing ring for conflict zones
+                if (loc.intensity === 'conflict') {
+                    const pulseRing = L.circleMarker([loc.lat, loc.lng], {
+                        radius: radius + 18,
+                        fillColor: 'transparent',
+                        color: color,
+                        weight: 1,
+                        opacity: 0.2,
+                        fillOpacity: 0,
+                        interactive: false
+                    }).addTo(heatmapMap);
+                    heatmapMarkers.push(pulseRing);
+                }
+            });
         }
-    }
 
-    function hideClusterBanner() {
-        const banner = document.getElementById('cluster-updates-banner');
-        if (banner) banner.classList.add('hidden');
-        pendingClusterUpdates = [];
-    }
+        // ========================================
+        // News Clustering Functions
+        // ========================================
+        let clustersData = null;
+        let clustersLoaded = false;
+        let pendingClusterUpdates = [];
+        let highlightedClusterIds = new Set();
+        let lastUpdatedClusterId = null;
 
-    function applyClusterUpdates() {
-        hideClusterBanner();
-        if (!clustersData) return;
+        function showClusterBanner(count) {
+            const banner = document.getElementById('cluster-updates-banner');
+            const txt = document.getElementById('cluster-updates-text');
+            if (banner && txt) {
+                const lastUpdate = pendingClusterUpdates[pendingClusterUpdates.length - 1];
+                const clusterName = lastUpdate ? (lastUpdate.cluster_title || '').substring(0, 50) : '';
+                if (clusterName) {
+                    txt.textContent = `خبر جديد في: ${clusterName}${clusterName.length >= 50 ? '...' : ''}`;
+                } else {
+                    txt.textContent = `${count} تحديث جديد في الأحداث`;
+                }
+                banner.classList.remove('hidden');
+                if (window.lucide) lucide.createIcons();
+            }
+        }
 
-        const scrollTargetId = lastUpdatedClusterId;
+        function hideClusterBanner() {
+            const banner = document.getElementById('cluster-updates-banner');
+            if (banner) banner.classList.add('hidden');
+            pendingClusterUpdates = [];
+        }
 
-        renderClusters(clustersData.clusters);
-        lucide.createIcons();
+        function applyClusterUpdates() {
+            hideClusterBanner();
+            if (!clustersData) return;
 
-        // Scroll to the last updated cluster
-        if (scrollTargetId !== null) {
-            setTimeout(() => {
-                const idx = clustersData.clusters.findIndex(c => c.id === scrollTargetId);
-                if (idx !== -1) {
-                    const el = document.getElementById(`cluster-${idx}`);
-                    if (el) {
-                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        // Auto-expand the cluster to show the new item
-                        const list = document.getElementById(`cluster-list-${idx}`);
-                        if (list && !list.classList.contains('open')) {
-                            toggleCluster(idx);
+            const scrollTargetId = lastUpdatedClusterId;
+
+            renderClusters(clustersData.clusters);
+            // lucide.createIcons(); // Called by renderClusters
+
+            // Scroll to the last updated cluster
+            if (scrollTargetId !== null) {
+                setTimeout(() => {
+                    const idx = clustersData.clusters.findIndex(c => c.id === scrollTargetId);
+                    if (idx !== -1) {
+                        const el = document.getElementById(`cluster-${idx}`);
+                        if (el) {
+                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            // Auto-expand the cluster to show the new item
+                            const list = document.getElementById(`cluster-list-${idx}`);
+                            if (list && !list.classList.contains('open')) {
+                                toggleCluster(idx);
+                            }
+                        }
+                    }
+                    lastUpdatedClusterId = null;
+                    setTimeout(() => { highlightedClusterIds.clear(); }, 6000);
+                }, 400);
+            } else {
+                setTimeout(() => { highlightedClusterIds.clear(); }, 6000);
+            }
+        }
+
+        function handleClusterWsMessage(msg) {
+            const d = msg.data;
+            const isNew = msg.type === 'new_cluster_created';
+            const targetClusterId = isNew ? (d.cluster_data && d.cluster_data.id) : d.cluster_id;
+
+            if (clustersData) {
+                if (isNew) {
+                    const clusterData = { ...d.cluster_data };
+                    const newsItem = { ...d.news, type: d.news_type };
+                    clusterData.news = [newsItem];
+                    clusterData.sources = [newsItem.source];
+                    clusterData.source_count = 1;
+                    clusterData.latest_date = newsItem.published || '';
+                    clustersData.clusters.unshift(clusterData);
+                    clustersData.total_clusters = clustersData.clusters.length;
+                    clustersData.total_news += 1;
+                } else {
+                    const cluster = clustersData.clusters.find(c => c.id === d.cluster_id);
+                    if (cluster) {
+                        const newsItem = { ...d.news, type: d.news_type };
+                        const exists = cluster.news.some(n => n.id === newsItem.id && n.type === newsItem.type);
+                        if (!exists) {
+                            cluster.news.unshift(newsItem);
+                            cluster.news_count = cluster.news.length;
+                            cluster.sources = [...new Set(cluster.news.map(n => n.source))];
+                            cluster.source_count = cluster.sources.length;
+                            cluster.types = [...new Set(cluster.news.map(n => n.type))];
+                            cluster.latest_date = newsItem.published || cluster.latest_date;
+                            clustersData.total_news += 1;
                         }
                     }
                 }
-                lastUpdatedClusterId = null;
-                setTimeout(() => { highlightedClusterIds.clear(); }, 6000);
-            }, 400);
-        } else {
-            setTimeout(() => { highlightedClusterIds.clear(); }, 6000);
-        }
-    }
-
-    function handleClusterWsMessage(msg) {
-        const d = msg.data;
-        const isNew = msg.type === 'new_cluster_created';
-        const targetClusterId = isNew ? (d.cluster_data && d.cluster_data.id) : d.cluster_id;
-
-        if (clustersData) {
-            if (isNew) {
-                const clusterData = { ...d.cluster_data };
-                const newsItem = { ...d.news, type: d.news_type };
-                clusterData.news = [newsItem];
-                clusterData.sources = [newsItem.source];
-                clusterData.source_count = 1;
-                clusterData.latest_date = newsItem.published || '';
-                clustersData.clusters.unshift(clusterData);
-                clustersData.total_clusters = clustersData.clusters.length;
-                clustersData.total_news += 1;
             } else {
-                const cluster = clustersData.clusters.find(c => c.id === d.cluster_id);
-                if (cluster) {
-                    const newsItem = { ...d.news, type: d.news_type };
-                    const exists = cluster.news.some(n => n.id === newsItem.id && n.type === newsItem.type);
-                    if (!exists) {
-                        cluster.news.unshift(newsItem);
-                        cluster.news_count = cluster.news.length;
-                        cluster.sources = [...new Set(cluster.news.map(n => n.source))];
-                        cluster.source_count = cluster.sources.length;
-                        cluster.types = [...new Set(cluster.news.map(n => n.type))];
-                        cluster.latest_date = newsItem.published || cluster.latest_date;
-                        clustersData.total_news += 1;
-                    }
-                }
+                clustersLoaded = false;
             }
-        } else {
-            clustersLoaded = false;
+
+            if (targetClusterId) {
+                highlightedClusterIds.add(targetClusterId);
+                lastUpdatedClusterId = targetClusterId;
+            }
+
+            pendingClusterUpdates.push(d);
+
+            if (activeTab === 'clusters') {
+                showClusterBanner(pendingClusterUpdates.length);
+            }
         }
 
-        if (targetClusterId) {
-            highlightedClusterIds.add(targetClusterId);
-            lastUpdatedClusterId = targetClusterId;
-        }
-
-        pendingClusterUpdates.push(d);
-
-        if (activeTab === 'clusters') {
-            showClusterBanner(pendingClusterUpdates.length);
-        }
-    }
-
-    async function fetchClusters(forceRefresh = false) {
-        if (clustersLoaded && clustersData && !forceRefresh) {
-            return;
-        }
-
-        const loading = document.getElementById('clusters-loading');
-        const error = document.getElementById('clusters-error');
-        const stats = document.getElementById('clusters-stats');
-        const grid = document.getElementById('clusters-grid');
-
-        if (loading) loading.classList.remove('hidden');
-        if (error) error.classList.add('hidden');
-        if (stats) stats.classList.add('hidden');
-        if (grid) grid.innerHTML = '';
-
-        try {
-            const response = await fetch(`${API_URL}/news/clusters`);
-            const data = await response.json();
-
-            if (loading) loading.classList.add('hidden');
-
-            if (data.error) {
-                if (error) {
-                    error.classList.remove('hidden');
-                    const errText = document.getElementById('clusters-error-text');
-                    if (errText) errText.textContent = data.error;
-                }
+        async function fetchClusters(forceRefresh = false) {
+            if (clustersLoaded && clustersData && !forceRefresh) {
                 return;
             }
 
-            clustersData = data;
-            clustersLoaded = true;
+            const loading = document.getElementById('clusters-loading');
+            const error = document.getElementById('clusters-error');
+            const stats = document.getElementById('clusters-stats');
+            const grid = document.getElementById('clusters-grid');
 
-            const countEl = document.getElementById('clusters-count');
-            const newsCountEl = document.getElementById('clusters-news-count');
-            if (countEl) countEl.textContent = data.total_clusters;
-            if (newsCountEl) newsCountEl.textContent = data.total_news;
-            if (stats) stats.classList.remove('hidden');
+            if (loading) loading.classList.remove('hidden');
+            if (error) error.classList.add('hidden');
+            if (stats) stats.classList.add('hidden');
+            if (grid) grid.innerHTML = '';
 
-            renderClusters(data.clusters);
-            lucide.createIcons();
-        } catch (err) {
-            console.error('Clusters fetch error:', err);
-            if (loading) loading.classList.add('hidden');
-            if (error) {
-                error.classList.remove('hidden');
-                const errText = document.getElementById('clusters-error-text');
-                if (errText) errText.textContent = err.message;
+            try {
+                const response = await fetch(`${API_URL}/news/clusters`);
+                const data = await response.json();
+
+                if (loading) loading.classList.add('hidden');
+
+                if (data.error) {
+                    if (error) {
+                        error.classList.remove('hidden');
+                        const errText = document.getElementById('clusters-error-text');
+                        if (errText) errText.textContent = data.error;
+                    }
+                    return;
+                }
+
+                clustersData = data;
+                clustersLoaded = true;
+
+                const countEl = document.getElementById('clusters-count');
+                const newsCountEl = document.getElementById('clusters-news-count');
+                if (countEl) countEl.textContent = data.total_clusters;
+                if (newsCountEl) newsCountEl.textContent = data.total_news;
+                if (stats) stats.classList.remove('hidden');
+
+                renderClusters(data.clusters);
+                // lucide.createIcons(); // Called by renderClusters
+            } catch (err) {
+                console.error('Clusters fetch error:', err);
+                if (loading) loading.classList.add('hidden');
+                if (error) {
+                    error.classList.remove('hidden');
+                    const errText = document.getElementById('clusters-error-text');
+                    if (errText) errText.textContent = err.message;
+                }
             }
         }
-    }
 
-    function refreshClusters() {
-        fetchClusters(true);
-    }
-
-    function renderClusters(clusters) {
-        const grid = document.getElementById('clusters-grid');
-        if (!grid) return;
-
-        if (clustersData) {
-            const countEl = document.getElementById('clusters-count');
-            const newsCountEl = document.getElementById('clusters-news-count');
-            if (countEl) countEl.textContent = clustersData.total_clusters;
-            if (newsCountEl) newsCountEl.textContent = clustersData.total_news;
+        function refreshClusters() {
+            fetchClusters(true);
         }
 
-        if (!clusters || clusters.length === 0) {
-            grid.innerHTML = `
+        function renderClusters(clusters) {
+            const grid = document.getElementById('clusters-grid');
+            if (!grid) return;
+
+            if (clustersData) {
+                const countEl = document.getElementById('clusters-count');
+                const newsCountEl = document.getElementById('clusters-news-count');
+                if (countEl) countEl.textContent = clustersData.total_clusters;
+                if (newsCountEl) newsCountEl.textContent = clustersData.total_news;
+            }
+
+            if (!clusters || clusters.length === 0) {
+                grid.innerHTML = `
                     <div class="col-span-full text-center py-20">
                         <i data-lucide="inbox" class="w-16 h-16 mx-auto mb-4 text-neutral-700"></i>
                         <p class="text-neutral-400 text-lg mb-2">لا توجد أحداث مجمّعة حالياً</p>
                         <p class="text-neutral-600 text-sm">سيتم تجميع الأخبار عند توفر عدد كافٍ منها</p>
                     </div>
                 `;
-            return;
-        }
+                if (window.lucide) lucide.createIcons();
+                return;
+            }
 
-        const intensityColors = {
-            conflict: { glow: 'rgba(239, 68, 68, 0.4)', text: '#f87171', label: 'صراع وتوتر عالٍ' },
-            crisis: { glow: 'rgba(245, 158, 11, 0.4)', text: '#fbbf24', label: 'أزمة سياسية' },
-            important: { glow: 'rgba(59, 130, 246, 0.4)', text: '#60a5fa', label: 'حدث مهم' },
-            positive: { glow: 'rgba(16, 185, 129, 0.4)', text: '#34d399', label: 'تطور إيجابي' }
-        };
+            const intensityColors = {
+                conflict: { glow: 'rgba(239, 68, 68, 0.4)', text: '#f87171', label: 'صراع وتوتر عالٍ' },
+                crisis: { glow: 'rgba(245, 158, 11, 0.4)', text: '#fbbf24', label: 'أزمة سياسية' },
+                important: { glow: 'rgba(59, 130, 246, 0.4)', text: '#60a5fa', label: 'حدث مهم' },
+                positive: { glow: 'rgba(16, 185, 129, 0.4)', text: '#34d399', label: 'تطور إيجابي' }
+            };
 
-        const typeLabels = { world: '🎬 عالمي', yemen: '🇾🇪 يمني', newspaper: '📰 صحافة' };
+            const typeLabels = { world: '🎬 عالمي', yemen: '🇾🇪 يمني', newspaper: '📰 صحافة' };
 
-        grid.innerHTML = clusters.map((cluster, idx) => {
-            const intensity = intensityColors[cluster.intensity] || intensityColors.important;
-            const isLarge = cluster.news_count >= 5;
+            grid.innerHTML = clusters.map((cluster, idx) => {
+                const intensity = intensityColors[cluster.intensity] || intensityColors.important;
+                const isLarge = cluster.news_count >= 5;
 
-            const sourceTags = cluster.sources.slice(0, 4).map(s =>
-                `<span class="cluster-source-tag">${s}</span>`
-            ).join('');
-            const extraSources = cluster.sources.length > 4 ? `<span class="cluster-source-tag">+${cluster.sources.length - 4}</span>` : '';
+                const sourceTags = cluster.sources.slice(0, 4).map(s =>
+                    `<span class="cluster-source-tag">${s}</span>`
+                ).join('');
+                const extraSources = cluster.sources.length > 4 ? `<span class="cluster-source-tag">+${cluster.sources.length - 4}</span>` : '';
 
-            const typeBadges = cluster.types.map(t =>
-                `<span class="cluster-type-dot ${t}" title="${typeLabels[t] || t}"></span>`
-            ).join('');
+                const typeBadges = cluster.types.map(t =>
+                    `<span class="cluster-type-dot ${t}" title="${typeLabels[t] || t}"></span>`
+                ).join('');
 
-            const newsListHtml = cluster.news.map(n => {
-                const typeColor = n.type === 'world' ? '#3b82f6' : n.type === 'yemen' ? '#10b981' : '#f59e0b';
-                const thumbSrc = n.image_url || '';
-                const thumbHtml = thumbSrc ? `<img src="${thumbSrc}" class="cluster-news-thumb" loading="lazy" onerror="this.style.display='none'">` : '';
-                const escapedLink = n.link.replace(/'/g, "\'");
-                const importanceBadge = n.is_important ? `
+                const newsListHtml = cluster.news.map(n => {
+                    const typeColor = n.type === 'world' ? '#3b82f6' : n.type === 'yemen' ? '#10b981' : '#f59e0b';
+                    const thumbSrc = n.image_url || '';
+                    const thumbHtml = thumbSrc ? `<img src="${thumbSrc}" class="cluster-news-thumb" loading="lazy" onerror="this.style.display='none'">` : '';
+                    const escapedLink = n.link.replace(/'/g, "\'");
+                    const importanceBadge = n.is_important ? `
                         <div class="absolute top-2 right-2 z-10">
                             <span class="px-2 py-0.5 bg-brand text-white text-[9px] font-black rounded-sm shadow-lg flex items-center gap-1 border border-white/20">
                                 <i data-lucide="award" class="w-2.5 h-2.5 fill-current"></i> مُقترح
@@ -2774,7 +2860,7 @@
                         </div>
                     ` : '';
 
-                return `
+                    return `
                         <a href="${n.link}" target="_blank" rel="noopener" class="cluster-news-item group relative" onclick="event.stopPropagation()">
                             ${importanceBadge}
                             ${thumbHtml}
@@ -2797,15 +2883,15 @@
                             </div>
                         </a>
                     `;
-            }).join('');
+                }).join('');
 
-            const isHighlighted = highlightedClusterIds.has(cluster.id);
-            const isNewCluster = isHighlighted && cluster.news_count === 1;
-            const highlightClass = isHighlighted ? (isNewCluster ? 'cluster-new-highlight' : 'cluster-highlight') : '';
-            const badgeHtml = isHighlighted ? (isNewCluster ? '<span class="cluster-new-badge">حدث جديد</span>' : '<span class="cluster-updated-badge">تم التحديث</span>') : '';
-            const animStyle = isHighlighted ? 'animation-delay:0s; opacity:1;' : `animation-delay: ${idx * 0.1}s`;
+                const isHighlighted = highlightedClusterIds.has(cluster.id);
+                const isNewCluster = isHighlighted && cluster.news_count === 1;
+                const highlightClass = isHighlighted ? (isNewCluster ? 'cluster-new-highlight' : 'cluster-highlight') : '';
+                const badgeHtml = isHighlighted ? (isNewCluster ? '<span class="cluster-new-badge">حدث جديد</span>' : '<span class="cluster-updated-badge">تم التحديث</span>') : '';
+                const animStyle = isHighlighted ? 'animation-delay:0s; opacity:1;' : `animation-delay: ${idx * 0.1}s`;
 
-            return `
+                return `
                     <div class="cluster-card animate-in ${isLarge ? 'lg:col-span-2' : ''} ${highlightClass}" id="cluster-${idx}" onclick="toggleCluster(${idx})" style="${animStyle}">
                         ${badgeHtml}
                         <div class="cluster-intensity-bar ${cluster.intensity}"></div>
@@ -2847,202 +2933,210 @@
                         </div>
                     </div>
                 `;
-        }).join('');
+            }).join('');
 
-        // Add mousemove effect for glow
-        document.querySelectorAll('.cluster-card').forEach(card => {
-            card.addEventListener('mousemove', e => {
-                const rect = card.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
-                card.style.setProperty('--mouse-x', `${x}px`);
-                card.style.setProperty('--mouse-y', `${y}px`);
+            // Add mousemove effect for glow
+            document.querySelectorAll('.cluster-card').forEach(card => {
+                card.addEventListener('mousemove', e => {
+                    const rect = card.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    card.style.setProperty('--mouse-x', `${x}px`);
+                    card.style.setProperty('--mouse-y', `${y}px`);
+                });
             });
-        });
-    }
-    function toggleCluster(idx) {
-        const card = document.getElementById(`cluster-${idx}`);
-        const list = document.getElementById(`cluster-list-${idx}`);
-        if (!card || !list) return;
-
-        const isOpen = list.classList.contains('open');
-        if (isOpen) {
-            list.style.maxHeight = list.scrollHeight + 'px';
-            requestAnimationFrame(() => {
-                list.style.maxHeight = '0px';
-            });
-            list.classList.remove('open');
-            card.classList.remove('expanded');
-        } else {
-            list.style.maxHeight = list.scrollHeight + 'px';
-            list.classList.add('open');
-            card.classList.add('expanded');
-            lucide.createIcons();
-            const onEnd = () => {
-                if (list.classList.contains('open')) {
-                    list.style.maxHeight = 'none';
-                }
-                list.removeEventListener('transitionend', onEnd);
-            };
-            list.addEventListener('transitionend', onEnd);
+            if (window.lucide) lucide.createIcons();
         }
-    }
+        function toggleCluster(idx) {
+            const card = document.getElementById(`cluster-${idx}`);
+            const list = document.getElementById(`cluster-list-${idx}`);
+            if (!card || !list) return;
 
-    function openReader(id, type) {
-        const list = (type === 'world' ? allNews : (type === 'yemen' ? yemenNews : newspaperNews));
-        let item = list.find(n => n.id === id);
-        if (!item && recommendedNews && recommendedNews.length) {
-            item = recommendedNews.find(n => n.id === id && (n.type || type) === type);
-        }
-        if (!item) return;
-        currentReaderNewsId = id;
-        currentReaderNewsType = type;
-
-        const logo = document.getElementById('reader-logo');
-        const source = document.getElementById('reader-source');
-        const img = document.getElementById('reader-image');
-        const title = document.getElementById('reader-title');
-        const date = document.getElementById('reader-date');
-        const link = document.getElementById('reader-link');
-        const content = document.getElementById('reader-content');
-
-        if (logo) logo.src = getSourceLogo(item.source);
-        if (source) source.textContent = item.source;
-        if (img) img.src = item.image_url || getThumbnailUrl(item.link);
-        if (title) title.textContent = item.title;
-        if (date) date.textContent = timeAgo(item.published);
-        if (link) link.href = item.link;
-        if (content) content.innerHTML = `<p class="mb-6">${item.summary || 'Summary not available.'}</p>`;
-
-        const reader = document.getElementById('quick-reader');
-        if (reader) reader.classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
-
-        // Fetch event timeline
-        fetchEventTimeline(id, type);
-
-        lucide.createIcons();
-    }
-
-    function closeReader() {
-        const reader = document.getElementById('quick-reader');
-        if (reader) reader.classList.add('hidden');
-        document.body.style.overflow = 'auto';
-        currentReaderNewsId = null;
-        currentReaderNewsType = null;
-    }
-
-    function connectWS() {
-        try {
-            const ws = new WebSocket(WS_URL);
-            ws.onopen = () => {
-                const ind = document.getElementById('live-indicator');
-                if (ind) ind.classList.remove('hidden');
-            };
-            ws.onmessage = (e) => {
-                const msg = JSON.parse(e.data);
-                if (msg.type === 'ping') return;
-
-                if (msg.type === 'cluster_news_added' || msg.type === 'new_cluster_created') {
-                    handleClusterWsMessage(msg);
-                    return;
-                }
-                if (msg.type === 'cluster_importance_updated') {
-                    clustersLoaded = false;
-                    syncRecommendedBadgesFromServer();
-                    refreshActiveViewAfterImportanceUpdate();
-                    showToast('تم تحديث اقتراحات المشاهدة للمجموعة');
-                    return;
-                }
-
-                let pending = activeTab === 'world' ? pendingNews : (activeTab === 'yemen' ? yemenPendingNews : newspaperPendingNews);
-                if ((msg.type === 'new_news' && activeTab === 'world') || (msg.type === 'new_yemen_news' && activeTab === 'yemen') || (msg.type === 'new_newspaper_news' && activeTab === 'newspaper')) {
-                    pending.push(msg.data);
-                    const banner = document.getElementById('new-news-banner');
-                    if (banner) {
-                        const txt = banner.querySelector('span.text-xs');
-                        if (txt) txt.textContent = `${pending.length} NEW UPDATES AVAILABLE`;
-                        banner.classList.remove('hidden');
+            const isOpen = list.classList.contains('open');
+            if (isOpen) {
+                list.style.maxHeight = list.scrollHeight + 'px';
+                requestAnimationFrame(() => {
+                    list.style.maxHeight = '0px';
+                });
+                list.classList.remove('open');
+                card.classList.remove('expanded');
+            } else {
+                list.style.maxHeight = list.scrollHeight + 'px';
+                list.classList.add('open');
+                card.classList.add('expanded');
+                if (window.lucide) lucide.createIcons();
+                const onEnd = () => {
+                    if (list.classList.contains('open')) {
+                        list.style.maxHeight = 'none';
                     }
-                }
-            };
-            ws.onclose = () => setTimeout(connectWS, 3000);
-        } catch (e) { console.error(e); }
-    }
-
-    const banner = document.getElementById('new-news-banner');
-    if (banner) {
-        banner.onclick = async function () {
-            await syncRecommendedBadgesFromServer();
-            if (activeTab === 'world') { allNews = [...pendingNews, ...allNews]; pendingNews = []; renderUI(allNews); }
-            else if (activeTab === 'yemen') { yemenNews = [...yemenPendingNews, ...yemenNews]; yemenPendingNews = []; renderUI(yemenNews); }
-            else { newspaperNews = [...newspaperPendingNews, ...newspaperNews]; newspaperPendingNews = []; renderUI(newspaperNews); }
-            this.classList.add('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' });
-        };
-    }
-
-    const prevBtn = document.getElementById('prev-btn');
-    if (prevBtn) {
-        prevBtn.onclick = () => {
-            const cp = activeTab === 'world' ? currentPage : (activeTab === 'yemen' ? yemenCurrentPage : (activeTab === 'newspaper' ? newspaperCurrentPage : recommendedCurrentPage));
-            if (cp > 1) {
-                if (activeTab === 'world') fetchNews(currentPage - 1);
-                else if (activeTab === 'yemen') fetchYemenNews(yemenCurrentPage - 1);
-                else if (activeTab === 'newspaper') fetchNewspaperNews(newspaperCurrentPage - 1);
-                else fetchRecommendedNews(recommendedCurrentPage - 1);
+                    list.removeEventListener('transitionend', onEnd);
+                };
+                list.addEventListener('transitionend', onEnd);
             }
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        };
-    }
-
-    const nextBtn = document.getElementById('next-btn');
-    if (nextBtn) {
-        nextBtn.onclick = () => {
-            if (activeTab === 'world') fetchNews(currentPage + 1);
-            else if (activeTab === 'yemen') fetchYemenNews(yemenCurrentPage + 1);
-            else if (activeTab === 'newspaper') fetchNewspaperNews(newspaperCurrentPage + 1);
-            else fetchRecommendedNews(recommendedCurrentPage + 1);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        };
-    }
-
-    async function classifyClusterVideos() {
-        const btn = document.getElementById('classify-btn');
-        if (!btn) return;
-        const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>جارٍ التصنيف...</span>';
-        btn.disabled = true;
-        lucide.createIcons();
-
-        try {
-            const r = await fetch(`${API_URL}/clusters/classify`);
-            const data = await r.json();
-            if (data.error) throw new Error(data.error);
-            refreshClusters();
-        } catch (e) {
-            console.error(e);
-            alert('حدث خطأ أثناء التصنيف: ' + e.message);
-        } finally {
-            btn.innerHTML = originalHTML;
-            btn.disabled = false;
-            lucide.createIcons();
         }
-    }
 
-    async function clearAllNews() {
-        if (confirm('Delete all news from database?')) {
+        function openReader(id, type) {
+            const list = (type === 'world' ? allNews : (type === 'yemen' ? yemenNews : newspaperNews));
+            let item = list.find(n => n.id === id);
+            if (!item && recommendedNews && recommendedNews.length) {
+                item = recommendedNews.find(n => n.id === id && (n.type || type) === type);
+            }
+            if (!item) return;
+            currentReaderNewsId = id;
+            currentReaderNewsType = type;
+
+            const logo = document.getElementById('reader-logo');
+            const source = document.getElementById('reader-source');
+            const img = document.getElementById('reader-image');
+            const title = document.getElementById('reader-title');
+            const date = document.getElementById('reader-date');
+            const link = document.getElementById('reader-link');
+            const content = document.getElementById('reader-content');
+
+            if (logo) logo.src = getSourceLogo(item.source);
+            if (source) source.textContent = item.source;
+            if (img) img.src = item.image_url || getThumbnailUrl(item.link);
+            if (title) title.textContent = item.title;
+            if (date) date.textContent = timeAgo(item.published);
+            if (link) link.href = item.link;
+            if (content) content.innerHTML = `<p class="mb-6">${item.summary || 'Summary not available.'}</p>`;
+
+            const reader = document.getElementById('quick-reader');
+            if (reader) reader.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+
+            // Fetch event timeline
+            fetchEventTimeline(id, type);
+
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function closeReader() {
+            const reader = document.getElementById('quick-reader');
+            if (reader) reader.classList.add('hidden');
+            document.body.style.overflow = 'auto';
+            currentReaderNewsId = null;
+            currentReaderNewsType = null;
+        }
+
+        function connectWS() {
             try {
-                const r = await fetch(`${API_URL}/clear-all`, { method: 'POST' });
-                if (r.ok) location.reload();
+                const ws = new WebSocket(WS_URL);
+                ws.onopen = () => {
+                    const ind = document.getElementById('live-indicator');
+                    if (ind) ind.classList.remove('hidden');
+                };
+                ws.onmessage = (e) => {
+                    const msg = JSON.parse(e.data);
+                    if (msg.type === 'ping') return;
+
+                    if (msg.type === 'cluster_news_added' || msg.type === 'new_cluster_created') {
+                        handleClusterWsMessage(msg);
+                        return;
+                    }
+                    if (msg.type === 'cluster_importance_updated') {
+                        clustersLoaded = false;
+                        syncRecommendedBadgesFromServer();
+                        refreshActiveViewAfterImportanceUpdate();
+                        showToast('تم تحديث اقتراحات المشاهدة للمجموعة');
+                        return;
+                    }
+
+                    let pending = activeTab === 'world' ? pendingNews : (activeTab === 'yemen' ? yemenPendingNews : newspaperPendingNews);
+                    if ((msg.type === 'new_news' && activeTab === 'world') || (msg.type === 'new_yemen_news' && activeTab === 'yemen') || (msg.type === 'new_newspaper_news' && activeTab === 'newspaper')) {
+                        pending.push(msg.data);
+                        const banner = document.getElementById('new-news-banner');
+                        if (banner) {
+                            const txt = banner.querySelector('span.text-xs');
+                            if (txt) txt.textContent = `${pending.length} NEW UPDATES AVAILABLE`;
+                            banner.classList.remove('hidden');
+                        }
+                    }
+                };
+                ws.onclose = () => setTimeout(connectWS, 3000);
             } catch (e) { console.error(e); }
         }
-    }
 
-    document.addEventListener('DOMContentLoaded', () => {
-        if (localStorage.getItem('darkMode') === 'enabled') document.documentElement.classList.add('dark');
-        initThree(); initDate(); fetchNews(1); connectWS();
-    });
-</script>
+        const banner = document.getElementById('new-news-banner');
+        if (banner) {
+            banner.onclick = async function () {
+                await syncRecommendedBadgesFromServer();
+                if (activeTab === 'world') { allNews = [...pendingNews, ...allNews]; pendingNews = []; renderUI(allNews); }
+                else if (activeTab === 'yemen') { yemenNews = [...yemenPendingNews, ...yemenNews]; yemenPendingNews = []; renderUI(yemenNews); }
+                else { newspaperNews = [...newspaperPendingNews, ...newspaperNews]; newspaperPendingNews = []; renderUI(newspaperNews); }
+                this.classList.add('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' });
+            };
+        }
+
+        const prevBtn = document.getElementById('prev-btn');
+        if (prevBtn) {
+            prevBtn.onclick = () => {
+                const cp = activeTab === 'world' ? currentPage : (activeTab === 'yemen' ? yemenCurrentPage : (activeTab === 'newspaper' ? newspaperCurrentPage : recommendedCurrentPage));
+                if (cp > 1) {
+                    if (activeTab === 'world') fetchNews(currentPage - 1);
+                    else if (activeTab === 'yemen') fetchYemenNews(yemenCurrentPage - 1);
+                    else if (activeTab === 'newspaper') fetchNewspaperNews(newspaperCurrentPage - 1);
+                    else fetchRecommendedNews(recommendedCurrentPage - 1);
+                }
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            };
+        }
+
+        const nextBtn = document.getElementById('next-btn');
+        if (nextBtn) {
+            nextBtn.onclick = () => {
+                if (activeTab === 'world') fetchNews(currentPage + 1);
+                else if (activeTab === 'yemen') fetchYemenNews(yemenCurrentPage + 1);
+                else if (activeTab === 'newspaper') fetchNewspaperNews(newspaperCurrentPage + 1);
+                else fetchRecommendedNews(recommendedCurrentPage + 1);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            };
+        }
+
+        async function classifyClusterVideos() {
+            const btn = document.getElementById('classify-btn');
+            if (!btn) return;
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>جارٍ التصنيف...</span>';
+            btn.disabled = true;
+            if (window.lucide) lucide.createIcons();
+
+            try {
+                const r = await fetch(`${API_URL}/clusters/classify`);
+                const data = await r.json();
+                if (data.error) throw new Error(data.error);
+                refreshClusters();
+            } catch (e) {
+                console.error(e);
+                alert('حدث خطأ أثناء التصنيف: ' + e.message);
+            } finally {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                if (window.lucide) lucide.createIcons();
+            }
+        }
+
+        async function clearAllNews() {
+            if (confirm('Delete all news from database?')) {
+                try {
+                    const r = await fetch(`${API_URL}/clear-all`, { method: 'POST' });
+                    if (r.ok) location.reload();
+                } catch (e) { console.error(e); }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                if (localStorage.getItem('darkMode') === 'enabled') document.documentElement.classList.add('dark');
+                initDate();
+                fetchNews(1);
+                connectWS();
+                initThree();
+            } catch (e) {
+                console.error("Initialization error:", e);
+            }
+        });
+    </script>
 </body>
 
 </html>
