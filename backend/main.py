@@ -2358,6 +2358,7 @@ async def startup_event():
     asyncio.create_task(fetch_youtube_feeds())
     asyncio.create_task(fetch_yemen_youtube_feeds())
     asyncio.create_task(fetch_newspaper_feeds())
+    asyncio.create_task(trend_background_task())
 
 @app.get("/api/news")
 async def get_news(page: int = 1, limit: int = 20):
@@ -3025,8 +3026,6 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.error(f"WebSocket error: {e}")
         manager.disconnect(websocket)
 
-# Static files logic moved to the end to avoid catching API routes
-# ... (moved)
 # ============================================
 # Trend Analysis Logic
 # ============================================
@@ -3173,29 +3172,12 @@ async def trend_background_task():
             logger.error(f"Background trend task error: {e}")
         await asyncio.sleep(3600) # Run every hour
 
-# Create app and mount static files
-app = FastAPI(title="NEXUS News API")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info("Starting background tasks...")
-    asyncio.create_task(trend_background_task())
-
+# Trends API and static files (single app - no duplicate app creation)
 @app.get("/api/trends")
 async def get_trends(db: Session = Depends(get_db)):
     trends = db.query(TrendingTopic).order_by(desc(TrendingTopic.velocity), desc(TrendingTopic.heat_score)).limit(15).all()
-    
     result = []
     for t in trends:
-        # Get representative news item
         news_item = None
         if t.representative_news_type == 'world':
             news_item = db.query(NewsItem).filter(NewsItem.id == t.representative_news_id).first()
@@ -3203,7 +3185,6 @@ async def get_trends(db: Session = Depends(get_db)):
             news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == t.representative_news_id).first()
         else:
             news_item = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id == t.representative_news_id).first()
-            
         result.append({
             "id": t.id,
             "keyword": t.keyword,
@@ -3219,14 +3200,10 @@ async def get_trends(db: Session = Depends(get_db)):
         })
     return result
 
-# Determine public directory path relative to this file
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 static_dir = os.path.join(backend_dir, "..", "public")
-
 if not os.path.exists(static_dir):
     os.makedirs(static_dir, exist_ok=True)
-
-# Mount public directory for static assets
 app.mount("/public", StaticFiles(directory=static_dir), name="public")
 
 @app.get("/")
@@ -3241,7 +3218,6 @@ async def serve_static(path: str):
     file_path = os.path.join(static_dir, path)
     if os.path.exists(file_path) and os.path.isfile(file_path):
         return FileResponse(file_path)
-    # SPA behavior: fallback to index.html for all other routes
     index_path = os.path.join(static_dir, "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
