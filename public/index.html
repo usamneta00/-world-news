@@ -1471,9 +1471,14 @@
                     <div>
                         <h2 class="text-3xl font-black text-white font-serif">تحليل التريند والانتشار</h2>
                         <p class="text-xs text-zinc-500 uppercase tracking-widest mt-1">تتبع جذور القصص والكلمات الأكثر
-                            تداولاً في الـ 24 ساعة الماضية</p>
+                            تداولاً</p>
                     </div>
                 </div>
+                <button onclick="forceRefreshTrends()" id="refresh-trends-btn"
+                    class="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-mono text-zinc-400 transition-all">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                    تحديث التحليل الآن
+                </button>
             </div>
 
             <!-- Trends Grid -->
@@ -2057,6 +2062,29 @@
                 console.error(e);
             } finally {
                 setLoading(false);
+            }
+        }
+
+        async function forceRefreshTrends() {
+            const btn = document.getElementById('refresh-trends-btn');
+            if (btn) {
+                btn.disabled = true;
+                btn.classList.add('opacity-50');
+                btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> جارٍ التحليل...';
+                if (window.lucide) lucide.createIcons();
+            }
+            try {
+                await fetch(`${API_URL}/trends/force`);
+                await fetchTrends();
+            } catch (e) {
+                console.error(e);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50');
+                    btn.innerHTML = '<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> تحديث التحليل الآن';
+                    if (window.lucide) lucide.createIcons();
+                }
             }
         }
 

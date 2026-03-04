@@ -3093,7 +3093,17 @@ async def analyze_trends(db: Session):
         recent_news = get_all_news(yesterday, now)
         baseline_news = get_all_news(day_before, yesterday)
         
+        logger.info(f"[Trends] Found {len(recent_news)} items in last 24h and {len(baseline_news)} in baseline.")
+
+        # If 24h is too narrow, try last 7 days as a fallback for 'recent'
         if not recent_news:
+            logger.info("[Trends] No news in last 24h, broadening search to last 7 days...")
+            week_ago = now - timedelta(days=7)
+            recent_news = get_all_news(week_ago, now)
+            logger.info(f"[Trends] Found {len(recent_news)} items in last 7 days.")
+
+        if not recent_news:
+            logger.warning("[Trends] Still no news found after broadening search.")
             return
             
         # Frequency counters
@@ -3209,6 +3219,12 @@ async def get_trends(db: Session = Depends(get_db)):
             "related": json.loads(t.related_items_json or "[]")
         })
     return result
+
+@app.get("/api/trends/force")
+async def force_trends(db: Session = Depends(get_db)):
+    """Manually trigger the trend analysis."""
+    await analyze_trends(db)
+    return {"status": "Analysis triggered", "time": str(datetime.now())}
 
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 static_dir = os.path.join(backend_dir, "..", "public")
