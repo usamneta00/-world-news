@@ -157,6 +157,18 @@ class NewsClusterMember(Base):
     news_type = Column(String)
     added_at = Column(DateTime, default=datetime.now)
 
+class TrendingTopic(Base):
+    __tablename__ = "trending_topics"
+    id = Column(Integer, primary_key=True, index=True)
+    keyword = Column(String, unique=True, index=True)
+    heat_score = Column(Integer, default=1) # Current frequency
+    velocity = Column(String, default="0.0") # Growth rate as string to be safe
+    representative_news_id = Column(Integer)
+    representative_news_type = Column(String)
+    first_seen_at = Column(DateTime, default=datetime.now)
+    last_updated = Column(DateTime, default=datetime.now)
+    related_items_json = Column(String) # JSON list of news IDs/Types related to this trend
+
 Base.metadata.create_all(bind=engine)
 
 # Migration: Add video_id column and channel_last_video table
@@ -290,6 +302,13 @@ def migrate_database():
                 logger.info("Creating newspaper_last_article table...")
                 NewspaperLastArticle.__table__.create(engine)
                 logger.info("Successfully created newspaper_last_article table")
+            
+            # Check if trending_topics table exists
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='trending_topics'"))
+            if not result.fetchone():
+                logger.info("Creating trending_topics table...")
+                TrendingTopic.__table__.create(engine)
+                logger.info("Successfully created trending_topics table")
             
             # Check if news_embedding_cache table exists
             result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='news_embedding_cache'"))
@@ -3006,27 +3025,224 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.error(f"WebSocket error: {e}")
         manager.disconnect(websocket)
 
-# Serve static files
-static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "public")
+# Static files logic moved to the end to avoid catching API routes
+# ... (moved)
+# ============================================
+# Trend Analysis Logic
+# ============================================
+
+ARABIC_STOP_WORDS = set([
+    "من", "في", "على", "إلى", "عن", "مع", "هذا", "هذه", "التي", "الذي", "تم", "كان", "كانت",
+    "أو", "أن", "إن", "لا", "ما", "لم", "بعد", "قبل", "بين", "حول", "خلال", "عند", "وقد",
+    "يكون", "كانوا", "كذلك", "ذلك", "هؤلاء", "كل", "جميع", "نفس", "بعض", "أكثر", "أقل",
+    "بسبب", "حيث", "بواسطة", "يتم", "قام", "قامت", "عبر", "نحو", "منذ", "منذ", "حتى"
+])
+
+def extract_trending_keywords(text: str) -> List[str]:
+    """Extract potential keywords from text, ignoring stop words and short terms"""
+    if not text:
+        return []
+    
+    # Remove special characters and numbers
+    text = re.sub(r'[^\w\s]', ' ', text)
+    text = re.sub(r'\d+', ' ', text)
+    
+    words = text.split()
+    keywords = []
+    
+    for i in range(len(words)):
+        word = words[i].strip()
+        
+        # Skip stop words and short words
+        if len(word) < 3 or word in ARABIC_STOP_WORDS:
+            continue
+            
+        keywords.append(word)
+        
+        # Also try bi-grams (2-word phrases)
+        if i + 1 < len(words):
+            next_word = words[i+1].strip()
+            if len(next_word) >= 3 and next_word not in ARABIC_STOP_WORDS:
+                keywords.append(f"{word} {next_word}")
+                
+    return keywords
+
+async def analyze_trends(db: Session):
+    """Analyze news from the last 24h to find surging trends"""
+    try:
+        now = datetime.now()
+        yesterday = now - timedelta(hours=24)
+        day_before = yesterday - timedelta(hours=24)
+        
+        # Period A: Last 24h (Current)
+        # Period B: Previous 24h (Baseline)
+        
+        def get_all_news(start_date, end_date):
+            world = db.query(NewsItem).filter(NewsItem.created_at >= start_date, NewsItem.created_at < end_date).all()
+            yemen = db.query(YemenNewsItem).filter(YemenNewsItem.created_at >= start_date, YemenNewsItem.created_at < end_date).all()
+            paper = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.created_at >= start_date, NewspaperNewsItem.created_at < end_date).all()
+            return world + yemen + paper
+
+        recent_news = get_all_news(yesterday, now)
+        baseline_news = get_all_news(day_before, yesterday)
+        
+        if not recent_news:
+            return
+            
+        # Frequency counters
+        recent_freq = {}
+        baseline_freq = {}
+        news_map = {} # keyword -> list of news items
+        
+        for item in recent_news:
+            text = f"{item.title} {item.summary or ''}"
+            keywords = extract_trending_keywords(text)
+            news_type = 'world' if isinstance(item, NewsItem) else 'yemen' if isinstance(item, YemenNewsItem) else 'newspaper'
+            
+            for kw in keywords:
+                recent_freq[kw] = recent_freq.get(kw, 0) + 1
+                if kw not in news_map:
+                    news_map[kw] = []
+                news_map[kw].append({"id": item.id, "type": news_type, "published": item.published, "title": item.title})
+
+        for item in baseline_news:
+            text = f"{item.title} {item.summary or ''}"
+            keywords = extract_trending_keywords(text)
+            for kw in keywords:
+                baseline_freq[kw] = baseline_freq.get(kw, 0) + 1
+        
+        # Calculate scores and velocity
+        trending_results = []
+        for kw, count in recent_freq.items():
+            if count < 3: continue # Minimum threshold
+            
+            baseline_count = baseline_freq.get(kw, 1) # Use 1 to avoid div by zero
+            velocity = (count - baseline_count) / baseline_count
+            
+            # Sort news by publication date to find the "root"
+            sorted_mentions = sorted(news_map[kw], key=lambda x: x['published'] or datetime.min)
+            root = sorted_mentions[0]
+            
+            trending_results.append({
+                "keyword": kw,
+                "heat": count,
+                "velocity": velocity,
+                "representative": root,
+                "related": sorted_mentions[:10]
+            })
+            
+        # Sort by heat and velocity
+        trending_results.sort(key=lambda x: (x['velocity'], x['heat']), reverse=True)
+        
+        # Update Database
+        for trend in trending_results[:20]: # Top 20 trends
+            existing = db.query(TrendingTopic).filter(TrendingTopic.keyword == trend['keyword']).first()
+            
+            if existing:
+                existing.heat_score = trend['heat']
+                existing.velocity = trend['velocity']
+                existing.last_updated = now
+                existing.related_items_json = json.dumps(trend['related'])
+            else:
+                new_trend = TrendingTopic(
+                    keyword=trend['keyword'],
+                    heat_score=trend['heat'],
+                    velocity=trend['velocity'],
+                    representative_news_id=trend['representative']['id'],
+                    representative_news_type=trend['representative']['type'],
+                    first_seen_at=trend['representative']['published'] or now,
+                    related_items_json = json.dumps(trend['related'])
+                )
+                db.add(new_trend)
+        
+        db.commit()
+        logger.info(f"Updated {len(trending_results[:20])} trending topics.")
+        
+    except Exception as e:
+        logger.error(f"Error in analyze_trends: {e}")
+        db.rollback()
+
+# Periodic Trend Task
+async def trend_background_task():
+    while True:
+        try:
+            db = SessionLocal()
+            await analyze_trends(db)
+            db.close()
+        except Exception as e:
+            logger.error(f"Background trend task error: {e}")
+        await asyncio.sleep(3600) # Run every hour
+
+# Create app and mount static files
+app = FastAPI(title="NEXUS News API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Starting background tasks...")
+    asyncio.create_task(trend_background_task())
+
+@app.get("/api/trends")
+async def get_trends(db: Session = Depends(get_db)):
+    trends = db.query(TrendingTopic).order_by(desc(TrendingTopic.velocity), desc(TrendingTopic.heat_score)).limit(15).all()
+    
+    result = []
+    for t in trends:
+        # Get representative news item
+        news_item = None
+        if t.representative_news_type == 'world':
+            news_item = db.query(NewsItem).filter(NewsItem.id == t.representative_news_id).first()
+        elif t.representative_news_type == 'yemen':
+            news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == t.representative_news_id).first()
+        else:
+            news_item = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id == t.representative_news_id).first()
+            
+        result.append({
+            "id": t.id,
+            "keyword": t.keyword,
+            "heat": t.heat_score,
+            "velocity": t.velocity,
+            "first_seen": t.first_seen_at,
+            "root_news": {
+                "title": news_item.title if news_item else "Unknown",
+                "source": news_item.source if news_item else "Unknown",
+                "link": news_item.link if news_item else "#"
+            },
+            "related": json.loads(t.related_items_json or "[]")
+        })
+    return result
+
+# Determine public directory path relative to this file
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+static_dir = os.path.join(backend_dir, "..", "public")
+
 if not os.path.exists(static_dir):
     os.makedirs(static_dir, exist_ok=True)
 
-if os.path.exists(static_dir):
-    app.mount("/dist", StaticFiles(directory=static_dir), name="static")
+# Mount public directory for static assets
+app.mount("/public", StaticFiles(directory=static_dir), name="public")
 
-    @app.get("/")
-    async def read_index():
-        index_path = os.path.join(static_dir, "index.html")
-        if os.path.exists(index_path):
-            return FileResponse(index_path)
-        return {"message": "Please create index.html in public folder"}
+@app.get("/")
+async def read_index():
+    index_path = os.path.join(static_dir, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"message": "Please create index.html in public folder"}
 
-    @app.get("/{path:path}")
-    async def serve_static(path: str):
-        file_path = os.path.join(static_dir, path)
-        if os.path.exists(file_path) and os.path.isfile(file_path):
-            return FileResponse(file_path)
-        index_path = os.path.join(static_dir, "index.html")
-        if os.path.exists(index_path):
-            return FileResponse(index_path)
-        return {"error": "File not found"}
+@app.get("/{path:path}")
+async def serve_static(path: str):
+    file_path = os.path.join(static_dir, path)
+    if os.path.exists(file_path) and os.path.isfile(file_path):
+        return FileResponse(file_path)
+    # SPA behavior: fallback to index.html for all other routes
+    index_path = os.path.join(static_dir, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"error": "File not found"}
