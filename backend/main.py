@@ -3042,36 +3042,58 @@ ARABIC_STOP_WORDS = set([
     "من", "في", "على", "إلى", "عن", "مع", "هذا", "هذه", "التي", "الذي", "تم", "كان", "كانت",
     "أو", "أن", "إن", "لا", "ما", "لم", "بعد", "قبل", "بين", "حول", "خلال", "عند", "وقد",
     "يكون", "كانوا", "كذلك", "ذلك", "هؤلاء", "كل", "جميع", "نفس", "بعض", "أكثر", "أقل",
-    "بسبب", "حيث", "بواسطة", "يتم", "قام", "قامت", "عبر", "نحو", "منذ", "منذ", "حتى"
+    "بسبب", "حيث", "بواسطة", "يتم", "قام", "قامت", "عبر", "نحو", "منذ", "حتى",
+    "آخر", "الكاملة", "التفاصيل", "مقال", "يتناول", "المستجدات", "الإخبارية", "انقر", "لمتابعة",
+    "الحلقة", "كاملة", "رئيسية", "اليوم", "تفاصيل", "جديد", "الجديدة", "المقال", "انقر لمتابعة",
+    "المصدر", "مصدر", "أخبار", "خبر", "أخبارية", "تغطية", "مباشر", "مباشرة", "تقرير", "تقارير",
+    "فيديو", "فيديو جديد", "جديد من", "الحلقة الكاملة", "مارس", "مارس 2026",
 ])
 
+ENGLISH_STOP_WORDS = set([
+    "news", "full", "episode", "click", "read", "more", "the", "and", "for", "with", "from",
+    "this", "that", "have", "has", "had", "were", "been", "being", "said", "says", "year",
+    "month", "day", "hour", "latest", "breaking", "watch", "video", "article", "story", "stories",
+])
+
+# Keywords we never want as trends (boilerplate / meaningless)
+TREND_KEYWORD_BLOCKLIST = set([
+    "news", "آخر", "الكاملة", "التفاصيل", "مقال", "يتناول", "المستجدات", "الإخبارية", "انقر",
+    "لمتابعة", "الحلقة", "كاملة", "رئيسية", "اليوم", "تفاصيل", "جديد", "الجديدة", "انقر لمتابعة",
+    "يتناول آخر", "آخر المستجدات", "المستجدات الإخبارية", "الإخبارية انقر", "مقال جديد",
+    "الحلقة الكاملة", "تفاصيل الرئيسية", "فيديو جديد", "جديد من",
+])
+
+def _is_blocked_keyword(kw: str) -> bool:
+    """Return True if this keyword should never appear as a trend."""
+    k = kw.strip()
+    k_lower = k.lower()
+    if k in TREND_KEYWORD_BLOCKLIST or k_lower in TREND_KEYWORD_BLOCKLIST:
+        return True
+    if len(k) < 4 and k_lower in ("news", "full", "الآن", "هنا", "هناك"):
+        return True
+    return False
+
 def extract_trending_keywords(text: str) -> List[str]:
-    """Extract potential keywords from text, ignoring stop words and short terms"""
+    """Extract potential keywords from text, ignoring stop words and boilerplate."""
     if not text:
         return []
-    
-    # Remove special characters and numbers
     text = re.sub(r'[^\w\s]', ' ', text)
     text = re.sub(r'\d+', ' ', text)
-    
     words = text.split()
     keywords = []
-    
     for i in range(len(words)):
         word = words[i].strip()
-        
-        # Skip stop words and short words
-        if len(word) < 3 or word in ARABIC_STOP_WORDS:
+        if len(word) < 3 or word in ARABIC_STOP_WORDS or word.lower() in ENGLISH_STOP_WORDS:
             continue
-            
+        if _is_blocked_keyword(word):
+            continue
         keywords.append(word)
-        
-        # Also try bi-grams (2-word phrases)
         if i + 1 < len(words):
             next_word = words[i+1].strip()
-            if len(next_word) >= 3 and next_word not in ARABIC_STOP_WORDS:
-                keywords.append(f"{word} {next_word}")
-                
+            if len(next_word) >= 3 and next_word not in ARABIC_STOP_WORDS and next_word.lower() not in ENGLISH_STOP_WORDS:
+                bigram = f"{word} {next_word}"
+                if not _is_blocked_keyword(bigram):
+                    keywords.append(bigram)
     return keywords
 
 async def analyze_trends(db: Session):
@@ -3137,19 +3159,21 @@ async def analyze_trends(db: Session):
             for kw in keywords:
                 baseline_freq[kw] = baseline_freq.get(kw, 0) + 1
         
-        # Calculate scores and velocity (allow single mention when data is sparse)
+        # Calculate scores and velocity; cap to avoid meaningless 600%+ when baseline is tiny
         trending_results = []
-        min_count = 2 if len(recent_news) >= 20 else 1
+        min_count = 5 if len(recent_news) >= 30 else 4
         for kw, count in recent_freq.items():
             if count < min_count:
                 continue
-            baseline_count = baseline_freq.get(kw, 1)
+            if _is_blocked_keyword(kw):
+                continue
+            baseline_count = max(baseline_freq.get(kw, 0), 2)
             velocity = (count - baseline_count) / baseline_count
-            
-            # Sort news by publication date to find the "root"
+            velocity = max(-1.0, min(3.0, velocity))
+
             sorted_mentions = sorted(news_map[kw], key=lambda x: x['published'] or datetime.min)
             root = sorted_mentions[0]
-            
+
             trending_results.append({
                 "keyword": kw,
                 "heat": count,
@@ -3157,8 +3181,7 @@ async def analyze_trends(db: Session):
                 "representative": root,
                 "related": sorted_mentions[:10]
             })
-            
-        # Sort by heat and velocity
+
         trending_results.sort(key=lambda x: (x['velocity'], x['heat']), reverse=True)
         
         # Serialize related items for JSON (datetime is not JSON-serializable)
@@ -3228,11 +3251,16 @@ async def get_trends(db: Session = Depends(get_db)):
             news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == t.representative_news_id).first()
         else:
             news_item = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id == t.representative_news_id).first()
+        try:
+            vel = float(t.velocity) if t.velocity is not None else 0.0
+        except (TypeError, ValueError):
+            vel = 0.0
+        vel = max(-1.0, min(3.0, vel))
         result.append({
             "id": t.id,
             "keyword": t.keyword,
             "heat": t.heat_score,
-            "velocity": t.velocity,
+            "velocity": vel,
             "first_seen": t.first_seen_at,
             "root_news": {
                 "title": news_item.title if news_item else "Unknown",
