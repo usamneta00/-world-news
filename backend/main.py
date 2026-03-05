@@ -598,6 +598,8 @@ NEWSPAPER_SOURCES = [
     {"url": "https://www.aljazeera.com/middle-east/", "name": "Al Jazeera", "type": "newspaper"},
     {"url": "https://www.axios.com/world", "name": "Axios", "type": "newspaper"},
     {"url": "https://www.seattletimes.com/nation-world/world/", "name": "Seattle Times", "type": "newspaper"},
+    {"url": "https://www.thestar.com/news/world/", "name": "The Star", "type": "newspaper"},
+    {"url": "https://www.independent.co.uk/topic/middle-east", "name": "The Independent", "type": "newspaper"},
     {"url": "https://www.reuters.com/world/middle-east/", "name": "Reuters", "type": "newspaper"},
     {"url": "https://news.un.org/en/focus-topic/middle-east", "name": "UN News", "type": "newspaper"},
     {"url": "https://www.ynetnews.com/category/3083", "name": "Ynet News", "type": "newspaper"},
@@ -690,6 +692,7 @@ _add_country("canada", 45.42, -75.70, "كندا", "Canada", ["كندا", "الك
 # Other
 _add_country("south_africa", -25.75, 28.19, "جنوب أفريقيا", "South Africa", ["جنوب أفريقيا", "South Africa", "Johannesburg"])
 _add_country("red_sea", 20.00, 38.50, "البحر الأحمر", "Red Sea", ["البحر الأحمر", "باب المندب", "Red Sea", "Bab el-Mandeb"])
+_add_country("hormuz", 26.56, 56.25, "مضيق هرمز", "Strait of Hormuz", ["مضيق هرمز", "هرمز", "Strait of Hormuz", "Hormuz"])
 _add_country("un_hq", 46.23, 6.14, "الأمم المتحدة", "United Nations", ["الأمم المتحدة", "مجلس الأمن", "United Nations", "Security Council"])
 
 # Build fast name → country_key lookup
@@ -1387,8 +1390,17 @@ def fetch_newspaper_articles(source_url: str, source_name: str, last_article_ids
                 pass
             
             # Try to get a better summary from the specific article if possible
-            # Note: In a production environment, we might want to do this asynchronously
-            article_summary = f"مقال جديد من {source_name} يتناول آخر المستجدات الإخبارية. انقر لمتابعة التفاصيل والتحليلات الكاملة."
+            article_summary = ""
+            try:
+                # Check for meta description in current soup if it's there
+                desc_meta = soup.find('meta', attrs={'name': 'description'}) or soup.find('meta', property='og:description')
+                if desc_meta:
+                    article_summary = desc_meta.get('content', '')
+            except:
+                pass
+
+            if not article_summary or len(article_summary) < 20:
+                article_summary = f"تغطية إخبارية من {source_name} حول {title}"
             
             # Translate Title and Summary
             translated_title = translate_to_arabic(title)
@@ -3046,7 +3058,7 @@ ARABIC_STOP_WORDS = set([
     "آخر", "الكاملة", "التفاصيل", "مقال", "يتناول", "المستجدات", "الإخبارية", "انقر", "لمتابعة",
     "الحلقة", "كاملة", "رئيسية", "اليوم", "تفاصيل", "جديد", "الجديدة", "المقال", "انقر لمتابعة",
     "المصدر", "مصدر", "أخبار", "خبر", "أخبارية", "تغطية", "مباشر", "مباشرة", "تقرير", "تقارير",
-    "فيديو", "فيديو جديد", "جديد من", "الحلقة الكاملة", "مارس", "مارس 2026",
+    "فيديو", "فيديو جديد", "جديد من", "الحلقة الكاملة", "مارس", "مارس 2026", "حول", "تغطية", "إخبارية",
 ])
 
 ENGLISH_STOP_WORDS = set([
@@ -3060,7 +3072,7 @@ TREND_KEYWORD_BLOCKLIST = set([
     "news", "آخر", "الكاملة", "التفاصيل", "مقال", "يتناول", "المستجدات", "الإخبارية", "انقر",
     "لمتابعة", "الحلقة", "كاملة", "رئيسية", "اليوم", "تفاصيل", "جديد", "الجديدة", "انقر لمتابعة",
     "يتناول آخر", "آخر المستجدات", "المستجدات الإخبارية", "الإخبارية انقر", "مقال جديد",
-    "الحلقة الكاملة", "تفاصيل الرئيسية", "فيديو جديد", "جديد من",
+    "الحلقة الكاملة", "تفاصيل الرئيسية", "فيديو جديد", "جديد من", "تغطية إخبارية",
 ])
 
 def _is_blocked_keyword(kw: str) -> bool:
@@ -3167,9 +3179,9 @@ async def analyze_trends(db: Session):
                 continue
             if _is_blocked_keyword(kw):
                 continue
-            baseline_count = max(baseline_freq.get(kw, 0), 2)
+            baseline_count = max(baseline_freq.get(kw, 0), 1)
             velocity = (count - baseline_count) / baseline_count
-            velocity = max(-1.0, min(3.0, velocity))
+            velocity = max(-1.0, min(20.0, velocity))
 
             sorted_mentions = sorted(news_map[kw], key=lambda x: x['published'] or datetime.min)
             root = sorted_mentions[0]
@@ -3188,29 +3200,25 @@ async def analyze_trends(db: Session):
         def _serialize_related(related_list):
             return [{"id": r["id"], "type": r["type"], "published": str(r["published"]) if r.get("published") else None, "title": r.get("title", "")} for r in related_list]
 
-        # Update Database
+        # Clean slate for trends to ensure old/blocked keywords are removed
+        db.query(TrendingTopic).delete()
+        
+        # Update Database with top 20 trends
         for trend in trending_results[:20]: # Top 20 trends
-            existing = db.query(TrendingTopic).filter(TrendingTopic.keyword == trend['keyword']).first()
             related_serialized = _serialize_related(trend['related'])
             rep = trend['representative']
             first_seen = rep.get('published') or now
 
-            if existing:
-                existing.heat_score = trend['heat']
-                existing.velocity = trend['velocity']
-                existing.last_updated = now
-                existing.related_items_json = json.dumps(related_serialized)
-            else:
-                new_trend = TrendingTopic(
-                    keyword=trend['keyword'],
-                    heat_score=trend['heat'],
-                    velocity=trend['velocity'],
-                    representative_news_id=rep['id'],
-                    representative_news_type=rep['type'],
-                    first_seen_at=first_seen,
-                    related_items_json=json.dumps(related_serialized)
-                )
-                db.add(new_trend)
+            new_trend = TrendingTopic(
+                keyword=trend['keyword'],
+                heat_score=trend['heat'],
+                velocity=trend['velocity'],
+                representative_news_id=rep['id'],
+                representative_news_type=rep['type'],
+                first_seen_at=first_seen,
+                related_items_json=json.dumps(related_serialized)
+            )
+            db.add(new_trend)
         
         db.commit()
         logger.info(f"Updated {len(trending_results[:20])} trending topics.")
@@ -3287,7 +3295,7 @@ async def get_trends(
             vel = float(t.velocity) if t.velocity is not None else 0.0
         except (TypeError, ValueError):
             vel = 0.0
-        vel = max(-1.0, min(3.0, vel))
+        vel = max(-1.0, min(20.0, vel))
         result.append({
             "id": t.id,
             "keyword": t.keyword,
@@ -3306,14 +3314,20 @@ async def get_trends(
         })
     out = {"trends": result}
     if include_digest:
-        yemen = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(5).all()
-        paper = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(5).all()
-        digest_items = []
-        for item in yemen:
-            digest_items.append({"title": item.title, "link": item.link, "source": item.source, "type": "yemen"})
-        for item in paper:
-            digest_items.append({"title": item.title, "link": item.link, "source": item.source, "type": "newspaper"})
-        digest_items.sort(key=lambda x: x.get("title", ""))
+        # Get important news for the daily digest
+        import_yemen = db.query(YemenNewsItem).filter(YemenNewsItem.is_important == 1).order_by(desc(YemenNewsItem.created_at)).limit(5).all()
+        import_paper = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.is_important == 1).order_by(desc(NewspaperNewsItem.created_at)).limit(5).all()
+        
+        # If not enough important news, fill with latest news
+        if len(import_yemen) + len(import_paper) < 5:
+            extra_yemen = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(5).all()
+            extra_paper = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(5).all()
+            yemen = list(set(import_yemen + extra_yemen))[:5]
+            paper = list(set(import_paper + extra_paper))[:5]
+        else:
+            yemen = import_yemen
+            paper = import_paper
+
         by_date_y = [(n.created_at, n) for n in yemen]
         by_date_p = [(n.created_at, n) for n in paper]
         merged = sorted(by_date_y + by_date_p, key=lambda t: t[0] or datetime.min, reverse=True)
