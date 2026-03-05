@@ -2148,25 +2148,18 @@
                         <span class="text-[10px] font-mono text-zinc-500">${t.heat || 0}pts</span>
                     </div>
                     
-                    ${rootNews.title && rootNews.title !== 'Unknown' && rootNews.type !== 'world' ? `
-                    <div class="mt-4 pt-4 border-t border-white/5 text-right flex flex-col gap-3">
-                        ${rootNews.image_url || rootNews.video_id ? `
-                        <div class="relative w-full aspect-video rounded-xl overflow-hidden bg-white/5 cursor-pointer" onclick="window.open('${rootNews.link}', '_blank')">
-                            <img src="${rootNews.image_url || `https://img.youtube.com/vi/${rootNews.video_id}/mqdefault.jpg`}" class="w-full h-full object-cover">
-                            ${rootNews.video_id ? `
-                            <div class="absolute inset-0 flex items-center justify-center bg-black/20">
-                                <i data-lucide="play" class="w-8 h-8 text-white fill-white"></i>
-                            </div>
-                            ` : ''}
+                    ${rootNews.title && rootNews.title !== 'Unknown' ? `
+                    <div class="p-4 bg-white/5 border border-white/5 rounded-2xl mb-4 relative overflow-hidden group">
+                        <div class="absolute inset-0 bg-brand/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div class="flex items-center gap-2 mb-3 text-[10px] font-mono text-zinc-500">
+                            <i data-lucide="git-branch" class="w-3 h-3 text-brand-500"></i>
+                            <span>بداية الانتشار:</span>
                         </div>
-                        ` : ''}
-                        <div>
-                            <p class="text-[10px] text-zinc-500 uppercase tracking-widest mb-2">بداية الانتشار:</p>
-                            <a href="${rootNews.link}" target="_blank" class="block group/link">
-                                <p class="text-sm text-zinc-300 line-clamp-2 group-hover/link:text-neon-blue transition-colors mb-1">${rootNews.title}</p>
-                                <span class="text-[10px] text-zinc-600 font-mono">${rootNews.source}</span>
-                            </a>
-                        </div>
+                        <a href="${rootNews.link}" target="_blank" class="block">
+                            ${rootNews.image_url ? `<img src="${rootNews.image_url}" class="w-full h-24 object-cover rounded-xl mb-3 border border-white/5 shadow-2xl" />` : ''}
+                            <h4 class="text-xs font-bold text-zinc-100 leading-tight group-hover:text-brand-400 transition-colors line-clamp-2 mb-1">${rootNews.title}</h4>
+                            <div class="text-[10px] text-zinc-500 font-mono">${rootNews.source}</div>
+                        </a>
                     </div>
                     ` : ''}
                     
@@ -2180,11 +2173,11 @@
                         </div>
                         <div class="flex flex-wrap gap-1.5 overflow-hidden">
                             ${related.map((r, ri) => `
-                                <div class="flex items-center gap-1 shrink-0 opacity-80 hover:opacity-100 transition-all cursor-help" title="${r.title}">
+                                <a href="${r.link}" target="_blank" class="flex items-center gap-1 shrink-0 opacity-80 hover:opacity-100 transition-all cursor-pointer" title="${r.title}">
                                     <span class="text-[9px] text-zinc-500 font-mono">${ri + 1}.</span>
-                                    <span class="px-2 py-0.5 bg-white/5 border border-white/5 rounded-full text-[9px] text-zinc-400 whitespace-nowrap">${r.source || 'Unknown'}</span>
+                                    <span class="px-2 py-0.5 bg-white/5 border border-white/5 rounded-full text-[9px] text-zinc-400 whitespace-nowrap hover:bg-brand/20 hover:text-white transition-colors">${r.source || 'Unknown'}</span>
                                     ${ri < related.length - 1 ? '<i data-lucide="chevron-left" class="w-2.5 h-2.5 text-zinc-700"></i>' : ''}
-                                </div>
+                                </a>
                             `).join('')}
                         </div>
                     </div>

@@ -3061,12 +3061,14 @@ ARABIC_STOP_WORDS = set([
     "فيديو", "فيديو جديد", "جديد من", "الحلقة الكاملة", "مارس", "مارس 2026", "حول", "تغطية", "إخبارية",
     "يقول", "قال", "قالت", "كان", "كانت", "الولايات", "المتحدة", "الأمريكية", "الإيرانية", "الإيراني",
     "تحليلات", "والتحليلات", "نشر", "بث", "عبر", "أيضا", "أنه", "أنها", "بأن", "بأنها",
+    "الأوسط", "الشرق", "العالم", "قناة", "برنامج", "حلقة", "حدث", "أحداث", "اليومية", "شاهد",
 ])
 
 ENGLISH_STOP_WORDS = set([
     "news", "full", "episode", "click", "read", "more", "the", "and", "for", "with", "from",
     "this", "that", "have", "has", "had", "were", "been", "being", "said", "says", "year",
     "month", "day", "hour", "latest", "breaking", "watch", "video", "article", "story", "stories",
+    "English", "Jazeera", "France", "Forbes", "Reuters", "News", "Press", "Associated", "Times",
 ])
 
 # Keywords we never want as trends (boilerplate / meaningless)
@@ -3076,6 +3078,11 @@ TREND_KEYWORD_BLOCKLIST = set([
     "يتناول آخر", "آخر المستجدات", "المستجدات الإخبارية", "الإخبارية انقر", "مقال جديد",
     "الحلقة الكاملة", "تفاصيل الرئيسية", "فيديو جديد", "جديد من", "تغطية إخبارية",
     "الولايات المتحدة", "الولايات", "المتحدة", "والتحليلات", "تحليلات", "بث مباشر", "نشرة",
+    "الشرق الأوسط", "الأوسط", "الشرق", "فرانس", "فيديو", "شاهد كواليس", "كواليس",
+    "الجزيرة", "إياد الحمود", "إياد", "الحمود", "نشرة", "أخبار", "موجز", "عاجل",
+    "Al Jazeera", "Sky News", "BBC News", "France 24", "DW News", "Middle East",
+    "فرانس", "الجزيرة", "رويترز", "نيوز", "صحافة", "المسيرة", "بلومبرغ", "بي بي سي", "سكاي",
+    "مباراة", "ملخص", "أهداف", "نقل", "بث", "حصري", "فيديو", "كواليس", "الحلقة", "كاملة",
 ])
 
 def _is_blocked_keyword(kw: str) -> bool:
@@ -3084,7 +3091,7 @@ def _is_blocked_keyword(kw: str) -> bool:
     k_lower = k.lower()
     if k in TREND_KEYWORD_BLOCKLIST or k_lower in TREND_KEYWORD_BLOCKLIST:
         return True
-    if len(k) < 4 and k_lower in ("news", "full", "الآن", "هنا", "هناك"):
+    if len(k) < 3 and k_lower in ("news", "full", "الآن", "هنا", "هناك", "شاهد"): # Changed from 4 to 3
         return True
     return False
 
@@ -3096,28 +3103,41 @@ def extract_trending_keywords(text: str) -> List[str]:
     text = re.sub(r'\d+', ' ', text)
     words = text.split()
     keywords = []
-    # Build a set of source names to block
+    # Build a set of source names and their parts to block
     global YOUTUBE_CHANNELS, YEMEN_YOUTUBE_CHANNELS, NEWSPAPER_SOURCES
-    source_names = set()
+    source_parts = set()
     for s_list in [YOUTUBE_CHANNELS, YEMEN_YOUTUBE_CHANNELS, NEWSPAPER_SOURCES]:
         for s in s_list:
-            source_names.add(s["name"].lower())
+            name = s["name"].lower()
+            source_parts.add(name)
+            # Add individual words from the name
+            for part in name.split():
+                if len(part) > 2:
+                    source_parts.add(part)
             
     for i in range(len(words)):
         word = words[i].strip()
         word_lower = word.lower()
+        # Aggressive filtering: block single words that are too short or stop words
         if len(word) < 3 or word in ARABIC_STOP_WORDS or word_lower in ENGLISH_STOP_WORDS:
             continue
-        if _is_blocked_keyword(word) or word_lower in source_names:
+        if _is_blocked_keyword(word) or word_lower in source_parts:
             continue
+        
+        # Add single word
         keywords.append(word)
+
+        # Consider bigrams
         if i + 1 < len(words):
             next_word = words[i+1].strip()
             next_lower = next_word.lower()
-            if len(next_word) >= 3 and next_word not in ARABIC_STOP_WORDS and next_lower not in ENGLISH_STOP_WORDS:
-                bigram = f"{word} {next_word}"
-                if not _is_blocked_keyword(bigram) and bigram.lower() not in source_names:
-                    keywords.append(bigram)
+            # Aggressive filtering: block bigrams if either word is too short or a stop word
+            if len(next_word) < 3 or next_word in ARABIC_STOP_WORDS or next_lower in ENGLISH_STOP_WORDS:
+                continue
+            
+            bigram = f"{word} {next_word}"
+            if not _is_blocked_keyword(bigram) and bigram.lower() not in source_parts:
+                keywords.append(bigram)
     return keywords
 
 async def analyze_trends(db: Session):
@@ -3175,7 +3195,7 @@ async def analyze_trends(db: Session):
                 recent_freq[kw] = recent_freq.get(kw, 0) + 1
                 if kw not in news_map:
                     news_map[kw] = []
-                news_map[kw].append({"id": item.id, "type": news_type, "published": item.published, "title": item.title, "source": item.source})
+                news_map[kw].append({"id": item.id, "type": news_type, "published": item.published, "title": item.title, "source": item.source, "link": item.link})
 
         for item in baseline_news:
             text = f"{item.title} {item.summary or ''}"
@@ -3210,7 +3230,7 @@ async def analyze_trends(db: Session):
         
         # Serialize related items for JSON (datetime is not JSON-serializable)
         def _serialize_related(related_list):
-            return [{"id": r["id"], "type": r["type"], "published": str(r["published"]) if r.get("published") else None, "title": r.get("title", ""), "source": r.get("source", "Unknown")} for r in related_list]
+            return [{"id": r["id"], "type": r["type"], "published": str(r["published"]) if r.get("published") else None, "title": r.get("title", ""), "source": r.get("source", "Unknown"), "link": r.get("link", "#")} for r in related_list]
 
         # Clean slate for trends to ensure old/blocked keywords are removed
         db.query(TrendingTopic).delete()
@@ -3265,8 +3285,10 @@ def _get_news_item(db: Session, news_type: str, news_id: int):
         item = db.query(NewsItem).filter(NewsItem.id == news_id).first()
     elif news_type == 'yemen':
         item = db.query(YemenNewsItem).filter(YemenNewsItem.id == news_id).first()
-    else:
+    elif news_type == 'newspaper':
         item = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id == news_id).first()
+    else:
+        item = None # Unknown type
     if not item:
         return None
     return {
@@ -3290,19 +3312,41 @@ async def get_trends(
     trends = db.query(TrendingTopic).order_by(desc(TrendingTopic.velocity), desc(TrendingTopic.heat_score)).limit(15).all()
     result = []
     for t in trends:
-        related_list = json.loads(t.related_items_json or "[]")
+        # Try to find the root news item details
         news_item = None
         root_type = t.representative_news_type
-        if prefer_non_world and related_list:
-            for r in related_list:
-                if r.get("type") in ("yemen", "newspaper"):
-                    news_item = _get_news_item(db, r["type"], r["id"])
-                    if news_item:
-                        root_type = r["type"]
-                        break
-        if news_item is None:
-            news_item = _get_news_item(db, t.representative_news_type, t.representative_news_id)
-            root_type = t.representative_news_type
+        root_id = t.representative_news_id
+
+        # First check the serialized related items for this topic
+        try:
+            related_data = json.loads(t.related_items_json) if t.related_items_json else []
+            if related_data:
+                # If prefer_non_world, try to find a non-world item first
+                if prefer_non_world:
+                    non_world_item = next((r for r in related_data if r.get("type") in ("yemen", "newspaper")), None)
+                    if non_world_item:
+                        news_item = non_world_item
+                        root_type = non_world_item.get("type", root_type)
+                
+                # If no non-world item preferred or found, use the oldest item from related_data
+                if not news_item:
+                    oldest = sorted(related_data, key=lambda x: x.get('published', '9999'))[0]
+                    news_item = oldest
+                    root_type = oldest.get("type", root_type) # Update root_type if it came from related_data
+        except Exception as e:
+            logger.warning(f"Error parsing related_items_json for trend {t.id}: {e}")
+            pass
+        
+        # If not found in JSON or if the item from JSON is incomplete, fallback to DB query
+        # The _get_news_item function is more robust for fetching full details from DB
+        if not news_item or news_item.get('title') == 'Unknown' or not news_item.get('link'):
+            db_fetched_item = _get_news_item(db, root_type, root_id)
+            if db_fetched_item:
+                news_item = db_fetched_item
+            elif related_data: # If DB query failed, but we have related_data, use the first one as a fallback
+                news_item = related_data[0]
+                root_type = news_item.get("type", root_type)
+
         try:
             vel = float(t.velocity) if t.velocity is not None else 0.0
         except (TypeError, ValueError):
@@ -3322,7 +3366,7 @@ async def get_trends(
                 "video_id": news_item.get("video_id") if news_item else None,
                 "type": root_type,
             },
-            "related": related_list,
+            "related": json.loads(t.related_items_json) if t.related_items_json else [],
         })
     out = {"trends": result}
     if include_digest:
