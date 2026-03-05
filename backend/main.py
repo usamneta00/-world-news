@@ -2942,6 +2942,7 @@ async def clear_all_news():
         db.query(NewsEmbeddingCache).delete()
         db.query(NewsClusterMember).delete()
         db.query(NewsCluster).delete()
+        db.query(TrendingTopic).delete()
         db.commit()
         _cluster_cache["data"] = None
         _cluster_cache["timestamp"] = None
