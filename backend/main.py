@@ -3059,6 +3059,8 @@ ARABIC_STOP_WORDS = set([
     "الحلقة", "كاملة", "رئيسية", "اليوم", "تفاصيل", "جديد", "الجديدة", "المقال", "انقر لمتابعة",
     "المصدر", "مصدر", "أخبار", "خبر", "أخبارية", "تغطية", "مباشر", "مباشرة", "تقرير", "تقارير",
     "فيديو", "فيديو جديد", "جديد من", "الحلقة الكاملة", "مارس", "مارس 2026", "حول", "تغطية", "إخبارية",
+    "يقول", "قال", "قالت", "كان", "كانت", "الولايات", "المتحدة", "الأمريكية", "الإيرانية", "الإيراني",
+    "تحليلات", "والتحليلات", "نشر", "بث", "عبر", "أيضا", "أنه", "أنها", "بأن", "بأنها",
 ])
 
 ENGLISH_STOP_WORDS = set([
@@ -3073,6 +3075,7 @@ TREND_KEYWORD_BLOCKLIST = set([
     "لمتابعة", "الحلقة", "كاملة", "رئيسية", "اليوم", "تفاصيل", "جديد", "الجديدة", "انقر لمتابعة",
     "يتناول آخر", "آخر المستجدات", "المستجدات الإخبارية", "الإخبارية انقر", "مقال جديد",
     "الحلقة الكاملة", "تفاصيل الرئيسية", "فيديو جديد", "جديد من", "تغطية إخبارية",
+    "الولايات المتحدة", "الولايات", "المتحدة", "والتحليلات", "تحليلات", "بث مباشر", "نشرة",
 ])
 
 def _is_blocked_keyword(kw: str) -> bool:
@@ -3093,18 +3096,27 @@ def extract_trending_keywords(text: str) -> List[str]:
     text = re.sub(r'\d+', ' ', text)
     words = text.split()
     keywords = []
+    # Build a set of source names to block
+    global YOUTUBE_CHANNELS, YEMEN_YOUTUBE_CHANNELS, NEWSPAPER_SOURCES
+    source_names = set()
+    for s_list in [YOUTUBE_CHANNELS, YEMEN_YOUTUBE_CHANNELS, NEWSPAPER_SOURCES]:
+        for s in s_list:
+            source_names.add(s["name"].lower())
+            
     for i in range(len(words)):
         word = words[i].strip()
-        if len(word) < 3 or word in ARABIC_STOP_WORDS or word.lower() in ENGLISH_STOP_WORDS:
+        word_lower = word.lower()
+        if len(word) < 3 or word in ARABIC_STOP_WORDS or word_lower in ENGLISH_STOP_WORDS:
             continue
-        if _is_blocked_keyword(word):
+        if _is_blocked_keyword(word) or word_lower in source_names:
             continue
         keywords.append(word)
         if i + 1 < len(words):
             next_word = words[i+1].strip()
-            if len(next_word) >= 3 and next_word not in ARABIC_STOP_WORDS and next_word.lower() not in ENGLISH_STOP_WORDS:
+            next_lower = next_word.lower()
+            if len(next_word) >= 3 and next_word not in ARABIC_STOP_WORDS and next_lower not in ENGLISH_STOP_WORDS:
                 bigram = f"{word} {next_word}"
-                if not _is_blocked_keyword(bigram):
+                if not _is_blocked_keyword(bigram) and bigram.lower() not in source_names:
                     keywords.append(bigram)
     return keywords
 
@@ -3163,7 +3175,7 @@ async def analyze_trends(db: Session):
                 recent_freq[kw] = recent_freq.get(kw, 0) + 1
                 if kw not in news_map:
                     news_map[kw] = []
-                news_map[kw].append({"id": item.id, "type": news_type, "published": item.published, "title": item.title})
+                news_map[kw].append({"id": item.id, "type": news_type, "published": item.published, "title": item.title, "source": item.source})
 
         for item in baseline_news:
             text = f"{item.title} {item.summary or ''}"
@@ -3198,7 +3210,7 @@ async def analyze_trends(db: Session):
         
         # Serialize related items for JSON (datetime is not JSON-serializable)
         def _serialize_related(related_list):
-            return [{"id": r["id"], "type": r["type"], "published": str(r["published"]) if r.get("published") else None, "title": r.get("title", "")} for r in related_list]
+            return [{"id": r["id"], "type": r["type"], "published": str(r["published"]) if r.get("published") else None, "title": r.get("title", ""), "source": r.get("source", "Unknown")} for r in related_list]
 
         # Clean slate for trends to ensure old/blocked keywords are removed
         db.query(TrendingTopic).delete()
