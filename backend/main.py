@@ -1523,17 +1523,17 @@ async def fetch_newspaper_feeds():
                     new_items_found.append(item_dict)
                     logger.info(f"[Newspaper] ✓ SAVED to DB (ID: {new_item.id}): {article['title'][:50]}... from {article['source']}")
                     
-                    # Process event timeline only for updates (not first run)
-                    if not first_run:
-                        await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'newspaper')
-                        cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'newspaper')
-                        if cluster_result:
-                            ws_type = "new_cluster_created" if cluster_result["is_new_cluster"] else "cluster_news_added"
-                            ws_data = {"cluster_id": cluster_result["cluster_id"], "cluster_title": cluster_result["cluster_title"], "news": item_dict, "news_type": "newspaper"}
-                            if cluster_result["is_new_cluster"]:
-                                ws_data["cluster_data"] = cluster_result["cluster_data"]
-                            await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
-                            schedule_cluster_importance_reclassify(cluster_result["cluster_id"])
+                    # Process event timeline only for updates (no longer automatic to save costs)
+                    # if not first_run:
+                    #     await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'newspaper')
+                    #     cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'newspaper')
+                    #     if cluster_result:
+                    #         ws_type = "new_cluster_created" if cluster_result["is_new_cluster"] else "cluster_news_added"
+                    #         ws_data = {"cluster_id": cluster_result["cluster_id"], "cluster_title": cluster_result["cluster_title"], "news": item_dict, "news_type": "newspaper"}
+                    #         if cluster_result["is_new_cluster"]:
+                    #             ws_data["cluster_data"] = cluster_result["cluster_data"]
+                    #         await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
+                    #         schedule_cluster_importance_reclassify(cluster_result["cluster_id"])
                 except Exception as e:
                     db.rollback()
                     logger.error(f"[Newspaper] ✗ FAILED to save article: {article['title'][:50]}... Error: {e}")
@@ -2157,17 +2157,17 @@ async def fetch_youtube_feeds():
                     new_items_found.append(item_dict)
                     logger.info(f"✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
                     
-                    # Process event timeline only for updates (not first run)
-                    if not first_run:
-                        await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'world')
-                        cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'world')
-                        if cluster_result:
-                            ws_type = "new_cluster_created" if cluster_result["is_new_cluster"] else "cluster_news_added"
-                            ws_data = {"cluster_id": cluster_result["cluster_id"], "cluster_title": cluster_result["cluster_title"], "news": item_dict, "news_type": "world"}
-                            if cluster_result["is_new_cluster"]:
-                                ws_data["cluster_data"] = cluster_result["cluster_data"]
-                            await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
-                            schedule_cluster_importance_reclassify(cluster_result["cluster_id"])
+                    # Process event timeline only for updates (no longer automatic to save costs)
+                    # if not first_run:
+                    #     await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'world')
+                    #     cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'world')
+                    #     if cluster_result:
+                    #         ws_type = "new_cluster_created" if cluster_result["is_new_cluster"] else "cluster_news_added"
+                    #         ws_data = {"cluster_id": cluster_result["cluster_id"], "cluster_title": cluster_result["cluster_title"], "news": item_dict, "news_type": "world"}
+                    #         if cluster_result["is_new_cluster"]:
+                    #             ws_data["cluster_data"] = cluster_result["cluster_data"]
+                    #         await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
+                    #         schedule_cluster_importance_reclassify(cluster_result["cluster_id"])
                 except Exception as e:
                     db.rollback()
                     logger.error(f"✗ FAILED to save video: {video['title'][:50]}... Error: {e}")
@@ -2298,17 +2298,17 @@ async def fetch_yemen_youtube_feeds():
                     new_items_found.append(item_dict)
                     logger.info(f"[Yemen] ✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
                     
-                    # Process event timeline only for updates (not first run)
-                    if not first_run:
-                        await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'yemen')
-                        cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'yemen')
-                        if cluster_result:
-                            ws_type = "new_cluster_created" if cluster_result["is_new_cluster"] else "cluster_news_added"
-                            ws_data = {"cluster_id": cluster_result["cluster_id"], "cluster_title": cluster_result["cluster_title"], "news": item_dict, "news_type": "yemen"}
-                            if cluster_result["is_new_cluster"]:
-                                ws_data["cluster_data"] = cluster_result["cluster_data"]
-                            await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
-                            schedule_cluster_importance_reclassify(cluster_result["cluster_id"])
+                    # Process event timeline only for updates (no longer automatic to save costs)
+                    # if not first_run:
+                    #     await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'yemen')
+                    #     cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'yemen')
+                    #     if cluster_result:
+                    #         ws_type = "new_cluster_created" if cluster_result["is_new_cluster"] else "cluster_news_added"
+                    #         ws_data = {"cluster_id": cluster_result["cluster_id"], "cluster_title": cluster_result["cluster_title"], "news": item_dict, "news_type": "yemen"}
+                    #         if cluster_result["is_new_cluster"]:
+                    #             ws_data["cluster_data"] = cluster_result["cluster_data"]
+                    #         await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
+                    #         schedule_cluster_importance_reclassify(cluster_result["cluster_id"])
                 except Exception as e:
                     db.rollback()
                     logger.error(f"[Yemen] ✗ FAILED to save video: {video['title'][:50]}... Error: {e}")
@@ -2409,6 +2409,64 @@ async def get_yemen_news(page: int = 1, limit: int = 20):
         "page": page,
         "limit": limit
     }
+
+@app.post("/api/process-news-ai/{news_type}/{news_id}")
+async def process_news_ai(news_type: str, news_id: int):
+    """Manually trigger AI processing for a news item (Timeline and Evolution) to save costs."""
+    db = SessionLocal()
+    try:
+        # Get the news item to ensure it exists and get its info
+        news_item = None
+        if news_type == 'world':
+            news_item = db.query(NewsItem).filter(NewsItem.id == news_id).first()
+        elif news_type == 'yemen':
+            news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == news_id).first()
+        elif news_type == 'newspaper':
+            news_item = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id == news_id).first()
+        
+        if not news_item:
+            return {"error": "News item not found"}, 404
+            
+        logger.info(f"Manual AI processing triggered for {news_type}:{news_id}")
+        
+        # 1. Process Timeline
+        await process_event_timeline(db, news_id, news_item.title, news_item.summary or '', news_type)
+        
+        # 2. Assign to Cluster (Event Evolution)
+        cluster_result = await assign_news_to_cluster(db, news_id, news_item.title, news_item.summary or '', news_type)
+        
+        # 3. Handle cluster results (WebSocket broadcast)
+        if cluster_result:
+            item_dict = {
+                "id": news_item.id,
+                "title": news_item.title,
+                "link": news_item.link,
+                "summary": news_item.summary,
+                "published": str(news_item.published),
+                "source": news_item.source,
+                "image_url": news_item.image_url,
+                "video_id": getattr(news_item, 'video_id', None),
+                "is_important": getattr(news_item, 'is_important', 0),
+                "importance_reason": getattr(news_item, 'importance_reason', None)
+            }
+            ws_type = "new_cluster_created" if cluster_result["is_new_cluster"] else "cluster_news_added"
+            ws_data = {"cluster_id": cluster_result["cluster_id"], "cluster_title": cluster_result["cluster_title"], "news": item_dict, "news_type": news_type}
+            if cluster_result["is_new_cluster"]:
+                ws_data["cluster_data"] = cluster_result["cluster_data"]
+            await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
+            schedule_cluster_importance_reclassify(cluster_result["cluster_id"])
+            
+        return {
+            "status": "success", 
+            "message": "AI processing complete", 
+            "timeline_processed": True,
+            "cluster_info": cluster_result
+        }
+    except Exception as e:
+        logger.error(f"Error in manual AI processing: {e}")
+        return {"error": str(e)}, 500
+    finally:
+        db.close()
 
 @app.get("/api/newspaper-news")
 async def get_newspaper_news(page: int = 1, limit: int = 20):
