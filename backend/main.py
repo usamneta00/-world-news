@@ -3001,6 +3001,7 @@ async def clear_all_news():
         db.query(NewsClusterMember).delete()
         db.query(NewsCluster).delete()
         db.query(TrendingTopic).delete()
+        db.query(SystemState).delete()
         db.commit()
         _cluster_cache["data"] = None
         _cluster_cache["timestamp"] = None
@@ -3433,8 +3434,8 @@ async def get_trends(
         import_yemen = db.query(YemenNewsItem).filter(YemenNewsItem.is_important == 1).order_by(desc(YemenNewsItem.created_at)).limit(5).all()
         import_paper = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.is_important == 1).order_by(desc(NewspaperNewsItem.created_at)).limit(5).all()
         
-        # If not enough important news, fill with latest news
-        if len(import_yemen) + len(import_paper) < 5:
+        # If not enough important news AND we have trends (indicates analysis has run), fill with latest news
+        if len(import_yemen) + len(import_paper) < 5 and trends:
             extra_yemen = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(5).all()
             extra_paper = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(5).all()
             yemen = list(set(import_yemen + extra_yemen))[:5]
