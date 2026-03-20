@@ -571,16 +571,16 @@ YEMEN_YOUTUBE_CHANNELS = [
     {"url": "https://www.youtube.com/@bbcnewsarabic/videos", "name": "بي بي سي عربي", "type": "channel"},
     {"url": "https://www.youtube.com/@AlArabiya/videos", "name": "العربية", "type": "channel"},
     {"url": "https://www.youtube.com/@ibrahiemmustafaelsharkawy/videos", "name": "إبراهيم مصطفى الشرقاوي", "type": "channel"},
-    {"url": "https://www.youtube.com/@AlmahriahTV/videos", "name": "المهرية", "type": "channel", "skip_filter": True},
-    {"url": "https://www.youtube.com/@Aimn_Al-Qasemi/videos", "name": "أيمن القاسمي", "type": "channel", "skip_filter": True},
+    {"url": "https://www.youtube.com/@AlmahriahTV/videos", "name": "المهرية", "type": "channel"},
+    {"url": "https://www.youtube.com/@Aimn_Al-Qasemi/videos", "name": "أيمن القاسمي", "type": "channel"},
     {"url": "https://www.youtube.com/@Ne3rafChannel/videos", "name": "نعرف", "type": "channel"},
-    {"url": "https://www.youtube.com/@Sahmoo7/videos", "name": "سهمو", "type": "channel", "skip_filter": True},
-    {"url": "https://www.youtube.com/@aljoumhouriyaTV/videos", "name": "الجمهورية", "type": "channel", "skip_filter": True},
-    {"url": "https://www.youtube.com/@mns777/videos", "name": "MNS", "type": "channel", "skip_filter": True},
-    {"url": "https://www.youtube.com/@yementvyem/videos", "name": "اليمن TV", "type": "channel", "skip_filter": True},
-    {"url": "https://www.youtube.com/@TVyemenshabab/videos", "name": "قناة يمن شباب", "type": "channel", "skip_filter": True},
+    {"url": "https://www.youtube.com/@Sahmoo7/videos", "name": "سهمو", "type": "channel"},
+    {"url": "https://www.youtube.com/@aljoumhouriyaTV/videos", "name": "الجمهورية", "type": "channel"},
+    {"url": "https://www.youtube.com/@mns777/videos", "name": "MNS", "type": "channel"},
+    {"url": "https://www.youtube.com/@yementvyem/videos", "name": "اليمن TV", "type": "channel"},
+    {"url": "https://www.youtube.com/@TVyemenshabab/videos", "name": "قناة يمن شباب", "type": "channel"},
     {"url": "https://www.youtube.com/@AsharqNews/videos", "name": "الشرق للأخبار", "type": "channel"},
-    {"url": "https://www.youtube.com/@Yementdy/videos", "name": "اليمن اليوم", "type": "channel", "skip_filter": True},
+    {"url": "https://www.youtube.com/@Yementdy/videos", "name": "اليمن اليوم", "type": "channel"},
 ]
 
 # World Newspapers Sources List
@@ -1111,12 +1111,7 @@ def get_clusters_from_db(db):
         })
         total_news += len(news_items)
 
-    # Sort: Yemen clusters first, then by event status, then by size
-    result_clusters.sort(key=lambda x: (
-        "yemen" in x.get("types", []),
-        x.get("is_event", False),
-        x["news_count"]
-    ), reverse=True)
+    result_clusters.sort(key=lambda x: (x.get("is_event", False), x["news_count"]), reverse=True)
 
     return {
         "clusters": result_clusters,
@@ -2094,20 +2089,12 @@ async def fetch_all_yemen_youtube_channels(db) -> List[dict]:
         if isinstance(videos, Exception):
             logger.error(f"[Yemen] Error in channel fetch for {YEMEN_YOUTUBE_CHANNELS[idx]['name']}: {videos}")
             continue
-            
-        # Check if this channel should bypass filtering
-        channel_info = YEMEN_YOUTUBE_CHANNELS[idx]
-        skip_filter = channel_info.get('skip_filter', False)
-        
-        # Filter videos (or include all if skip_filter is set)
+        # Filter videos to only include Yemen-related content
         for video in videos:
-            if skip_filter or is_yemen_related(video['title']):
+            if is_yemen_related(video['title']):
                 video['summary'] = f"فيديو جديد من {video['source']} - أخبار اليمن"
                 all_videos.append(video)
-                if skip_filter:
-                    logger.debug(f"[Yemen] Included video from unfiltered channel: {video['title'][:50]}...")
-                else:
-                    logger.info(f"[Yemen] Found Yemen-related video: {video['title'][:50]}...")
+                logger.info(f"[Yemen] Found Yemen-related video: {video['title'][:50]}...")
     
     # Sort by published date from NEWEST to OLDEST
     all_videos.sort(key=lambda x: x['published'], reverse=True)
@@ -2753,9 +2740,8 @@ async def get_news_clusters(rebuild: bool = False):
     db = SessionLocal()
     try:
         world_news = db.query(NewsItem).order_by(desc(NewsItem.created_at)).limit(250).all()
-        # Increased limit for Yemen news to 650 to find more groups/clusters
-        yemen_news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(650).all()
-        newspaper_news = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(250).all()
+        yemen_news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(200).all()
+        newspaper_news = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(200).all()
 
         all_news = []
         for n in world_news:
@@ -2765,21 +2751,13 @@ async def get_news_clusters(rebuild: bool = False):
                 "image_url": n.image_url, "video_id": n.video_id, 
                 "is_important": n.is_important, "importance_reason": n.importance_reason
             })
-        # Set of primary Yemen news channels for 'strong' video detection
-        STRONG_YEMEN_SOURCES = {"المهرية", "أيمن القاسمي", "سهمو", "الجمهورية", "MNS", "اليمن TV", "قناة يمن شباب", "اليمن اليوم"}
-        
         for n in yemen_news:
-            # We filter for 'strong' videos: high intensity keywords, important flag, or major news source
-            intensity = classify_news_intensity(n.title)
-            is_strong = (n.is_important == 1 or intensity in ("conflict", "crisis") or n.source in STRONG_YEMEN_SOURCES)
-            
-            if is_strong:
-                all_news.append({
-                    "id": n.id, "type": "yemen", "title": n.title, "link": n.link,
-                    "summary": n.summary, "source": n.source, "published": str(n.published),
-                    "image_url": n.image_url, "video_id": n.video_id,
-                    "is_important": n.is_important, "importance_reason": n.importance_reason
-                })
+            all_news.append({
+                "id": n.id, "type": "yemen", "title": n.title, "link": n.link,
+                "summary": n.summary, "source": n.source, "published": str(n.published),
+                "image_url": n.image_url, "video_id": n.video_id,
+                "is_important": n.is_important, "importance_reason": n.importance_reason
+            })
         for n in newspaper_news:
             all_news.append({
                 "id": n.id, "type": "newspaper", "title": n.title, "link": n.link,
@@ -2890,12 +2868,7 @@ async def get_news_clusters(rebuild: bool = False):
                 "news": items_sorted
             })
 
-        # Sort: Yemen clusters first, then by event status, then by size
-        result_clusters.sort(key=lambda x: (
-            "yemen" in x.get("types", []),
-            x.get("is_event", False),
-            x["news_count"]
-        ), reverse=True)
+        result_clusters.sort(key=lambda x: (x.get("is_event", False), x["news_count"]), reverse=True)
 
         # Persist clusters to database for fast future retrieval
         store_clusters_to_db(db, result_clusters, all_news, embeddings)
