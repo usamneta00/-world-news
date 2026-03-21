@@ -516,7 +516,7 @@ YOUTUBE_CHANNELS = [
     {"url": "https://www.youtube.com/@markets/videos", "name": "Bloomberg Markets", "type": "channel"},
     {"url": "https://www.youtube.com/@euronews/videos", "name": "Euronews", "type": "channel"},
     {"url": "https://www.youtube.com/@trtworld/videos", "name": "TRT World", "type": "channel"},
-    {"url": "https://www.youtube.com/@WION/videos", "name": "WION", "type": "channel"},
+    #{"url": "https://www.youtube.com/@WION/videos", "name": "WION", "type": "channel"},
     {"url": "https://www.youtube.com/@channelnewsasia/videos", "name": "Channel News Asia", "type": "channel"},
     {"url": "https://www.youtube.com/@globalnews/videos", "name": "Global News", "type": "channel"},
     {"url": "https://www.youtube.com/@TheAtlantic/videos", "name": "The Atlantic", "type": "channel"},
