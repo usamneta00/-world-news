@@ -157,18 +157,6 @@ class NewsClusterMember(Base):
     news_type = Column(String)
     added_at = Column(DateTime, default=datetime.now)
 
-class TrendingTopic(Base):
-    __tablename__ = "trending_topics"
-    id = Column(Integer, primary_key=True, index=True)
-    keyword = Column(String, unique=True, index=True)
-    heat_score = Column(Integer, default=1) # Current frequency
-    velocity = Column(String, default="0.0") # Growth rate as string to be safe
-    representative_news_id = Column(Integer)
-    representative_news_type = Column(String)
-    first_seen_at = Column(DateTime, default=datetime.now)
-    last_updated = Column(DateTime, default=datetime.now)
-    related_items_json = Column(String) # JSON list of news IDs/Types related to this trend
-
 Base.metadata.create_all(bind=engine)
 
 # Migration: Add video_id column and channel_last_video table
@@ -303,13 +291,6 @@ def migrate_database():
                 NewspaperLastArticle.__table__.create(engine)
                 logger.info("Successfully created newspaper_last_article table")
             
-            # Check if trending_topics table exists
-            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='trending_topics'"))
-            if not result.fetchone():
-                logger.info("Creating trending_topics table...")
-                TrendingTopic.__table__.create(engine)
-                logger.info("Successfully created trending_topics table")
-            
             # Check if news_embedding_cache table exists
             result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='news_embedding_cache'"))
             if not result.fetchone():
@@ -349,14 +330,6 @@ def migrate_database():
                     try: conn.commit()
                     except: pass
                     logger.info("Successfully added related_news_type column")
-            
-            # Fix missing created_at values to ensure Trends work immediately
-            conn.execute(text("UPDATE news SET created_at = published WHERE created_at IS NULL"))
-            conn.execute(text("UPDATE yemen_news SET created_at = published WHERE created_at IS NULL"))
-            conn.execute(text("UPDATE newspaper_news SET created_at = published WHERE created_at IS NULL"))
-            try: conn.commit() 
-            except: pass 
-
     except Exception as e:
         logger.error(f"Migration error: {e}")
 
@@ -543,7 +516,7 @@ YOUTUBE_CHANNELS = [
     {"url": "https://www.youtube.com/@markets/videos", "name": "Bloomberg Markets", "type": "channel"},
     {"url": "https://www.youtube.com/@euronews/videos", "name": "Euronews", "type": "channel"},
     {"url": "https://www.youtube.com/@trtworld/videos", "name": "TRT World", "type": "channel"},
-    #{"url": "https://www.youtube.com/@WION/videos", "name": "WION", "type": "channel"},
+    {"url": "https://www.youtube.com/@WION/videos", "name": "WION", "type": "channel"},
     {"url": "https://www.youtube.com/@channelnewsasia/videos", "name": "Channel News Asia", "type": "channel"},
     {"url": "https://www.youtube.com/@globalnews/videos", "name": "Global News", "type": "channel"},
     {"url": "https://www.youtube.com/@TheAtlantic/videos", "name": "The Atlantic", "type": "channel"},
@@ -598,8 +571,6 @@ NEWSPAPER_SOURCES = [
     {"url": "https://www.aljazeera.com/middle-east/", "name": "Al Jazeera", "type": "newspaper"},
     {"url": "https://www.axios.com/world", "name": "Axios", "type": "newspaper"},
     {"url": "https://www.seattletimes.com/nation-world/world/", "name": "Seattle Times", "type": "newspaper"},
-    {"url": "https://www.thestar.com/news/world/", "name": "The Star", "type": "newspaper"},
-    {"url": "https://www.independent.co.uk/topic/middle-east", "name": "The Independent", "type": "newspaper"},
     {"url": "https://www.reuters.com/world/middle-east/", "name": "Reuters", "type": "newspaper"},
     {"url": "https://news.un.org/en/focus-topic/middle-east", "name": "UN News", "type": "newspaper"},
     {"url": "https://www.ynetnews.com/category/3083", "name": "Ynet News", "type": "newspaper"},
@@ -692,7 +663,6 @@ _add_country("canada", 45.42, -75.70, "كندا", "Canada", ["كندا", "الك
 # Other
 _add_country("south_africa", -25.75, 28.19, "جنوب أفريقيا", "South Africa", ["جنوب أفريقيا", "South Africa", "Johannesburg"])
 _add_country("red_sea", 20.00, 38.50, "البحر الأحمر", "Red Sea", ["البحر الأحمر", "باب المندب", "Red Sea", "Bab el-Mandeb"])
-_add_country("hormuz", 26.56, 56.25, "مضيق هرمز", "Strait of Hormuz", ["مضيق هرمز", "هرمز", "Strait of Hormuz", "Hormuz"])
 _add_country("un_hq", 46.23, 6.14, "الأمم المتحدة", "United Nations", ["الأمم المتحدة", "مجلس الأمن", "United Nations", "Security Council"])
 
 # Build fast name → country_key lookup
@@ -1111,8 +1081,9 @@ def get_clusters_from_db(db):
         })
         total_news += len(news_items)
 
-    result_clusters.sort(key=lambda x: (x.get("is_event", False), x["news_count"]), reverse=True)
-
+    #result_clusters.sort(key=lambda x: (x.get("is_event", False), x["news_count"]), reverse=True)
+    result_clusters.sort(key=lambda x: ('yemen' in x.get('types', []), x.get("is_event", False), x["news_count"]), reverse=True)
+    
     return {
         "clusters": result_clusters,
         "total_news": total_news,
@@ -1390,17 +1361,8 @@ def fetch_newspaper_articles(source_url: str, source_name: str, last_article_ids
                 pass
             
             # Try to get a better summary from the specific article if possible
-            article_summary = ""
-            try:
-                # Check for meta description in current soup if it's there
-                desc_meta = soup.find('meta', attrs={'name': 'description'}) or soup.find('meta', property='og:description')
-                if desc_meta:
-                    article_summary = desc_meta.get('content', '')
-            except:
-                pass
-
-            if not article_summary or len(article_summary) < 20:
-                article_summary = f"تغطية إخبارية من {source_name} حول {title}"
+            # Note: In a production environment, we might want to do this asynchronously
+            article_summary = f"مقال جديد من {source_name} يتناول آخر المستجدات الإخبارية. انقر لمتابعة التفاصيل والتحليلات الكاملة."
             
             # Translate Title and Summary
             translated_title = translate_to_arabic(title)
@@ -1523,17 +1485,17 @@ async def fetch_newspaper_feeds():
                     new_items_found.append(item_dict)
                     logger.info(f"[Newspaper] ✓ SAVED to DB (ID: {new_item.id}): {article['title'][:50]}... from {article['source']}")
                     
-                    # Process event timeline only for updates (no longer automatic to save costs)
-                    # if not first_run:
-                    #     await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'newspaper')
-                    #     cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'newspaper')
-                    #     if cluster_result:
-                    #         ws_type = "new_cluster_created" if cluster_result["is_new_cluster"] else "cluster_news_added"
-                    #         ws_data = {"cluster_id": cluster_result["cluster_id"], "cluster_title": cluster_result["cluster_title"], "news": item_dict, "news_type": "newspaper"}
-                    #         if cluster_result["is_new_cluster"]:
-                    #             ws_data["cluster_data"] = cluster_result["cluster_data"]
-                    #         await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
-                    #         schedule_cluster_importance_reclassify(cluster_result["cluster_id"])
+                    # Process event timeline only for updates (not first run)
+                    if not first_run:
+                        await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'newspaper')
+                        cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'newspaper')
+                        if cluster_result:
+                            ws_type = "new_cluster_created" if cluster_result["is_new_cluster"] else "cluster_news_added"
+                            ws_data = {"cluster_id": cluster_result["cluster_id"], "cluster_title": cluster_result["cluster_title"], "news": item_dict, "news_type": "newspaper"}
+                            if cluster_result["is_new_cluster"]:
+                                ws_data["cluster_data"] = cluster_result["cluster_data"]
+                            await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
+                            schedule_cluster_importance_reclassify(cluster_result["cluster_id"])
                 except Exception as e:
                     db.rollback()
                     logger.error(f"[Newspaper] ✗ FAILED to save article: {article['title'][:50]}... Error: {e}")
@@ -2157,17 +2119,17 @@ async def fetch_youtube_feeds():
                     new_items_found.append(item_dict)
                     logger.info(f"✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
                     
-                    # Process event timeline only for updates (no longer automatic to save costs)
-                    # if not first_run:
-                    #     await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'world')
-                    #     cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'world')
-                    #     if cluster_result:
-                    #         ws_type = "new_cluster_created" if cluster_result["is_new_cluster"] else "cluster_news_added"
-                    #         ws_data = {"cluster_id": cluster_result["cluster_id"], "cluster_title": cluster_result["cluster_title"], "news": item_dict, "news_type": "world"}
-                    #         if cluster_result["is_new_cluster"]:
-                    #             ws_data["cluster_data"] = cluster_result["cluster_data"]
-                    #         await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
-                    #         schedule_cluster_importance_reclassify(cluster_result["cluster_id"])
+                    # Process event timeline only for updates (not first run)
+                    if not first_run:
+                        await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'world')
+                        cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'world')
+                        if cluster_result:
+                            ws_type = "new_cluster_created" if cluster_result["is_new_cluster"] else "cluster_news_added"
+                            ws_data = {"cluster_id": cluster_result["cluster_id"], "cluster_title": cluster_result["cluster_title"], "news": item_dict, "news_type": "world"}
+                            if cluster_result["is_new_cluster"]:
+                                ws_data["cluster_data"] = cluster_result["cluster_data"]
+                            await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
+                            schedule_cluster_importance_reclassify(cluster_result["cluster_id"])
                 except Exception as e:
                     db.rollback()
                     logger.error(f"✗ FAILED to save video: {video['title'][:50]}... Error: {e}")
@@ -2298,17 +2260,17 @@ async def fetch_yemen_youtube_feeds():
                     new_items_found.append(item_dict)
                     logger.info(f"[Yemen] ✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
                     
-                    # Process event timeline only for updates (no longer automatic to save costs)
-                    # if not first_run:
-                    #     await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'yemen')
-                    #     cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'yemen')
-                    #     if cluster_result:
-                    #         ws_type = "new_cluster_created" if cluster_result["is_new_cluster"] else "cluster_news_added"
-                    #         ws_data = {"cluster_id": cluster_result["cluster_id"], "cluster_title": cluster_result["cluster_title"], "news": item_dict, "news_type": "yemen"}
-                    #         if cluster_result["is_new_cluster"]:
-                    #             ws_data["cluster_data"] = cluster_result["cluster_data"]
-                    #         await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
-                    #         schedule_cluster_importance_reclassify(cluster_result["cluster_id"])
+                    # Process event timeline only for updates (not first run)
+                    if not first_run:
+                        await process_event_timeline(db, new_item.id, new_item.title, new_item.summary or '', 'yemen')
+                        cluster_result = await assign_news_to_cluster(db, new_item.id, new_item.title, new_item.summary or '', 'yemen')
+                        if cluster_result:
+                            ws_type = "new_cluster_created" if cluster_result["is_new_cluster"] else "cluster_news_added"
+                            ws_data = {"cluster_id": cluster_result["cluster_id"], "cluster_title": cluster_result["cluster_title"], "news": item_dict, "news_type": "yemen"}
+                            if cluster_result["is_new_cluster"]:
+                                ws_data["cluster_data"] = cluster_result["cluster_data"]
+                            await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
+                            schedule_cluster_importance_reclassify(cluster_result["cluster_id"])
                 except Exception as e:
                     db.rollback()
                     logger.error(f"[Yemen] ✗ FAILED to save video: {video['title'][:50]}... Error: {e}")
@@ -2378,7 +2340,6 @@ async def startup_event():
     asyncio.create_task(fetch_youtube_feeds())
     asyncio.create_task(fetch_yemen_youtube_feeds())
     asyncio.create_task(fetch_newspaper_feeds())
-    asyncio.create_task(trend_background_task())
 
 @app.get("/api/news")
 async def get_news(page: int = 1, limit: int = 20):
@@ -2409,64 +2370,6 @@ async def get_yemen_news(page: int = 1, limit: int = 20):
         "page": page,
         "limit": limit
     }
-
-@app.post("/api/process-news-ai/{news_type}/{news_id}")
-async def process_news_ai(news_type: str, news_id: int):
-    """Manually trigger AI processing for a news item (Timeline and Evolution) to save costs."""
-    db = SessionLocal()
-    try:
-        # Get the news item to ensure it exists and get its info
-        news_item = None
-        if news_type == 'world':
-            news_item = db.query(NewsItem).filter(NewsItem.id == news_id).first()
-        elif news_type == 'yemen':
-            news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == news_id).first()
-        elif news_type == 'newspaper':
-            news_item = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id == news_id).first()
-        
-        if not news_item:
-            return {"error": "News item not found"}, 404
-            
-        logger.info(f"Manual AI processing triggered for {news_type}:{news_id}")
-        
-        # 1. Process Timeline
-        await process_event_timeline(db, news_id, news_item.title, news_item.summary or '', news_type)
-        
-        # 2. Assign to Cluster (Event Evolution)
-        cluster_result = await assign_news_to_cluster(db, news_id, news_item.title, news_item.summary or '', news_type)
-        
-        # 3. Handle cluster results (WebSocket broadcast)
-        if cluster_result:
-            item_dict = {
-                "id": news_item.id,
-                "title": news_item.title,
-                "link": news_item.link,
-                "summary": news_item.summary,
-                "published": str(news_item.published),
-                "source": news_item.source,
-                "image_url": news_item.image_url,
-                "video_id": getattr(news_item, 'video_id', None),
-                "is_important": getattr(news_item, 'is_important', 0),
-                "importance_reason": getattr(news_item, 'importance_reason', None)
-            }
-            ws_type = "new_cluster_created" if cluster_result["is_new_cluster"] else "cluster_news_added"
-            ws_data = {"cluster_id": cluster_result["cluster_id"], "cluster_title": cluster_result["cluster_title"], "news": item_dict, "news_type": news_type}
-            if cluster_result["is_new_cluster"]:
-                ws_data["cluster_data"] = cluster_result["cluster_data"]
-            await manager.broadcast(json.dumps({"type": ws_type, "data": ws_data}))
-            schedule_cluster_importance_reclassify(cluster_result["cluster_id"])
-            
-        return {
-            "status": "success", 
-            "message": "AI processing complete", 
-            "timeline_processed": True,
-            "cluster_info": cluster_result
-        }
-    except Exception as e:
-        logger.error(f"Error in manual AI processing: {e}")
-        return {"error": str(e)}, 500
-    finally:
-        db.close()
 
 @app.get("/api/newspaper-news")
 async def get_newspaper_news(page: int = 1, limit: int = 20):
@@ -3000,8 +2903,6 @@ async def clear_all_news():
         db.query(NewsEmbeddingCache).delete()
         db.query(NewsClusterMember).delete()
         db.query(NewsCluster).delete()
-        db.query(TrendingTopic).delete()
-        db.query(SystemState).delete()
         db.commit()
         _cluster_cache["data"] = None
         _cluster_cache["timestamp"] = None
@@ -3106,379 +3007,27 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.error(f"WebSocket error: {e}")
         manager.disconnect(websocket)
 
-# ============================================
-# Trend Analysis Logic
-# ============================================
-
-ARABIC_STOP_WORDS = set([
-    "من", "في", "على", "إلى", "عن", "مع", "هذا", "هذه", "التي", "الذي", "تم", "كان", "كانت",
-    "أو", "أن", "إن", "لا", "ما", "لم", "بعد", "قبل", "بين", "حول", "خلال", "عند", "وقد",
-    "يكون", "كانوا", "كذلك", "ذلك", "هؤلاء", "كل", "جميع", "نفس", "بعض", "أكثر", "أقل",
-    "بسبب", "حيث", "بواسطة", "يتم", "قام", "قامت", "عبر", "نحو", "منذ", "حتى",
-    "آخر", "الكاملة", "التفاصيل", "مقال", "يتناول", "المستجدات", "الإخبارية", "انقر", "لمتابعة",
-    "الحلقة", "كاملة", "رئيسية", "اليوم", "تفاصيل", "جديد", "الجديدة", "المقال", "انقر لمتابعة",
-    "المصدر", "مصدر", "أخبار", "خبر", "أخبارية", "تغطية", "مباشر", "مباشرة", "تقرير", "تقارير",
-    "فيديو", "فيديو جديد", "جديد من", "الحلقة الكاملة", "مارس", "مارس 2026", "حول", "تغطية", "إخبارية",
-    "يقول", "قال", "قالت", "كان", "كانت", "الولايات", "المتحدة", "الأمريكية", "الإيرانية", "الإيراني",
-    "تحليلات", "والتحليلات", "نشر", "بث", "عبر", "أيضا", "أنه", "أنها", "بأن", "بأنها",
-    "الأوسط", "الشرق", "العالم", "قناة", "برنامج", "حلقة", "حدث", "أحداث", "اليومية", "شاهد",
-])
-
-ENGLISH_STOP_WORDS = set([
-    "news", "full", "episode", "click", "read", "more", "the", "and", "for", "with", "from",
-    "this", "that", "have", "has", "had", "were", "been", "being", "said", "says", "year",
-    "month", "day", "hour", "latest", "breaking", "watch", "video", "article", "story", "stories",
-    "English", "Jazeera", "France", "Forbes", "Reuters", "News", "Press", "Associated", "Times",
-])
-
-# Keywords we never want as trends (boilerplate / meaningless)
-TREND_KEYWORD_BLOCKLIST = set([
-    "news", "آخر", "الكاملة", "التفاصيل", "مقال", "يتناول", "المستجدات", "الإخبارية", "انقر",
-    "لمتابعة", "الحلقة", "كاملة", "رئيسية", "اليوم", "تفاصيل", "جديد", "الجديدة", "انقر لمتابعة",
-    "يتناول آخر", "آخر المستجدات", "المستجدات الإخبارية", "الإخبارية انقر", "مقال جديد",
-    "الحلقة الكاملة", "تفاصيل الرئيسية", "فيديو جديد", "جديد من", "تغطية إخبارية",
-    "الولايات المتحدة", "الولايات", "المتحدة", "والتحليلات", "تحليلات", "بث مباشر", "نشرة",
-    "الشرق الأوسط", "الأوسط", "الشرق", "فرانس", "فيديو", "شاهد كواليس", "كواليس",
-    "الجزيرة", "إياد الحمود", "إياد", "الحمود", "نشرة", "أخبار", "موجز", "عاجل",
-    "Al Jazeera", "Sky News", "BBC News", "France 24", "DW News", "Middle East",
-    "فرانس", "الجزيرة", "رويترز", "نيوز", "صحافة", "المسيرة", "بلومبرغ", "بي بي سي", "سكاي",
-    "مباراة", "ملخص", "أهداف", "نقل", "بث", "حصري", "فيديو", "كواليس", "الحلقة", "كاملة",
-])
-
-def _is_blocked_keyword(kw: str) -> bool:
-    """Return True if this keyword should never appear as a trend."""
-    k = kw.strip()
-    k_lower = k.lower()
-    if k in TREND_KEYWORD_BLOCKLIST or k_lower in TREND_KEYWORD_BLOCKLIST:
-        return True
-    if len(k) < 3 and k_lower in ("news", "full", "الآن", "هنا", "هناك", "شاهد"): # Changed from 4 to 3
-        return True
-    return False
-
-def extract_trending_keywords(text: str) -> List[str]:
-    """Extract potential keywords from text, ignoring stop words and boilerplate."""
-    if not text:
-        return []
-    text = re.sub(r'[^\w\s]', ' ', text)
-    text = re.sub(r'\d+', ' ', text)
-    words = text.split()
-    keywords = []
-    # Build a set of source names and their parts to block
-    global YOUTUBE_CHANNELS, YEMEN_YOUTUBE_CHANNELS, NEWSPAPER_SOURCES
-    source_parts = set()
-    for s_list in [YOUTUBE_CHANNELS, YEMEN_YOUTUBE_CHANNELS, NEWSPAPER_SOURCES]:
-        for s in s_list:
-            name = s["name"].lower()
-            source_parts.add(name)
-            # Add individual words from the name
-            for part in name.split():
-                if len(part) > 2:
-                    source_parts.add(part)
-            
-    for i in range(len(words)):
-        word = words[i].strip()
-        word_lower = word.lower()
-        # Aggressive filtering: block single words that are too short or stop words
-        if len(word) < 3 or word in ARABIC_STOP_WORDS or word_lower in ENGLISH_STOP_WORDS:
-            continue
-        if _is_blocked_keyword(word) or word_lower in source_parts:
-            continue
-        
-        # Add single word
-        keywords.append(word)
-
-        # Consider bigrams
-        if i + 1 < len(words):
-            next_word = words[i+1].strip()
-            next_lower = next_word.lower()
-            # Aggressive filtering: block bigrams if either word is too short or a stop word
-            if len(next_word) < 3 or next_word in ARABIC_STOP_WORDS or next_lower in ENGLISH_STOP_WORDS:
-                continue
-            
-            bigram = f"{word} {next_word}"
-            if not _is_blocked_keyword(bigram) and bigram.lower() not in source_parts:
-                keywords.append(bigram)
-    return keywords
-
-async def analyze_trends(db: Session):
-    """Analyze news from the last 24h to find surging trends"""
-    try:
-        now = datetime.now()
-        yesterday = now - timedelta(hours=24)
-        day_before = yesterday - timedelta(hours=24)
-        
-        # Period A: Last 24h (Current). Period B: Previous 24h (Baseline).
-        def get_all_news(start_date, end_date):
-            world = db.query(NewsItem).filter(
-                NewsItem.created_at >= start_date,
-                NewsItem.created_at < end_date
-            ).all()
-            yemen = db.query(YemenNewsItem).filter(
-                YemenNewsItem.created_at >= start_date,
-                YemenNewsItem.created_at < end_date
-            ).all()
-            paper = db.query(NewspaperNewsItem).filter(
-                NewspaperNewsItem.created_at >= start_date,
-                NewspaperNewsItem.created_at < end_date
-            ).all()
-            return world + yemen + paper
-
-        recent_news = get_all_news(yesterday, now)
-        baseline_news = get_all_news(day_before, yesterday)
-
-        logger.info(f"[Trends] Found {len(recent_news)} items in last 24h and {len(baseline_news)} in baseline.")
-
-        # If 24h is too narrow, use last 7 days vs previous 7 days so we still get trends
-        if not recent_news:
-            logger.info("[Trends] No news in last 24h, using last 7 days vs previous 7 days...")
-            week_ago = now - timedelta(days=7)
-            two_weeks_ago = now - timedelta(days=14)
-            recent_news = get_all_news(week_ago, now)
-            baseline_news = get_all_news(two_weeks_ago, week_ago)
-            logger.info(f"[Trends] Found {len(recent_news)} items in last 7 days and {len(baseline_news)} in previous 7 days.")
-
-        if not recent_news:
-            logger.warning("[Trends] No news found in any time window.")
-            return
-            
-        # Frequency counters
-        recent_freq = {}
-        baseline_freq = {}
-        news_map = {} # keyword -> list of news items
-        
-        for item in recent_news:
-            text = f"{item.title} {item.summary or ''}"
-            keywords = extract_trending_keywords(text)
-            news_type = 'world' if isinstance(item, NewsItem) else 'yemen' if isinstance(item, YemenNewsItem) else 'newspaper'
-            
-            for kw in keywords:
-                recent_freq[kw] = recent_freq.get(kw, 0) + 1
-                if kw not in news_map:
-                    news_map[kw] = []
-                news_map[kw].append({"id": item.id, "type": news_type, "published": item.published, "title": item.title, "source": item.source, "link": item.link})
-
-        for item in baseline_news:
-            text = f"{item.title} {item.summary or ''}"
-            keywords = extract_trending_keywords(text)
-            for kw in keywords:
-                baseline_freq[kw] = baseline_freq.get(kw, 0) + 1
-        
-        # Calculate scores and velocity; cap to avoid meaningless 600%+ when baseline is tiny
-        trending_results = []
-        min_count = 5 if len(recent_news) >= 30 else 4
-        for kw, count in recent_freq.items():
-            if count < min_count:
-                continue
-            if _is_blocked_keyword(kw):
-                continue
-            baseline_count = max(baseline_freq.get(kw, 0), 1)
-            velocity = (count - baseline_count) / baseline_count
-            velocity = max(-1.0, min(20.0, velocity))
-
-            sorted_mentions = sorted(news_map[kw], key=lambda x: x['published'] or datetime.min)
-            root = sorted_mentions[0]
-
-            trending_results.append({
-                "keyword": kw,
-                "heat": count,
-                "velocity": velocity,
-                "representative": root,
-                "related": sorted_mentions[:10]
-            })
-
-        trending_results.sort(key=lambda x: (x['velocity'], x['heat']), reverse=True)
-        
-        # Serialize related items for JSON (datetime is not JSON-serializable)
-        def _serialize_related(related_list):
-            return [{"id": r["id"], "type": r["type"], "published": str(r["published"]) if r.get("published") else None, "title": r.get("title", ""), "source": r.get("source", "Unknown"), "link": r.get("link", "#")} for r in related_list]
-
-        # Clean slate for trends to ensure old/blocked keywords are removed
-        db.query(TrendingTopic).delete()
-        
-        # Update Database with top 20 trends
-        for trend in trending_results[:20]: # Top 20 trends
-            related_serialized = _serialize_related(trend['related'])
-            rep = trend['representative']
-            first_seen = rep.get('published') or now
-
-            new_trend = TrendingTopic(
-                keyword=trend['keyword'],
-                heat_score=trend['heat'],
-                velocity=trend['velocity'],
-                representative_news_id=rep['id'],
-                representative_news_type=rep['type'],
-                first_seen_at=first_seen,
-                related_items_json=json.dumps(related_serialized)
-            )
-            db.add(new_trend)
-        
-        db.commit()
-        logger.info(f"Updated {len(trending_results[:20])} trending topics.")
-        
-    except Exception as e:
-        logger.error(f"Error in analyze_trends: {e}")
-        db.rollback()
-
-# Periodic Trend Task: run once at startup (for existing DB), then after 90s, then every 30 min
-async def trend_background_task():
-    # First run soon so existing DB shows trends; second run after fetch has time to add news
-    try:
-        db = SessionLocal()
-        await analyze_trends(db)
-        db.close()
-    except Exception as e:
-        logger.error(f"Trend initial run error: {e}")
-    await asyncio.sleep(90)  # Let first news fetch complete
-    while True:
-        try:
-            db = SessionLocal()
-            await analyze_trends(db)
-            db.close()
-        except Exception as e:
-            logger.error(f"Background trend task error: {e}")
-        await asyncio.sleep(1800)  # Every 30 minutes
-
-# Trends API and static files (single app - no duplicate app creation)
-def _get_news_item(db: Session, news_type: str, news_id: int):
-    """Fetch one news item by type and id; return dict with title, source, link, image_url, video_id."""
-    if news_type == 'world':
-        item = db.query(NewsItem).filter(NewsItem.id == news_id).first()
-    elif news_type == 'yemen':
-        item = db.query(YemenNewsItem).filter(YemenNewsItem.id == news_id).first()
-    elif news_type == 'newspaper':
-        item = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id == news_id).first()
-    else:
-        item = None # Unknown type
-    if not item:
-        return None
-    return {
-        "title": item.title,
-        "source": item.source,
-        "link": item.link,
-        "image_url": item.image_url,
-        "video_id": getattr(item, 'video_id', None),
-    }
-
-@app.get("/api/trends")
-async def get_trends(
-    db: Session = Depends(get_db),
-    prefer_non_world: bool = False,
-    include_digest: bool = False,
-):
-    """
-    prefer_non_world: when True, root_news for each trend prefers Yemen/newspaper over world (no repetition with World tab).
-    include_digest: when True, response includes top_events_today (أهم 5 أحداث اليوم) from Yemen + newspaper only.
-    """
-    trends = db.query(TrendingTopic).order_by(desc(TrendingTopic.velocity), desc(TrendingTopic.heat_score)).limit(15).all()
-    result = []
-    for t in trends:
-        # Try to find the root news item details
-        news_item = None
-        root_type = t.representative_news_type
-        root_id = t.representative_news_id
-
-        # First check the serialized related items for this topic
-        try:
-            related_data = json.loads(t.related_items_json) if t.related_items_json else []
-            if related_data:
-                # If prefer_non_world, try to find a non-world item first
-                if prefer_non_world:
-                    non_world_item = next((r for r in related_data if r.get("type") in ("yemen", "newspaper")), None)
-                    if non_world_item:
-                        news_item = non_world_item
-                        root_type = non_world_item.get("type", root_type)
-                
-                # If no non-world item preferred or found, use the oldest item from related_data
-                if not news_item:
-                    oldest = sorted(related_data, key=lambda x: x.get('published', '9999'))[0]
-                    news_item = oldest
-                    root_type = oldest.get("type", root_type) # Update root_type if it came from related_data
-        except Exception as e:
-            logger.warning(f"Error parsing related_items_json for trend {t.id}: {e}")
-            pass
-        
-        # If not found in JSON or if the item from JSON is incomplete, fallback to DB query
-        # The _get_news_item function is more robust for fetching full details from DB
-        if not news_item or news_item.get('title') == 'Unknown' or not news_item.get('link'):
-            db_fetched_item = _get_news_item(db, root_type, root_id)
-            if db_fetched_item:
-                news_item = db_fetched_item
-            elif related_data: # If DB query failed, but we have related_data, use the first one as a fallback
-                news_item = related_data[0]
-                root_type = news_item.get("type", root_type)
-
-        try:
-            vel = float(t.velocity) if t.velocity is not None else 0.0
-        except (TypeError, ValueError):
-            vel = 0.0
-        vel = max(-1.0, min(20.0, vel))
-        result.append({
-            "id": t.id,
-            "keyword": t.keyword,
-            "heat": t.heat_score,
-            "velocity": vel,
-            "first_seen": t.first_seen_at,
-            "root_news": {
-                "title": news_item.get("title", "Unknown") if news_item else "Unknown",
-                "source": news_item.get("source", "Unknown") if news_item else "Unknown",
-                "link": news_item.get("link", "#") if news_item else "#",
-                "image_url": news_item.get("image_url") if news_item else None,
-                "video_id": news_item.get("video_id") if news_item else None,
-                "type": root_type,
-            },
-            "related": json.loads(t.related_items_json) if t.related_items_json else [],
-        })
-    out = {"trends": result}
-    if include_digest:
-        # Get important news for the daily digest
-        import_yemen = db.query(YemenNewsItem).filter(YemenNewsItem.is_important == 1).order_by(desc(YemenNewsItem.created_at)).limit(5).all()
-        import_paper = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.is_important == 1).order_by(desc(NewspaperNewsItem.created_at)).limit(5).all()
-        
-        # If not enough important news AND we have trends (indicates analysis has run), fill with latest news
-        if len(import_yemen) + len(import_paper) < 5 and trends:
-            extra_yemen = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(5).all()
-            extra_paper = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(5).all()
-            yemen = list(set(import_yemen + extra_yemen))[:5]
-            paper = list(set(import_paper + extra_paper))[:5]
-        else:
-            yemen = import_yemen
-            paper = import_paper
-
-        by_date_y = [(n.created_at, n) for n in yemen]
-        by_date_p = [(n.created_at, n) for n in paper]
-        merged = sorted(by_date_y + by_date_p, key=lambda t: t[0] or datetime.min, reverse=True)
-        top_events_today = []
-        for _, item in merged[:5]:
-            t = "yemen" if isinstance(item, YemenNewsItem) else "newspaper"
-            top_events_today.append({"title": item.title, "link": item.link, "source": item.source, "type": t})
-        out["top_events_today"] = top_events_today
-    return out
-
-@app.get("/api/trends/force")
-async def force_trends(db: Session = Depends(get_db)):
-    """Manually trigger the trend analysis."""
-    await analyze_trends(db)
-    return {"status": "Analysis triggered", "time": str(datetime.now())}
-
-backend_dir = os.path.dirname(os.path.abspath(__file__))
-static_dir = os.path.join(backend_dir, "..", "public")
+# Serve static files
+static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "public")
 if not os.path.exists(static_dir):
     os.makedirs(static_dir, exist_ok=True)
-app.mount("/public", StaticFiles(directory=static_dir), name="public")
 
-@app.get("/")
-async def read_index():
-    index_path = os.path.join(static_dir, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    return {"message": "Please create index.html in public folder"}
+if os.path.exists(static_dir):
+    app.mount("/dist", StaticFiles(directory=static_dir), name="static")
 
-@app.get("/{path:path}")
-async def serve_static(path: str):
-    file_path = os.path.join(static_dir, path)
-    if os.path.exists(file_path) and os.path.isfile(file_path):
-        return FileResponse(file_path)
-    index_path = os.path.join(static_dir, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    return {"error": "File not found"}
+    @app.get("/")
+    async def read_index():
+        index_path = os.path.join(static_dir, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        return {"message": "Please create index.html in public folder"}
+
+    @app.get("/{path:path}")
+    async def serve_static(path: str):
+        file_path = os.path.join(static_dir, path)
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        index_path = os.path.join(static_dir, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        return {"error": "File not found"}
