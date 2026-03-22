@@ -484,6 +484,7 @@
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
+            line-clamp: 2;
             overflow: hidden;
         }
 
@@ -716,6 +717,7 @@
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
+            line-clamp: 2;
             overflow: hidden;
         }
 
@@ -1233,7 +1235,7 @@
     <nav class="fixed top-10 w-full z-40 glass-panel border-b-0 border-t-0">
         <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
             <div class="flex items-center gap-4">
-                <button id="menu-btn"
+                <button id="menu-btn" onclick="toggleSidebar()"
                     class="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors">
                     <i data-lucide="menu" class="w-5 h-5"></i>
                 </button>
@@ -1243,46 +1245,33 @@
                 </a>
             </div>
 
-            <div class="hidden md:flex items-center gap-8 text-[10px] md:text-xs font-mono tracking-widest uppercase">
-                <button id="tab-world" onclick="switchTab('world')"
-                    class="hover:text-neon-accent transition-colors text-neon-accent font-bold">World</button>
-                <button id="tab-yemen" onclick="switchTab('yemen')"
-                    class="hover:text-neon-accent transition-colors">Yemen</button>
-                <button id="tab-newspaper" onclick="switchTab('newspaper')"
-                    class="hover:text-neon-accent transition-colors">Press</button>
-                <button id="tab-recommended" onclick="switchTab('recommended')"
-                    class="hover:text-neon-accent transition-colors flex items-center gap-1">
-                    <i data-lucide="star" class="w-3.5 h-3.5"></i> Suggested
-                </button>
-                <button id="tab-clusters" onclick="switchTab('clusters')"
-                    class="hover:text-neon-accent transition-colors flex items-center gap-1">
-                    <i data-lucide="layers" class="w-3.5 h-3.5"></i> Events
-                </button>
-                <button id="tab-heatmap" onclick="switchTab('heatmap')"
-                    class="hover:text-neon-accent transition-colors flex items-center gap-1">
-                    <i data-lucide="globe-2" class="w-3.5 h-3.5"></i> Map
-                </button>
-                <div class="h-6 w-px bg-white/10 mx-2"></div>
-                <button onclick="processWorldVideo()" class="world-ai-btn" title="تلخيص ونشر فيديو عالمي">
-                    <i data-lucide="sparkles" class="w-4 h-4"></i>
-                    <span>نشر خبر عالمي (AI)</span>
-                </button>
-            </div>
-
             <div class="flex items-center gap-4">
                 <span id="current-date" class="hidden lg:block text-[10px] font-mono opacity-50"></span>
-                <button onclick="switchTab('clusters')" class="md:hidden p-2 hover:text-neon-blue transition-colors"
+                <button id="tab-world" onclick="switchTab('world')" class="p-2 hover:text-neon-blue transition-colors text-neon-accent font-bold"
+                    title="الأخبار العالمية">
+                    <i data-lucide="globe" class="w-4 h-4"></i>
+                </button>
+                <button id="tab-yemen" onclick="switchTab('yemen')" class="p-2 hover:text-neon-blue transition-colors text-neutral-500"
+                    title="أخبار اليمن">
+                    <i data-lucide="map-pin" class="w-4 h-4"></i>
+                </button>
+                <button id="tab-newspaper" onclick="switchTab('newspaper')" class="p-2 hover:text-neon-blue transition-colors text-neutral-500"
+                    title="الصحافة العالمية">
+                    <i data-lucide="newspaper" class="w-4 h-4"></i>
+                </button>
+                <button id="tab-clusters" onclick="switchTab('clusters')" class="p-2 hover:text-neon-blue transition-colors text-neutral-500"
                     title="الأحداث الجارية">
                     <i data-lucide="layers" class="w-4 h-4"></i>
                 </button>
-                <button onclick="switchTab('recommended')" class="md:hidden p-2 hover:text-neon-blue transition-colors"
+                <button id="tab-recommended" onclick="switchTab('recommended')" class="p-2 hover:text-neon-blue transition-colors text-neutral-500"
                     title="المقترح للمشاهدة">
                     <i data-lucide="star" class="w-4 h-4"></i>
                 </button>
-                <button onclick="switchTab('heatmap')" class="md:hidden p-2 hover:text-neon-blue transition-colors"
+                <button id="tab-heatmap" onclick="switchTab('heatmap')" class="p-2 hover:text-neon-blue transition-colors text-neutral-500"
                     title="خريطة الحرارة الجيوسياسية">
                     <i data-lucide="globe-2" class="w-4 h-4"></i>
                 </button>
+                <div class="h-6 w-px bg-white/10 mx-2 hidden md:block"></div>
                 <button onclick="clearAllNews()" class="p-2 hover:text-red-500 transition-colors" title="حذف الكل">
                     <i data-lucide="trash-2" class="w-4 h-4"></i>
                 </button>
@@ -1294,12 +1283,112 @@
                         class="w-4 h-4 block dark:hidden group-hover:-rotate-12 transition-transform"></i>
                 </button>
                 <button
-                    class="px-5 py-2 border border-neutral-300 dark:border-neutral-700 rounded-full text-[10px] font-medium hover:bg-neutral-900 hover:text-white dark:hover:bg-white dark:hover:text-black transition-all">
+                    class="hidden sm:block px-5 py-2 border border-neutral-300 dark:border-neutral-700 rounded-full text-[10px] font-medium hover:bg-neutral-900 hover:text-white dark:hover:bg-white dark:hover:text-black transition-all">
                     SUBSCRIBE
                 </button>
             </div>
         </div>
     </nav>
+    
+    <!-- Sidebar / Drawer Menu -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 z-[50] bg-black/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300"></div>
+    <aside id="sidebar" class="fixed inset-y-0 right-0 w-80 z-[60] bg-paper dark:bg-obsidian border-l border-white/10 transform translate-x-full transition-transform duration-500 ease-in-out">
+        <div class="h-20 flex items-center justify-between px-8 border-b border-white/5">
+            <span class="font-serif text-xl font-bold tracking-tight text-white uppercase">Menu Intelligence</span>
+            <button onclick="toggleSidebar()" class="p-2 hover:bg-white/10 rounded-full transition-colors">
+                <i data-lucide="x" class="w-5 h-5 text-neutral-400"></i>
+            </button>
+        </div>
+        
+        <div class="p-6 space-y-2 overflow-y-auto max-h-[calc(100vh-80px)]">
+            <div class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest mb-4 px-2">Navigation Intelligence</div>
+            
+            <button onclick="switchTab('world'); toggleSidebar()" class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
+                        <i data-lucide="globe" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-sm font-bold text-neutral-200">الأخبار العالمية</div>
+                        <div class="text-[9px] font-mono text-neutral-500 uppercase tracking-tighter">Global Affairs</div>
+                    </div>
+                </div>
+                <i data-lucide="chevron-left" class="w-4 h-4 text-neutral-700 group-hover:text-neon-blue"></i>
+            </button>
+
+            <button onclick="switchTab('yemen'); toggleSidebar()" class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
+                        <i data-lucide="map-pin" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-sm font-bold text-neutral-200">أخبار اليمن</div>
+                        <div class="text-[9px] font-mono text-neutral-500 uppercase tracking-tighter">Regional Coverage</div>
+                    </div>
+                </div>
+                <i data-lucide="chevron-left" class="w-4 h-4 text-neutral-700 group-hover:text-neon-blue"></i>
+            </button>
+
+            <button onclick="switchTab('newspaper'); toggleSidebar()" class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform">
+                        <i data-lucide="newspaper" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-sm font-bold text-neutral-200">الصحافة الدولية</div>
+                        <div class="text-[9px] font-mono text-neutral-500 uppercase tracking-tighter">Global Press</div>
+                    </div>
+                </div>
+                <i data-lucide="chevron-left" class="w-4 h-4 text-neutral-700 group-hover:text-neon-blue"></i>
+            </button>
+
+            <button onclick="switchTab('clusters'); toggleSidebar()" class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-500 group-hover:scale-110 transition-transform">
+                        <i data-lucide="layers" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-sm font-bold text-neutral-200">تجمع الأحداث</div>
+                        <div class="text-[9px] font-mono text-neutral-500 uppercase tracking-tighter">AI Analysis</div>
+                    </div>
+                </div>
+                <i data-lucide="chevron-left" class="w-4 h-4 text-neutral-700 group-hover:text-neon-blue"></i>
+            </button>
+
+            <button onclick="switchTab('recommended'); toggleSidebar()" class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-500 group-hover:scale-110 transition-transform">
+                        <i data-lucide="star" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-sm font-bold text-neutral-200">مقترح المشاهدة</div>
+                        <div class="text-[9px] font-mono text-neutral-500 uppercase tracking-tighter">Recommended</div>
+                    </div>
+                </div>
+                <i data-lucide="chevron-left" class="w-4 h-4 text-neutral-700 group-hover:text-neon-blue"></i>
+            </button>
+
+            <button onclick="switchTab('heatmap'); toggleSidebar()" class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center text-red-500 group-hover:scale-110 transition-transform">
+                        <i data-lucide="globe-2" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-sm font-bold text-neutral-200">الخريطة الحرارية</div>
+                        <div class="text-[9px] font-mono text-neutral-500 uppercase tracking-tighter">Geopolitics Map</div>
+                    </div>
+                </div>
+                <i data-lucide="chevron-left" class="w-4 h-4 text-neutral-700 group-hover:text-neon-blue"></i>
+            </button>
+
+            <div class="pt-8 mt-8 border-t border-white/5 space-y-4">
+                <button onclick="clearAllNews()" class="w-full flex items-center gap-3 px-4 py-2 text-neutral-500 hover:text-red-500 transition-colors text-xs font-mono uppercase tracking-widest">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    <span>Clear Data</span>
+                </button>
+            </div>
+        </div>
+    </aside>
 
     <!-- Main Content -->
     <main class="relative z-10 pt-32 pb-24 px-4 sm:px-6 min-h-screen">
@@ -1971,6 +2060,24 @@
             const isDark = document.documentElement.classList.toggle('dark');
             localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled');
             updateThreeTheme();
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            const isOpen = sidebar.classList.contains('translate-x-0');
+            
+            if (isOpen) {
+                sidebar.classList.remove('translate-x-0');
+                sidebar.classList.add('translate-x-full');
+                overlay.classList.add('opacity-0', 'pointer-events-none');
+                overlay.classList.remove('opacity-100');
+            } else {
+                sidebar.classList.add('translate-x-0');
+                sidebar.classList.remove('translate-x-full');
+                overlay.classList.remove('opacity-0', 'pointer-events-none');
+                overlay.classList.add('opacity-100');
+            }
         }
 
         function initDate() {
