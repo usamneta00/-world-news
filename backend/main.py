@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Set
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, desc
 from sqlalchemy.ext.declarative import declarative_base
@@ -21,10 +21,48 @@ import hashlib
 from urllib.parse import urljoin, urlparse, quote
 import html
 import numpy as np
+from telethon import TelegramClient
+from telethon.sessions import StringSession
+import requests
+import json
+import re
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# FastAPI App Setup
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# WebSocket Manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except Exception:
+                pass
+
+manager = ConnectionManager()
 
 # Database setup - Use /data for Railway Volume persistence
 import os
@@ -765,7 +803,7 @@ def translate_to_arabic(text: str) -> str:
         # Using the unofficial but widely used Google Translate API endpoint
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ar&dt=t&q={quote(text)}"
         headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=5)
+        response = requests.get(url, headers=headers, timeout=10)
         
         if response.status_code == 200:
             result = response.json()
@@ -773,8 +811,345 @@ def translate_to_arabic(text: str) -> str:
             return translated_text
         return text
     except Exception as e:
-        logger.error(f"Translation error: {e}")
+        logger.warning(f"Translation skipped (timeout/error): {e}")
         return text
+
+# ============================================
+# World News Video Processing (Manual AI)
+# ============================================
+
+# Telegram Settings (from telegram_to_facebook.py)
+API_ID = int(os.environ.get("API_ID", "39973736"))
+API_HASH = os.environ.get("API_HASH", "85c0ad15e89597740a41ecf4d4b21100")
+MY_CHANNEL_URL = "https://t.me/osamaalshahape"
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8652668769:AAGUMELS4sWpcKZ5WSTxqFW8BUhiz-VwrgE")
+
+# Initialize Telegram Client
+bot_client = TelegramClient(StringSession(), API_ID, API_HASH)
+
+# التحكم في أولوية النشر
+pause_background_tasks = asyncio.Event()
+pause_background_tasks.set()  # مسموح بالعمل في الحالة العادية
+
+async def post_to_telegram_channel(message_text):
+    """نشر الرسالة إلى قناة تيليجرام المحددة."""
+    try:
+        if not bot_client.is_connected():
+            await bot_client.start(bot_token=BOT_TOKEN)
+        
+        entity = await bot_client.get_entity(MY_CHANNEL_URL)
+        await bot_client.send_message(entity, message_text)
+        logger.info("✅ تم النشر في قناة تيليجرام بنجاح!")
+        return True
+    except Exception as e:
+        logger.error(f"❌ فشل النشر في تيليجرام: {e}")
+        return False
+
+def fetch_youtube_transcript_downsub(video_url):
+    """جلب نص الفيديو من DownSub مع مهل أطول وإعادة محاولة عند المهلات وأخطاء الشبكة."""
+    api_url = 'https://api.downsub.com/download'
+    headers = {
+        'Authorization': 'Bearer AIzalTjrrsT1cKdr4HSWUryzgFRiqNYc8XBzztm',
+        'Content-Type': 'application/json'
+    }
+    payload = {'url': video_url}
+    max_retries = max(1, int(os.environ.get('DOWNSUB_RETRIES', '3')))
+    post_timeout = int(os.environ.get('DOWNSUB_POST_TIMEOUT', '55'))
+    get_timeout = int(os.environ.get('DOWNSUB_GET_TIMEOUT', '90'))
+
+    last_err: Optional[str] = None
+    for attempt in range(1, max_retries + 1):
+        data = None
+        try:
+            logger.info(f"📡 [DownSub] محاولة {attempt}/{max_retries} — طلب المعالجة (مهلة {post_timeout}s)...")
+            resp = requests.post(api_url, headers=headers, json=payload, timeout=post_timeout)
+            resp.raise_for_status()
+            data = resp.json()
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            last_err = str(e)
+            logger.warning(f"⚠️ [DownSub] مهلة أو فشل اتصال: {e}")
+            if attempt < max_retries:
+                time.sleep(min(2 ** (attempt - 1), 12))
+            continue
+        except requests.exceptions.HTTPError as e:
+            code = e.response.status_code if e.response is not None else 0
+            last_err = str(e)
+            if code >= 500 and attempt < max_retries:
+                logger.warning(f"⚠️ [DownSub] HTTP {code} — إعادة المحاولة")
+                time.sleep(min(2 ** (attempt - 1), 12))
+                continue
+            logger.error(f"🚨 [DownSub] خطأ HTTP: {e}")
+            return None, None, str(e)
+        except ValueError as e:
+            last_err = str(e)
+            logger.warning(f"⚠️ [DownSub] رد JSON غير صالح: {e}")
+            if attempt < max_retries:
+                time.sleep(min(2 ** (attempt - 1), 12))
+            continue
+        except Exception as e:
+            logger.error(f"🚨 [DownSub] خطأ غير متوقع: {e}")
+            return None, None, str(e)
+
+        if data.get('status') != 'success':
+            logger.error(f"❌ [DownSub] رد غير ناجح من الخادم: {data.get('message')}")
+            return None, None, "فشل في جلب بيانات الفيديو من المصدر"
+
+        original_subs = data.get('data', {}).get('subtitles', [])
+        if not original_subs:
+            logger.warning(f"⚠️ [DownSub] لم يتم العثور على أي ترجمات لهذا الفيديو.")
+            return None, None, "لم يتم العثور على ترجمة أصلية"
+
+        selected_sub = original_subs[0]
+        for sub in original_subs:
+            if "auto-generated" not in sub.get('language', '').lower():
+                selected_sub = sub
+                break
+
+        txt_url = None
+        for fmt in selected_sub.get('formats', []):
+            if fmt.get('format') == 'txt':
+                txt_url = fmt.get('url')
+                break
+
+        if not txt_url:
+            logger.error(f"❌ [DownSub] لم يتم العثور على رابط لملف TXT.")
+            return None, None, "لم يتم العثور على صيغة نصية (TXT)"
+
+        page_title = data.get('data', {}).get('title')
+        try:
+            logger.info(f"📡 [DownSub] تحميل ملف TXT (مهلة {get_timeout}s)...")
+            txt_resp = requests.get(txt_url, timeout=get_timeout)
+            txt_resp.raise_for_status()
+            logger.info(f"✅ [DownSub] اكتمل تحميل النص بنجاح.")
+            return txt_resp.text, page_title, None
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            last_err = str(e)
+            logger.warning(f"⚠️ [DownSub] فشل تحميل TXT: {e}")
+            if attempt < max_retries:
+                time.sleep(min(2 ** (attempt - 1), 12))
+            continue
+        except requests.exceptions.HTTPError as e:
+            last_err = str(e)
+            if e.response is not None and e.response.status_code >= 500 and attempt < max_retries:
+                logger.warning(f"⚠️ [DownSub] فشل تحميل TXT HTTP — إعادة المحاولة")
+                time.sleep(min(2 ** (attempt - 1), 12))
+                continue
+            logger.error(f"🚨 [DownSub] خطأ تحميل TXT: {e}")
+            return None, None, str(e)
+
+    return None, None, last_err or "فشل الاتصال بـ DownSub بعد عدة محاولات"
+
+async def translate_title_ai(english_title: str) -> str:
+    """ترجمة عنوان الفيديو إلى العربية بأسلوب إخباري باستخدام AI."""
+    if not english_title or not OPENAI_API_KEY:
+        return english_title
+        
+    prompt = f"قم بترجمة هذا العنوان الإخباري إلى لغة عربية سليمة وجذابة (عنوان إخباري فقط): {english_title}"
+    try:
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.3
+        }
+        response = await asyncio.to_thread(
+            lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=20)
+        )
+        if response.status_code == 200:
+            return response.json()['choices'][0]['message']['content'].strip().strip('"')
+        return english_title
+    except:
+        return english_title
+
+async def summarize_world_video_ai(transcript, original_url):
+    """تلخيص النص باستخدام OpenAI (منطق telegram_to_facebook.py)."""
+    if not OPENAI_API_KEY:
+        return None, "OpenAI API Key is missing"
+    
+    system_prompt = (
+        "اريد ان تدخل في الموضوع مباشرة ولا تضيف اي شي اخر. "
+        "أنت كاتب عربي يصوغ ملخصات تبدو بشرية وطبيعية.\n"
+        "اكتب فقرة واحدة أو اثنتين مترابطتين تشرح الفكرة الأساسية وأهم الرسائل أو النتائج "
+        "الواردة في المقالة، بصياغة مباشرة وواضحة.\n"
+        "تجنّب تمامًا العبارات التي تكشف أن النص ملخص أو أنه مأخوذ من مقالة، "
+        'مثل: «تتحدث المقالة عن»، «في هذه المقالة»، «في هذا النص»، «هذا الملخص»، أو ما يشبهها.\n'
+        "اكتب المحتوى مباشرة بصيغة تقريرية إخبارية، كما لو كنت تكتب خبراً صحفياً."
+    )
+    user_prompt = (
+        "استخرج أهم ما يفيد القارئ من النص التالي، واكتبه في فقرة أو فقرتين عربيتين متصلتين، "
+        "بدون تعداد نقاط وبدون الإشارة إلى كلمة مقالة أو نص أو ملخص:\n\n"
+        f"{transcript}"
+    )
+
+    try:
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": 0.5
+        }
+        
+        response = await asyncio.to_thread(
+            lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=40)
+        )
+        
+        if response.status_code == 200:
+            content = response.json()['choices'][0]['message']['content'].strip()
+            # استخراج العنوان للترجمة (أول جملة أو عنوان افتراضي)
+            return content, None
+        return None, f"AI Error: {response.status_code}"
+    except Exception as e:
+        return None, str(e)
+
+async def run_video_processing_flow(
+    video_url: str,
+    *,
+    fallback_title: Optional[str] = None,
+    fallback_summary: Optional[str] = None,
+    skip_transcript: bool = False,
+):
+    """جلب النص (أو تخطيه) → تلخيص/ملخص احتياطي → ترجمة عنوان → نشر. عند الإلغاء (reload) يُسجَّل تحذير ويُعاد رفع التجميد."""
+    pause_background_tasks.clear()
+    logger.info("--- 🚀 [أولوية قصوى] بدء عملية النشر، تم تجميد مهام الخلفية مؤقتاً ---")
+
+    def _fallback_ok() -> bool:
+        return bool(fallback_summary and len(fallback_summary.strip()) >= 25)
+
+    async def _publish_db_fallback(reason: str) -> tuple:
+        if not _fallback_ok():
+            return None, reason
+        logger.warning(f"📎 نشر احتياطي من ملخص التطبيق ({reason})")
+        translated_title = await translate_title_ai((fallback_title or "").strip() or "خبر")
+        body = (fallback_summary or "").strip()
+        final_message = f"📌 **{translated_title}**\n\n{body}\n\n🔗 {video_url}"
+        ok = await post_to_telegram_channel(final_message)
+        if ok:
+            logger.info("🎉 تم النشر (من الملخص المخزن).")
+            return body, "نُشر باستخدام الملخص المخزن (تعذّر الاعتماد على نص الفيديو)."
+        return None, "فشل النشر في تيليجرام"
+
+    try:
+        if skip_transcript and _fallback_ok():
+            logger.info("⏩ وضع سريع: تخطي DownSub والنشر من عنوان/ملخص البطاقة.")
+            translated_title = await translate_title_ai((fallback_title or "").strip() or "خبر")
+            body = (fallback_summary or "").strip()
+            final_message = f"📌 **{translated_title}**\n\n{body}\n\n🔗 {video_url}"
+            if await post_to_telegram_channel(final_message):
+                logger.info("🎉 تم النشر السريع بنجاح.")
+                return body, None
+            return None, "فشل النشر في تيليجرام"
+
+        transcript = None
+        original_title = None
+        error = None
+
+        if not skip_transcript:
+            logger.info("⏳ [1/4] جاري استخلاص النصوص من يوتيوب (قد يستغرق وقتاً مع الفيديوهات الطويلة)...")
+            transcript, original_title, error = await asyncio.to_thread(fetch_youtube_transcript_downsub, video_url)
+
+        if skip_transcript or error or not transcript or len(transcript) < 10:
+            if skip_transcript:
+                return None, "تخطي النص مفعّل لكن لا يوجد ملخص كافٍ في البطاقة"
+            if error:
+                logger.error(f"❌ فشل جلب النص من DownSub: {error}")
+            else:
+                logger.warning("⚠️ النص المستخرج فارغ أو غير كافٍ.")
+            fb_summary, fb_err = await _publish_db_fallback(error or "نص غير كافٍ")
+            if fb_summary is not None:
+                return fb_summary, fb_err
+            base = error or "النص المستخرج غير كافٍ للتلخيص"
+            return None, f"{base} — ولا يوجد ملخص احتياطي في البطاقة"
+
+        logger.info(f"✅ تم استخلاص النص بنجاح! الطول: {len(transcript)} حرف.")
+
+        logger.info("⏳ [2/4] جاري التلخيص بالذكاء الاصطناعي...")
+        summary, ai_error = await summarize_world_video_ai(transcript, video_url)
+        if ai_error:
+            logger.error(f"❌ فشل التلخيص بالذكاء الاصطناعي: {ai_error}")
+            fb_summary, fb_err = await _publish_db_fallback(f"فشل التلخيص: {ai_error}")
+            if fb_summary is not None:
+                return fb_summary, fb_err
+            return None, f"فشل التلخيص: {ai_error}"
+
+        logger.info("📝 اكتمل التلخيص بنجاح.")
+
+        logger.info("⏳ [3/4] جاري ترجمة العنوان بالـ AI...")
+        translated_title = await translate_title_ai(original_title)
+
+        logger.info("⏳ [4/4] جاري النشر النهائي...")
+        final_message = f"📌 **{translated_title}**\n\n{summary}\n\n🔗 {video_url}"
+        success = await post_to_telegram_channel(final_message)
+
+        if success:
+            logger.info("🎉 تم النشر بنجاح!")
+            return summary, None
+        fb_summary, fb_err = await _publish_db_fallback("فشل إرسال تيليجرام للرسالة الملخّصة")
+        if fb_summary is not None:
+            return fb_summary, fb_err
+        return None, "فشل النشر في تيليجرام"
+
+    except asyncio.CancelledError:
+        logger.warning(
+            "أُلغيت عملية النشر (غالباً بسبب إعادة تحميل Uvicorn عند حفظ الملفات مع --reload، أو إيقاف الخادم). "
+            "لتفادي ذلك: لا تحفظ main.py أثناء النشر، أو شغّل الإنتاج بدون --reload."
+        )
+        raise
+    finally:
+        pause_background_tasks.set()
+
+# Endpoint للمعالجة عبر رابط يدوي
+@app.post("/api/process-world-video")
+async def process_world_video_endpoint(payload: dict):
+    video_url = payload.get("url")
+    if not video_url:
+        return {"error": "رابط الفيديو مطلوب"}, 400
+    
+    logger.info(f"🚀 بدء معالجة فيديو يدوي: {video_url}")
+    summary, error = await run_video_processing_flow(video_url)
+    
+    if error and not summary:
+        return {"error": error}, 500
+    return {"status": "success" if not error else "partial_success", "message": error or "تمت المعالجة والنشر بنجاح!", "summary": summary}
+
+# Endpoint للنشر المباشر من بطاقة الخبر
+@app.post("/api/telegram-publish/{news_type}/{news_id}")
+async def telegram_publish_by_id_endpoint(
+    news_type: str,
+    news_id: int,
+    use_db_only: bool = Query(False, description="نشر سريع من عنوان/ملخص البطاقة دون جلب نص الفيديو من DownSub"),
+):
+    db = SessionLocal()
+    try:
+        # البحث عن الخبر للحصول على الرابط
+        news_item = None
+        if news_type == 'world':
+            news_item = db.query(NewsItem).filter(NewsItem.id == news_id).first()
+        elif news_type == 'yemen':
+            news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == news_id).first()
+        elif news_type == 'newspaper':
+            news_item = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id == news_id).first()
+            
+        if not news_item or not news_item.link:
+            return {"error": "الخبر غير موجود أو لا يحتوي على رابط"}, 404
+        
+        video_url = news_item.link
+        logger.info(f"🚀 بدء نشر خبر من البطاقة ({news_type}:{news_id}): {video_url}")
+        
+        summary, error = await run_video_processing_flow(
+            video_url,
+            fallback_title=news_item.title,
+            fallback_summary=news_item.summary,
+            skip_transcript=use_db_only,
+        )
+        
+        if error and not summary:
+            return {"error": error}, 500
+        return {"status": "success" if not error else "partial_success", "message": error or "تمت العملية بنجاح!", "summary": summary}
+    finally:
+        db.close()
 
 # ============================================
 # News Clustering - Embedding & Clustering Logic
@@ -1389,7 +1764,7 @@ def fetch_newspaper_articles(source_url: str, source_name: str, last_article_ids
     return articles
 
 async def fetch_all_newspaper_sources(db) -> List[dict]:
-    """Fetch NEW articles from all newspaper sources in parallel"""
+    """Fetch NEW articles from all newspaper sources in parallel with concurrency control"""
     
     # Get last 5 article IDs for each source
     source_last_articles = {}
@@ -1403,17 +1778,14 @@ async def fetch_all_newspaper_sources(db) -> List[dict]:
         else:
             source_last_articles[source['name']] = None
     
-    # Create tasks for all sources
-    tasks = []
-    for source in NEWSPAPER_SOURCES:
-        last_article_ids = source_last_articles.get(source['name'])
-        if last_article_ids:
-            logger.info(f"[Newspaper] Checking {source['name']} for new articles (last {len(last_article_ids)} IDs tracked)...")
-        else:
-            logger.info(f"[Newspaper] Checking {source['name']} for new articles (first run)...")
-        tasks.append(asyncio.to_thread(fetch_newspaper_articles, source['url'], source['name'], last_article_ids))
-    
-    # Run all tasks in parallel
+    semaphore = asyncio.Semaphore(3) # تقليل المهام المتوازية لترك موارد للنشر
+    async def fetch_with_semaphore(source):
+        async with semaphore:
+            await pause_background_tasks.wait() # الانتظار إذا كان هناك نشر جاري
+            last_article_ids = source_last_articles.get(source['name'])
+            return await asyncio.to_thread(fetch_newspaper_articles, source['url'], source['name'], last_article_ids)
+
+    tasks = [fetch_with_semaphore(source) for source in NEWSPAPER_SOURCES]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     
     # Combine all results (skip exceptions)
@@ -1558,37 +1930,6 @@ async def fetch_newspaper_feeds():
         logger.info("[Newspaper] Waiting 20 minutes before next fetch...")
         await asyncio.sleep(1200)
 
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# WebSocket Manager
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            try:
-                await connection.send_text(message)
-            except Exception:
-                pass
-
-manager = ConnectionManager()
 
 def fetch_youtube_channel_videos(channel_url: str, channel_name: str, last_video_ids: Optional[List[str]] = None, is_playlist: bool = False) -> List[dict]:
     """Fetch NEW videos from a YouTube channel/playlist - only videos newer than any in last_video_ids (last 5)"""
@@ -1990,18 +2331,15 @@ async def fetch_all_youtube_channels(db) -> List[dict]:
         else:
             channel_last_videos[channel['name']] = None
     
-    # Create tasks for all channels
-    tasks = []
-    for channel in YOUTUBE_CHANNELS:
-        last_video_ids = channel_last_videos.get(channel['name'])
-        is_playlist = channel.get('type') == 'playlist'
-        if last_video_ids:
-            logger.info(f"Checking {channel['name']} for new videos (last {len(last_video_ids)} IDs tracked)...")
-        else:
-            logger.info(f"Checking {channel['name']} for new videos (first run)...")
-        tasks.append(asyncio.to_thread(fetch_youtube_channel_videos, channel['url'], channel['name'], last_video_ids, is_playlist))
-    
-    # Run all tasks in parallel
+    semaphore = asyncio.Semaphore(3)
+    async def fetch_with_semaphore(channel):
+        async with semaphore:
+            await pause_background_tasks.wait() # الانتظار إذا كان هناك نشر جاري
+            last_video_ids = channel_last_videos.get(channel['name'])
+            is_playlist = channel.get('type') == 'playlist'
+            return await asyncio.to_thread(fetch_youtube_channel_videos, channel['url'], channel['name'], last_video_ids, is_playlist)
+
+    tasks = [fetch_with_semaphore(channel) for channel in YOUTUBE_CHANNELS]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     
     # Combine all results (skip exceptions)
@@ -2031,18 +2369,15 @@ async def fetch_all_yemen_youtube_channels(db) -> List[dict]:
         else:
             channel_last_videos[channel['name']] = None
     
-    # Create tasks for all channels
-    tasks = []
-    for channel in YEMEN_YOUTUBE_CHANNELS:
-        last_video_ids = channel_last_videos.get(channel['name'])
-        is_playlist = channel.get('type') == 'playlist'
-        if last_video_ids:
-            logger.info(f"[Yemen] Checking {channel['name']} for new videos (last {len(last_video_ids)} IDs tracked)...")
-        else:
-            logger.info(f"[Yemen] Checking {channel['name']} for new videos (first run)...")
-        tasks.append(asyncio.to_thread(fetch_youtube_channel_videos, channel['url'], channel['name'], last_video_ids, is_playlist))
-    
-    # Run all tasks in parallel
+    semaphore = asyncio.Semaphore(3)
+    async def fetch_with_semaphore(channel):
+        async with semaphore:
+            await pause_background_tasks.wait() # الانتظار إذا كان هناك نشر جاري
+            last_video_ids = channel_last_videos.get(channel['name'])
+            is_playlist = channel.get('type') == 'playlist'
+            return await asyncio.to_thread(fetch_youtube_channel_videos, channel['url'], channel['name'], last_video_ids, is_playlist)
+
+    tasks = [fetch_with_semaphore(channel) for channel in YEMEN_YOUTUBE_CHANNELS]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     
     # Combine all results and filter for Yemen-related content

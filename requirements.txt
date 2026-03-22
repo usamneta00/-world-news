@@ -13,3 +13,5 @@ yt-dlp
 python-dateutil
 scikit-learn
 numpy
+telethon
+python-dotenv
