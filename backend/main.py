@@ -1004,6 +1004,93 @@ async def summarize_world_video_ai(transcript, original_url):
     except Exception as e:
         return None, str(e)
 
+async def analyze_geopolitical_ai(text):
+    """تحليل جيوسياسي استراتيجي للنص بناءً على برومبت المستخدم."""
+    if not OPENAI_API_KEY:
+        return None, "OpenAI API Key is missing"
+        
+    system_prompt = """الدور: أنت محلل جيوسياسي استراتيجي مخضرم، وصائغ بيانات سياسية ذو لغة عربية رصينة، قوية، ومكثفة. مهمتك ليست تلخيص الأخبار، بل تفكيكها وكشف "العمق السياسي" والنوايا الخفية وراءها.
+
+التعليمات الصارمة:
+
+    المحتوى: اقرأ الأخبار المقدمة لك، وتجاهل التفاصيل الصحفية الروتينية (الأسماء، التواريخ الدقيقة، الأماكن غير المؤثرة). ركّز فقط على: تضارب المصالح، النفاق السياسي، هيمنة القوى الكبرى، معاناة الشعوب، والحروب بالوكالة.
+
+    الأسلوب: استخدم لغة "البيانات السياسية النارية". ابحث عن المفارقات (مثلاً: دولة تدعو للسلام وترسل السلاح). استخدم مصطلحات قوية مثل (وصاية، هندسة المجتمعات، شراء الولاءات، قمع ناعم، مسرح عبثي، تجارة الدم).
+
+    الشكل (هام جداً):
+
+        ممنوع استخدام النقاط (Bullet Points) أو الترقيم نهائياً.
+
+        اكتب النص كـ كتلة سردية متواصلة (فقرة واحدة أو فقرتين مترابطتين).
+
+        اربط بين الأخبار المختلفة بذكاء لتصنع "صورة بانورامية" للمشهد العالمي (مثلاً اربط بين حدث اقتصادي في الغرب وقمع في الشرق لتدلل على ازدواجية المعايير).
+
+    الهدف: الخروج بنص يجعلك تشعر أن العالم يُدار بصفقات مشبوهة، وأن الشعار المعلن ليس هو الحقيقة.
+
+طريقة الإخراج: ابدأ مباشرة في السرد التحليلي العميق دون مقدمات مثل "إليك الملخص" أو "بناء على الأخبار".
+نصائح إضافية للحصول على أفضل نتيجة:
+
+    اجعل النبرة أكثر حدة وسوداوية، وركز على التناقضات الأخلاقية.
+
+
+**الدور (Role):**
+أنت محلل جيوسياسي استراتيجي مخضرم، وصائغ بيانات سياسية ذو لغة عربية رصينة، قوية، ومكثفة (High-context Arabic). أنت لا تؤمن بالروايات الرسمية، بل تبحث دائماً عن "الما وراء" (The subtext).
+
+**المهمة (Task):**
+سيقوم المستخدم بتزويدك بمجموعة من الأخبار العاجلة أو التقارير. مهمتك هي دمج هذه الأخبار في "كتلة سردية واحدة" (Narrative Block) تكشف الترابط الخفي بين الأحداث العالمية.
+
+**قواعد الأسلوب والنبرة (Tone & Style Guidelines):**
+1. **نبرة سوداوية وواقعية (Cynical Realism):** افترض أن العالم يُدار بمنطق الصفقات، القوة، والمصالح، وأن "حقوق الإنسان" و"الديمقراطية" هي مجرد أدوات ضغط.
+2. **لغة نارية ومكثفة:** استخدم مفردات ثقيلة مثل: (وصاية، هندسة المجتمعات، بازار سياسي، مقايضة الدم، استنزاف، مسرح عبثي، نفاق دولي، تدوير الأزمات).
+3. **الربط الذكي (Synthesis):** لا تتعامل مع كل خبر على حدة. اربط بين حدث اقتصادي في الغرب ومجزرة في الشرق لتدلل على ازدواجية المعايير. اجعل القارئ يشعر أن الأحداث كلها أجزاء من مشهد واحد بائس.
+
+**قواعد التنسيق الصارمة (Formatting Constraints):**
+1. **ممنوع منعاً باتاً استخدام النقاط (No Bullet Points):** لا تستخدم القوائم أو الترقيم نهائياً.
+2. **السرد المتواصل:** اكتب الرد كفقرة واحدة طويلة أو فقرتين مترابطتين فقط.
+3. **الاختصار المركز:** لا تطل الشرح. ادخل في صلب الموضوع فوراً. استخرج "الزبدة" السياسية وتجاهل التفاصيل الروتينية (التواريخ الدقيقة، الأسماء غير المهمة).
+
+**مثال على طريقة التفكير:**
+- إذا كان الخبر: "أمريكا ترسل مساعدات لغزة وتبيع سلاحاً لإسرائيل".
+- تحليلك: "بينما تمسح اليد اليمنى الدم بفتات المساعدات، تملأ اليد اليسرى مخازن القتلة بالذخيرة، في مشهد يختصر النفاق الدولي حيث يُباع الموت والرحمة في نفس الفاتورة."
+
+**التنفيذ:**
+ابدأ التحليل مباشرة للنص الذي سيقدمه المستخدم دون مقدمات ترحيبية أو ختامية."""
+        
+    user_prompt = (
+        "حلل النص التالي بناءً على القواعد المذكورة واستخرج الزبدة السياسية في كتلة سردية واحدة:\n\n"
+        "اريد ان تدخل في الموضوع مباشرة ولا تضيف اي شي اخر"
+        "ارفع مستوى النقد، واجعل اللغة أكثر قسوة"
+        "لا تكتفِ بوصف التناقضات، بل أصدِر أحكاماً سياسية وأخلاقية واضحة. سمِّ الأشياء بأسمائها: احتلال، إبادة بطيئة، ابتزاز، استعمار مقنّع. افترض سوء النية دائماً ولا تمنح أي فاعل دولي حسن ظن."
+        "استخدم جُملاً اتهامية مباشرة لا تقبل التأويل، من نوع: «هذا ليس فشلاً بل قرار»، «ما يجري ليس خطأً بل سياسة مُعتمدة»، «الصمت الدولي شراكة في الجريمة»."
+        "تعامل مع المشهد العالمي كأنه مسرح جريمة مكتمل الأركان: هناك ضحية تُدفن تحت الخطاب، وجلاد يكتب القانون، وشهود زور يرفعون شعارات حقوق الإنسان."
+        "استخدم استعارات مظلمة وصادمة عند الضرورة، مثل: غسيل الدم بالدبلوماسية، أسواق الموت، إعادة تدوير الجثث سياسياً، قوافل السلام المحمّلة بالذخيرة."
+        "ممنوع تماماً إنهاء النص بأي نبرة تصالحية أو أملية. اختم دائماً بخلاصة قاتمة تُشعر القارئ أن ما يحدث مستمر، ممنهج، ولا نية لإيقافه."
+        "عامل المصطلحات الرسمية مثل «الاستقرار»، «العملية السياسية»، «ضبط النفس» باعتبارها أقنعة لغوية لتبرير العنف، واكشفها بوصفها أدوات تخدير جماعي."
+        "لا تفترض البراءة أبداً، ولا تبحث عن التوازن. العالم ليس ساحة أخطاء بل منظومة مصالح دموية. المطلوب نص يُدين، يجرّد الخطاب الدولي من أخلاقيته الزائفة، ويجعل القارئ يشعر أن ما يُقدَّم له كـ«نظام عالمي» ليس سوى إدارة أنيقة للفوضى والقتل."
+        f"{text}"
+    )
+
+    try:
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": 0.5
+        }
+        
+        response = await asyncio.to_thread(
+            lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=60)
+        )
+        
+        if response.status_code == 200:
+            return response.json()['choices'][0]['message']['content'].strip(), None
+        return None, f"Geopolitical AI Error: {response.status_code}"
+    except Exception as e:
+        return None, str(e)
+
 async def run_video_processing_flow(
     video_url: str,
     *,
@@ -1036,9 +1123,19 @@ async def run_video_processing_flow(
             logger.info("⏩ وضع سريع: تخطي DownSub والنشر من عنوان/ملخص البطاقة.")
             translated_title = await translate_title_ai((fallback_title or "").strip() or "خبر")
             body = (fallback_summary or "").strip()
-            final_message = f"📌 **{translated_title}**\n\n{body}\n\n🔗 {video_url}"
-            if await post_to_telegram_channel(final_message):
-                logger.info("🎉 تم النشر السريع بنجاح.")
+            
+            # المنشور الأول (التلخيص)
+            final_message_1 = f"📌 **{translated_title}**\n\n{body}\n\n🔗 {video_url}"
+            if await post_to_telegram_channel(final_message_1):
+                logger.info("🎉 تم نشر المنشور الأول (التلخيص) بنجاح.")
+                
+                # المنشور الثاني (التحليل الجيوسياسي)
+                geo_analysis, geo_error = await analyze_geopolitical_ai(body)
+                if geo_analysis:
+                    final_message_2 = f"🏛️ **العمق السياسي والتحليل الاستراتيجي**\n\n{geo_analysis}\n\n🔗 {video_url}"
+                    await post_to_telegram_channel(final_message_2)
+                    logger.info("🎉 تم نشر المنشور الثاني (التحليل الجيوسياسي) بنجاح.")
+                
                 return body, None
             return None, "فشل النشر في تيليجرام"
 
@@ -1065,8 +1162,14 @@ async def run_video_processing_flow(
 
         logger.info(f"✅ تم استخلاص النص بنجاح! الطول: {len(transcript)} حرف.")
 
-        logger.info("⏳ [2/4] جاري التلخيص بالذكاء الاصطناعي...")
-        summary, ai_error = await summarize_world_video_ai(transcript, video_url)
+        logger.info("⏳ [2/4] جاري التلخيص والتحليل بالذكاء الاصطناعي...")
+        # تنفيذ الطلبين بالتوازي لتوفير الوقت
+        summary_task = summarize_world_video_ai(transcript, video_url)
+        geo_task = analyze_geopolitical_ai(transcript)
+        
+        summary, ai_error = await summary_task
+        geo_analysis, geo_error = await geo_task
+        
         if ai_error:
             logger.error(f"❌ فشل التلخيص بالذكاء الاصطناعي: {ai_error}")
             fb_summary, fb_err = await _publish_db_fallback(f"فشل التلخيص: {ai_error}")
@@ -1074,18 +1177,29 @@ async def run_video_processing_flow(
                 return fb_summary, fb_err
             return None, f"فشل التلخيص: {ai_error}"
 
-        logger.info("📝 اكتمل التلخيص بنجاح.")
+        logger.info("📝 اكتمل التلخيص والتحليل بنجاح.")
 
         logger.info("⏳ [3/4] جاري ترجمة العنوان بالـ AI...")
         translated_title = await translate_title_ai(original_title)
 
-        logger.info("⏳ [4/4] جاري النشر النهائي...")
-        final_message = f"📌 **{translated_title}**\n\n{summary}\n\n🔗 {video_url}"
-        success = await post_to_telegram_channel(final_message)
+        logger.info("⏳ [4/4] جاري النشر النهائي للمنشورين...")
+        # المنشور الأول (التلخيص)
+        final_message_1 = f"📌 **{translated_title}**\n\n{summary}\n\n🔗 {video_url}"
+        success_1 = await post_to_telegram_channel(final_message_1)
 
-        if success:
-            logger.info("🎉 تم النشر بنجاح!")
+        if success_1:
+            logger.info("🎉 تم نشر المنشور الأول (التلخيص) بنجاح!")
+            
+            # المنشور الثاني (التحليل الجيوسياسي)
+            if geo_analysis:
+                final_message_2 = f"🏛️ **العمق السياسي والتحليل الاستراتيجي**\n\n{geo_analysis}\n\n🔗 {video_url}"
+                await post_to_telegram_channel(final_message_2)
+                logger.info("🎉 تم نشر المنشور الثاني (التحليل الجيوسياسي) بنجاح!")
+            else:
+                logger.warning(f"⚠️ تخطي المنشور الثاني بسبب خطأ في التحليل: {geo_error}")
+                
             return summary, None
+            
         fb_summary, fb_err = await _publish_db_fallback("فشل إرسال تيليجرام للرسالة الملخّصة")
         if fb_summary is not None:
             return fb_summary, fb_err
