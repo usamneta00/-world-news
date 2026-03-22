@@ -1132,7 +1132,7 @@ async def run_video_processing_flow(
                 # المنشور الثاني (التحليل الجيوسياسي)
                 geo_analysis, geo_error = await analyze_geopolitical_ai(body)
                 if geo_analysis:
-                    final_message_2 = f"🏛️ **العمق السياسي والتحليل الاستراتيجي**\n\n{geo_analysis}\n\n🔗 {video_url}"
+                    final_message_2 = f"🏛️ \n\n{geo_analysis}\n\n🔗 {video_url}"
                     await post_to_telegram_channel(final_message_2)
                     logger.info("🎉 تم نشر المنشور الثاني (التحليل الجيوسياسي) بنجاح.")
                 
@@ -1192,7 +1192,7 @@ async def run_video_processing_flow(
             
             # المنشور الثاني (التحليل الجيوسياسي)
             if geo_analysis:
-                final_message_2 = f"🏛️ **العمق السياسي والتحليل الاستراتيجي**\n\n{geo_analysis}\n\n🔗 {video_url}"
+                final_message_2 = f"🏛️ \n\n{geo_analysis}\n\n🔗 {video_url}"
                 await post_to_telegram_channel(final_message_2)
                 logger.info("🎉 تم نشر المنشور الثاني (التحليل الجيوسياسي) بنجاح!")
             else:
