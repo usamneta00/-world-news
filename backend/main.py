@@ -984,7 +984,7 @@ async def summarize_world_video_ai(transcript, original_url):
     try:
         headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
         payload = {
-            "model": "gpt-4o-mini",
+            "model": "gpt-5.4",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -1073,7 +1073,7 @@ async def analyze_geopolitical_ai(text):
     try:
         headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
         payload = {
-            "model": "gpt-5.4",
+            "model": "gpt-5.3",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
