@@ -966,6 +966,49 @@ async def summarize_world_video_ai(transcript, original_url):
     if not OPENAI_API_KEY:
         return None, "OpenAI API Key is missing"
     
+    system_prompt = (
+        "اريد ان تدخل في الموضوع مباشرة ولا تضيف اي شي اخر. "
+        "أنت كاتب عربي يصوغ ملخصات تبدو بشرية وطبيعية.\n"
+        "اكتب فقرة واحدة أو اثنتين مترابطتين تشرح الفكرة الأساسية وأهم الرسائل أو النتائج "
+        "الواردة في المقالة، بصياغة مباشرة وواضحة.\n"
+        "تجنّب تمامًا العبارات التي تكشف أن النص ملخص أو أنه مأخوذ من مقالة، "
+        'مثل: «تتحدث المقالة عن»، «في هذه المقالة»، «في هذا النص»، «هذا الملخص»، أو ما يشبهها.\n'
+        "اكتب المحتوى مباشرة بصيغة تقريرية إخبارية، كما لو كنت تكتب خبراً صحفياً."
+    )
+    user_prompt = (
+        "استخرج أهم ما يفيد القارئ من النص التالي، واكتبه في فقرة أو فقرتين عربيتين متصلتين، "
+        "بدون تعداد نقاط وبدون الإشارة إلى كلمة مقالة أو نص أو ملخص:\n\n"
+        f"{transcript}"
+    )
+
+    try:
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+        payload = {
+            "model": "gpt-5.4",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": 0.5
+        }
+        
+        response = await asyncio.to_thread(
+            lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=40)
+        )
+        
+        if response.status_code == 200:
+            content = response.json()['choices'][0]['message']['content'].strip()
+            # استخراج العنوان للترجمة (أول جملة أو عنوان افتراضي)
+            return content, None
+        return None, f"AI Error: {response.status_code}"
+    except Exception as e:
+        return None, str(e)
+
+async def analyze_geopolitical_ai(text):
+    """تحليل جيوسياسي استراتيجي للنص بناءً على برومبت المستخدم."""
+    if not OPENAI_API_KEY:
+        return None, "OpenAI API Key is missing"
+        
     system_prompt = """
 الدور:
 أنت محلل جيوسياسي استراتيجي، تكتب بلغة عربية رصينة، دقيقة، ومباشرة. لا تستخدم الزخرفة الزائدة ولا الخطابة. تركّز على التحليل الواقعي المبني على منطق المصالح والقوة.
