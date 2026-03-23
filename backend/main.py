@@ -1073,7 +1073,7 @@ async def analyze_geopolitical_ai(text):
     try:
         headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
         payload = {
-            "model": "gpt-4o-mini",
+            "model": "gpt-5.4",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
