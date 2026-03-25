@@ -388,6 +388,12 @@
             border: 1px solid rgba(245, 158, 11, 0.3);
         }
 
+        .timeline-type-badge.type-dubbed {
+            background: rgba(244, 63, 94, 0.15);
+            color: #fb7185;
+            border: 1px solid rgba(244, 63, 94, 0.3);
+        }
+
         .timeline-action-btn {
             display: inline-flex;
             align-items: center;
@@ -461,6 +467,10 @@
             border-color: #f59e0b;
         }
 
+        .timeline-item.type-dubbed .timeline-dot {
+            border-color: #f43f5e;
+        }
+
         .timeline-item.type-world:hover .timeline-dot {
             background: #3b82f6;
             box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
@@ -474,6 +484,11 @@
         .timeline-item.type-newspaper:hover .timeline-dot {
             background: #f59e0b;
             box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
+        }
+
+        .timeline-item.type-dubbed:hover .timeline-dot {
+            background: #f43f5e;
+            box-shadow: 0 0 15px rgba(244, 63, 94, 0.5);
         }
 
         .timeline-summary {
@@ -523,6 +538,10 @@
 
         .timeline-legend-dot.newspaper {
             background: #f59e0b;
+        }
+
+        .timeline-legend-dot.dubbed {
+            background: #f43f5e;
         }
 
         .timeline-header {
@@ -898,6 +917,11 @@
             background: #f59e0b;
         }
 
+        .cluster-type-dot.dubbed {
+            color: #f43f5e;
+            background: #f43f5e;
+        }
+
         .cluster-news-list {
             max-height: 0;
             overflow: hidden;
@@ -1144,7 +1168,7 @@
             border-color: rgba(45, 212, 191, 0.3) !important;
             color: #2dd4bf !important;
         }
-        
+
         .ai-process-btn {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1247,27 +1271,33 @@
 
             <div class="flex items-center gap-4">
                 <span id="current-date" class="hidden lg:block text-[10px] font-mono opacity-50"></span>
-                <button id="tab-world" onclick="switchTab('world')" class="p-2 hover:text-neon-blue transition-colors text-neon-accent font-bold"
+                <button id="tab-world" onclick="switchTab('world')"
+                    class="p-2 hover:text-neon-blue transition-colors text-neon-accent font-bold"
                     title="الأخبار العالمية">
                     <i data-lucide="globe" class="w-4 h-4"></i>
                 </button>
-                <button id="tab-yemen" onclick="switchTab('yemen')" class="p-2 hover:text-neon-blue transition-colors text-neutral-500"
-                    title="أخبار اليمن">
+                <button id="tab-yemen" onclick="switchTab('yemen')"
+                    class="p-2 hover:text-neon-blue transition-colors text-neutral-500" title="أخبار اليمن">
                     <i data-lucide="map-pin" class="w-4 h-4"></i>
                 </button>
-                <button id="tab-newspaper" onclick="switchTab('newspaper')" class="p-2 hover:text-neon-blue transition-colors text-neutral-500"
-                    title="الصحافة العالمية">
+                <button id="tab-newspaper" onclick="switchTab('newspaper')"
+                    class="p-2 hover:text-neon-blue transition-colors text-neutral-500" title="الصحافة العالمية">
                     <i data-lucide="newspaper" class="w-4 h-4"></i>
                 </button>
-                <button id="tab-clusters" onclick="switchTab('clusters')" class="p-2 hover:text-neon-blue transition-colors text-neutral-500"
-                    title="الأحداث الجارية">
+                <button id="tab-dubbed" onclick="switchTab('dubbed')"
+                    class="p-2 hover:text-neon-blue transition-colors text-neutral-500" title="قنوات مدبلجة">
+                    <i data-lucide="mic" class="w-4 h-4"></i>
+                </button>
+                <button id="tab-clusters" onclick="switchTab('clusters')"
+                    class="p-2 hover:text-neon-blue transition-colors text-neutral-500" title="الأحداث الجارية">
                     <i data-lucide="layers" class="w-4 h-4"></i>
                 </button>
-                <button id="tab-recommended" onclick="switchTab('recommended')" class="p-2 hover:text-neon-blue transition-colors text-neutral-500"
-                    title="المقترح للمشاهدة">
+                <button id="tab-recommended" onclick="switchTab('recommended')"
+                    class="p-2 hover:text-neon-blue transition-colors text-neutral-500" title="المقترح للمشاهدة">
                     <i data-lucide="star" class="w-4 h-4"></i>
                 </button>
-                <button id="tab-heatmap" onclick="switchTab('heatmap')" class="p-2 hover:text-neon-blue transition-colors text-neutral-500"
+                <button id="tab-heatmap" onclick="switchTab('heatmap')"
+                    class="p-2 hover:text-neon-blue transition-colors text-neutral-500"
                     title="خريطة الحرارة الجيوسياسية">
                     <i data-lucide="globe-2" class="w-4 h-4"></i>
                 </button>
@@ -1289,49 +1319,61 @@
             </div>
         </div>
     </nav>
-    
+
     <!-- Sidebar / Drawer Menu -->
-    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 z-[50] bg-black/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300"></div>
-    <aside id="sidebar" class="fixed inset-y-0 right-0 w-80 z-[60] bg-paper dark:bg-obsidian border-l border-white/10 transform translate-x-full transition-transform duration-500 ease-in-out">
+    <div id="sidebar-overlay" onclick="toggleSidebar()"
+        class="fixed inset-0 z-[50] bg-black/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300">
+    </div>
+    <aside id="sidebar"
+        class="fixed inset-y-0 right-0 w-80 z-[60] bg-paper dark:bg-obsidian border-l border-white/10 transform translate-x-full transition-transform duration-500 ease-in-out">
         <div class="h-20 flex items-center justify-between px-8 border-b border-white/5">
             <span class="font-serif text-xl font-bold tracking-tight text-white uppercase">Menu Intelligence</span>
             <button onclick="toggleSidebar()" class="p-2 hover:bg-white/10 rounded-full transition-colors">
                 <i data-lucide="x" class="w-5 h-5 text-neutral-400"></i>
             </button>
         </div>
-        
+
         <div class="p-6 space-y-2 overflow-y-auto max-h-[calc(100vh-80px)]">
-            <div class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest mb-4 px-2">Navigation Intelligence</div>
-            
-            <button onclick="switchTab('world'); toggleSidebar()" class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
+            <div class="text-[10px] font-mono text-neutral-500 uppercase tracking-widest mb-4 px-2">Navigation
+                Intelligence</div>
+
+            <button onclick="switchTab('world'); toggleSidebar()"
+                class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
                 <div class="flex items-center gap-4">
-                    <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
+                    <div
+                        class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
                         <i data-lucide="globe" class="w-5 h-5"></i>
                     </div>
                     <div class="text-right">
                         <div class="text-sm font-bold text-neutral-200">الأخبار العالمية</div>
-                        <div class="text-[9px] font-mono text-neutral-500 uppercase tracking-tighter">Global Affairs</div>
+                        <div class="text-[9px] font-mono text-neutral-500 uppercase tracking-tighter">Global Affairs
+                        </div>
                     </div>
                 </div>
                 <i data-lucide="chevron-left" class="w-4 h-4 text-neutral-700 group-hover:text-neon-blue"></i>
             </button>
 
-            <button onclick="switchTab('yemen'); toggleSidebar()" class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
+            <button onclick="switchTab('yemen'); toggleSidebar()"
+                class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
                 <div class="flex items-center gap-4">
-                    <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
+                    <div
+                        class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
                         <i data-lucide="map-pin" class="w-5 h-5"></i>
                     </div>
                     <div class="text-right">
                         <div class="text-sm font-bold text-neutral-200">أخبار اليمن</div>
-                        <div class="text-[9px] font-mono text-neutral-500 uppercase tracking-tighter">Regional Coverage</div>
+                        <div class="text-[9px] font-mono text-neutral-500 uppercase tracking-tighter">Regional Coverage
+                        </div>
                     </div>
                 </div>
                 <i data-lucide="chevron-left" class="w-4 h-4 text-neutral-700 group-hover:text-neon-blue"></i>
             </button>
 
-            <button onclick="switchTab('newspaper'); toggleSidebar()" class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
+            <button onclick="switchTab('newspaper'); toggleSidebar()"
+                class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
                 <div class="flex items-center gap-4">
-                    <div class="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform">
+                    <div
+                        class="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform">
                         <i data-lucide="newspaper" class="w-5 h-5"></i>
                     </div>
                     <div class="text-right">
@@ -1342,9 +1384,27 @@
                 <i data-lucide="chevron-left" class="w-4 h-4 text-neutral-700 group-hover:text-neon-blue"></i>
             </button>
 
-            <button onclick="switchTab('clusters'); toggleSidebar()" class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
+            <button onclick="switchTab('dubbed'); toggleSidebar()"
+                class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
                 <div class="flex items-center gap-4">
-                    <div class="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-500 group-hover:scale-110 transition-transform">
+                    <div
+                        class="w-10 h-10 rounded-lg bg-rose-500/10 flex items-center justify-center text-rose-500 group-hover:scale-110 transition-transform">
+                        <i data-lucide="mic" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-sm font-bold text-neutral-200">قنوات مدبلجة</div>
+                        <div class="text-[9px] font-mono text-neutral-500 uppercase tracking-tighter">Dubbed Channels
+                        </div>
+                    </div>
+                </div>
+                <i data-lucide="chevron-left" class="w-4 h-4 text-neutral-700 group-hover:text-neon-blue"></i>
+            </button>
+
+            <button onclick="switchTab('clusters'); toggleSidebar()"
+                class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
+                <div class="flex items-center gap-4">
+                    <div
+                        class="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-500 group-hover:scale-110 transition-transform">
                         <i data-lucide="layers" class="w-5 h-5"></i>
                     </div>
                     <div class="text-right">
@@ -1355,9 +1415,11 @@
                 <i data-lucide="chevron-left" class="w-4 h-4 text-neutral-700 group-hover:text-neon-blue"></i>
             </button>
 
-            <button onclick="switchTab('recommended'); toggleSidebar()" class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
+            <button onclick="switchTab('recommended'); toggleSidebar()"
+                class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
                 <div class="flex items-center gap-4">
-                    <div class="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-500 group-hover:scale-110 transition-transform">
+                    <div
+                        class="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-500 group-hover:scale-110 transition-transform">
                         <i data-lucide="star" class="w-5 h-5"></i>
                     </div>
                     <div class="text-right">
@@ -1368,21 +1430,25 @@
                 <i data-lucide="chevron-left" class="w-4 h-4 text-neutral-700 group-hover:text-neon-blue"></i>
             </button>
 
-            <button onclick="switchTab('heatmap'); toggleSidebar()" class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
+            <button onclick="switchTab('heatmap'); toggleSidebar()"
+                class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
                 <div class="flex items-center gap-4">
-                    <div class="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center text-red-500 group-hover:scale-110 transition-transform">
+                    <div
+                        class="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center text-red-500 group-hover:scale-110 transition-transform">
                         <i data-lucide="globe-2" class="w-5 h-5"></i>
                     </div>
                     <div class="text-right">
                         <div class="text-sm font-bold text-neutral-200">الخريطة الحرارية</div>
-                        <div class="text-[9px] font-mono text-neutral-500 uppercase tracking-tighter">Geopolitics Map</div>
+                        <div class="text-[9px] font-mono text-neutral-500 uppercase tracking-tighter">Geopolitics Map
+                        </div>
                     </div>
                 </div>
                 <i data-lucide="chevron-left" class="w-4 h-4 text-neutral-700 group-hover:text-neon-blue"></i>
             </button>
 
             <div class="pt-8 mt-8 border-t border-white/5 space-y-4">
-                <button onclick="clearAllNews()" class="w-full flex items-center gap-3 px-4 py-2 text-neutral-500 hover:text-red-500 transition-colors text-xs font-mono uppercase tracking-widest">
+                <button onclick="clearAllNews()"
+                    class="w-full flex items-center gap-3 px-4 py-2 text-neutral-500 hover:text-red-500 transition-colors text-xs font-mono uppercase tracking-widest">
                     <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                     <span>Clear Data</span>
                 </button>
@@ -1779,6 +1845,10 @@
                                     <span class="timeline-legend-dot newspaper"></span>
                                     <span>📰 صحف عالمية</span>
                                 </div>
+                                <div class="timeline-legend-item">
+                                    <span class="timeline-legend-dot dubbed"></span>
+                                    <span>🎙️ قنوات مدبلجة</span>
+                                </div>
                             </div>
                             <div class="timeline-line"></div>
                             <div id="timeline-items">
@@ -1832,6 +1902,7 @@
         let yemenCurrentPage = 1, yemenNews = [], yemenPendingNews = [], yemenTotalItems = 0;
         let newspaperCurrentPage = 1, newspaperNews = [], newspaperPendingNews = [], newspaperTotalItems = 0;
         let recommendedCurrentPage = 1, recommendedNews = [], recommendedTotalItems = 0;
+        let dubbedCurrentPage = 1, dubbedNews = [], dubbedPendingNews = [], dubbedTotalItems = 0;
         let currentTimelineLinks = []; // Store timeline links for copying
         let currentReaderNewsId = null;
         let currentReaderNewsType = null;
@@ -1891,6 +1962,8 @@
                 applyFlags(yemenPendingNews, 'yemen');
                 applyFlags(newspaperNews, 'newspaper');
                 applyFlags(newspaperPendingNews, 'newspaper');
+                applyFlags(dubbedNews, 'dubbed');
+                applyFlags(dubbedPendingNews, 'dubbed');
                 applyFlags(recommendedNews);
 
                 if (clustersData && Array.isArray(clustersData.clusters)) {
@@ -2001,12 +2074,12 @@
             btn.disabled = true;
             btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>جاري النشر...</span>';
             if (window.lucide) lucide.createIcons();
-            
+
             try {
                 const r = await fetch(`/api/telegram-publish/${type}/${id}`, { method: 'POST' });
                 const d = await r.json();
                 if (d.error) throw new Error(d.error);
-                
+
                 btn.innerHTML = '<i data-lucide="check" class="w-3.5 h-3.5"></i><span>تم النشر</span>';
                 btn.classList.add('bg-emerald-500/10', 'border-emerald-500/30', 'text-emerald-400');
                 showToast('تم النشر في تيليجرام بنجاح');
@@ -2025,17 +2098,17 @@
             btn.disabled = true;
             btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>جارٍ التحليل...</span>';
             if (window.lucide) lucide.createIcons();
-            
+
             try {
                 const r = await fetch(`/api/process-news-ai/${type}/${id}`, { method: 'POST' });
                 const d = await r.json();
                 if (d.error) throw new Error(d.error);
-                
+
                 btn.innerHTML = '<i data-lucide="check" class="w-3.5 h-3.5"></i><span>تم التحليل بنجاح</span>';
                 btn.classList.add('bg-emerald-500/10', 'border-emerald-500/30', 'text-emerald-400');
-                
+
                 showToast('تم اكتمال تحليل الذكاء الاصطناعي بنجاح');
-                
+
                 // Refresh the reader if it's open for this item
                 if (currentReaderNewsId === id && currentReaderNewsType === type) {
                     fetchEventTimeline(id, type);
@@ -2066,7 +2139,7 @@
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebar-overlay');
             const isOpen = sidebar.classList.contains('translate-x-0');
-            
+
             if (isOpen) {
                 sidebar.classList.remove('translate-x-0');
                 sidebar.classList.add('translate-x-full');
@@ -2095,7 +2168,7 @@
 
         function switchTab(tab) {
             activeTab = tab;
-            const tabs = ['world', 'yemen', 'newspaper', 'recommended', 'clusters', 'heatmap'];
+            const tabs = ['world', 'yemen', 'newspaper', 'dubbed', 'recommended', 'clusters', 'heatmap'];
             tabs.forEach(t => {
                 const el = document.getElementById(`tab-${t}`);
                 if (el) {
@@ -2145,6 +2218,7 @@
                 world: ['Trending Intelligence'],
                 yemen: ['أخبار اليمن الميدانية'],
                 newspaper: ['نظرة على الصحافة العالمية'],
+                dubbed: ['قنوات مدبلجة (صوتيات)'],
                 recommended: ['المقترح للمشاهدة من كل المصادر']
             };
 
@@ -2156,12 +2230,14 @@
             if (tab === 'world') fetchNews(currentPage);
             else if (tab === 'yemen') fetchYemenNews(yemenCurrentPage);
             else if (tab === 'newspaper') fetchNewspaperNews(newspaperCurrentPage);
+            else if (tab === 'dubbed') fetchDubbedNews(dubbedCurrentPage);
             else fetchRecommendedNews(recommendedCurrentPage);
         }
 
         async function fetchNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/news?page=${p}&limit=20`); const d = await r.json(); allNews = d.items; totalItems = d.total; currentPage = d.page; renderUI(allNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
         async function fetchYemenNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/yemen-news?page=${p}&limit=20`); const d = await r.json(); yemenNews = d.items; yemenTotalItems = d.total; yemenCurrentPage = d.page; renderUI(yemenNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
         async function fetchNewspaperNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/newspaper-news?page=${p}&limit=20`); const d = await r.json(); newspaperNews = d.items; newspaperTotalItems = d.total; newspaperCurrentPage = d.page; renderUI(newspaperNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
+        async function fetchDubbedNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/dubbed-news?page=${p}&limit=20`); const d = await r.json(); dubbedNews = d.items; dubbedTotalItems = d.total; dubbedCurrentPage = d.page; renderUI(dubbedNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
         async function fetchRecommendedNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/recommended-news?page=${p}&limit=20`); const d = await r.json(); recommendedNews = d.items; recommendedTotalItems = d.total; recommendedCurrentPage = d.page; renderUI(recommendedNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
 
         function setLoading(l) {
@@ -2259,8 +2335,8 @@
                 latestFeed.innerHTML = gridHTML;
             }
 
-            const curr = activeTab === 'world' ? currentPage : (activeTab === 'yemen' ? yemenCurrentPage : (activeTab === 'newspaper' ? newspaperCurrentPage : recommendedCurrentPage));
-            const total = activeTab === 'world' ? totalItems : (activeTab === 'yemen' ? yemenTotalItems : (activeTab === 'newspaper' ? newspaperTotalItems : recommendedTotalItems));
+            const curr = activeTab === 'world' ? currentPage : (activeTab === 'yemen' ? yemenCurrentPage : (activeTab === 'newspaper' ? newspaperCurrentPage : (activeTab === 'dubbed' ? dubbedCurrentPage : recommendedCurrentPage)));
+            const total = activeTab === 'world' ? totalItems : (activeTab === 'yemen' ? yemenTotalItems : (activeTab === 'newspaper' ? newspaperTotalItems : (activeTab === 'dubbed' ? dubbedTotalItems : recommendedTotalItems)));
             const pageInfo = document.getElementById('page-info');
             if (pageInfo) pageInfo.textContent = `${curr} / ${Math.ceil(total / 20) || 1}`;
 
@@ -2357,6 +2433,11 @@
                         typeBadge = `<span class="timeline-type-badge type-newspaper">📰 صحيفة عالمية</span>`;
                         actionBtn = `<button class="timeline-action-btn action-article" onclick="event.stopPropagation(); openTimelineLink('${escapedLink}')">
                             <i data-lucide="book-open" class="w-3 h-3"></i> قراءة المقال
+                        </button>`;
+                    } else if (newsType === 'dubbed') {
+                        typeBadge = `<span class="timeline-type-badge type-dubbed">🎙️ فيديو مدبلج</span>`;
+                        actionBtn = `<button class="timeline-action-btn action-video" onclick="event.stopPropagation(); openTimelineLink('${escapedLink}')">
+                            <i data-lucide="play-circle" class="w-3 h-3"></i> استماع مدبلج
                         </button>`;
                     }
 
@@ -2607,8 +2688,8 @@
                 positive: 'تطورات إيجابية'
             };
 
-            const typeColors = { world: '#3b82f6', yemen: '#10b981', newspaper: '#f59e0b' };
-            const typeLabels = { world: 'عالمي', yemen: 'يمني', newspaper: 'صحافة' };
+            const typeColors = { world: '#3b82f6', yemen: '#10b981', newspaper: '#f59e0b', dubbed: '#f43f5e' };
+            const typeLabels = { world: 'عالمي', yemen: 'يمني', newspaper: 'صحافة', dubbed: 'مدبلج' };
 
             locations.forEach((loc, idx) => {
                 const color = intensityColors[loc.intensity] || '#3b82f6';
@@ -2888,7 +2969,7 @@
                 positive: { glow: 'rgba(16, 185, 129, 0.4)', text: '#34d399', label: 'تطور إيجابي' }
             };
 
-            const typeLabels = { world: '🎬 عالمي', yemen: '🇾🇪 يمني', newspaper: '📰 صحافة' };
+            const typeLabels = { world: '🎬 عالمي', yemen: '🇾🇪 يمني', newspaper: '📰 صحافة', dubbed: '🎙️ مدبلج' };
 
             grid.innerHTML = clusters.map((cluster, idx) => {
                 const intensity = intensityColors[cluster.intensity] || intensityColors.important;
@@ -2904,7 +2985,7 @@
                 ).join('');
 
                 const newsListHtml = cluster.news.map(n => {
-                    const typeColor = n.type === 'world' ? '#3b82f6' : n.type === 'yemen' ? '#10b981' : '#f59e0b';
+                    const typeColor = n.type === 'world' ? '#3b82f6' : n.type === 'yemen' ? '#10b981' : n.type === 'newspaper' ? '#f59e0b' : '#f43f5e';
                     const thumbSrc = n.image_url || '';
                     const thumbHtml = thumbSrc ? `<img src="${thumbSrc}" class="cluster-news-thumb" loading="lazy" onerror="this.style.display='none'">` : '';
                     const escapedLink = n.link.replace(/'/g, "\'");
@@ -3031,7 +3112,7 @@
         }
 
         function openReader(id, type) {
-            const list = (type === 'world' ? allNews : (type === 'yemen' ? yemenNews : newspaperNews));
+            const list = (type === 'world' ? allNews : (type === 'yemen' ? yemenNews : (type === 'newspaper' ? newspaperNews : dubbedNews)));
             let item = list.find(n => n.id === id);
             if (!item && recommendedNews && recommendedNews.length) {
                 item = recommendedNews.find(n => n.id === id && (n.type || type) === type);
@@ -3054,7 +3135,7 @@
             if (title) title.textContent = item.title;
             if (date) date.textContent = timeAgo(item.published);
             if (link) link.href = item.link;
-            
+
             // AI Action Button in Reader
             const readerAiBtn = document.getElementById('reader-ai-btn');
             if (readerAiBtn) {
@@ -3107,8 +3188,8 @@
                         return;
                     }
 
-                    let pending = activeTab === 'world' ? pendingNews : (activeTab === 'yemen' ? yemenPendingNews : newspaperPendingNews);
-                    if ((msg.type === 'new_news' && activeTab === 'world') || (msg.type === 'new_yemen_news' && activeTab === 'yemen') || (msg.type === 'new_newspaper_news' && activeTab === 'newspaper')) {
+                    let pending = activeTab === 'world' ? pendingNews : (activeTab === 'yemen' ? yemenPendingNews : (activeTab === 'newspaper' ? newspaperPendingNews : dubbedPendingNews));
+                    if ((msg.type === 'new_news' && activeTab === 'world') || (msg.type === 'new_yemen_news' && activeTab === 'yemen') || (msg.type === 'new_newspaper_news' && activeTab === 'newspaper') || (msg.type === 'new_dubbed_news' && activeTab === 'dubbed')) {
                         pending.push(msg.data);
                         const banner = document.getElementById('new-news-banner');
                         if (banner) {
@@ -3128,7 +3209,8 @@
                 await syncRecommendedBadgesFromServer();
                 if (activeTab === 'world') { allNews = [...pendingNews, ...allNews]; pendingNews = []; renderUI(allNews); }
                 else if (activeTab === 'yemen') { yemenNews = [...yemenPendingNews, ...yemenNews]; yemenPendingNews = []; renderUI(yemenNews); }
-                else { newspaperNews = [...newspaperPendingNews, ...newspaperNews]; newspaperPendingNews = []; renderUI(newspaperNews); }
+                else if (activeTab === 'newspaper') { newspaperNews = [...newspaperPendingNews, ...newspaperNews]; newspaperPendingNews = []; renderUI(newspaperNews); }
+                else if (activeTab === 'dubbed') { dubbedNews = [...dubbedPendingNews, ...dubbedNews]; dubbedPendingNews = []; renderUI(dubbedNews); }
                 this.classList.add('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' });
             };
         }
@@ -3136,11 +3218,12 @@
         const prevBtn = document.getElementById('prev-btn');
         if (prevBtn) {
             prevBtn.onclick = () => {
-                const cp = activeTab === 'world' ? currentPage : (activeTab === 'yemen' ? yemenCurrentPage : (activeTab === 'newspaper' ? newspaperCurrentPage : recommendedCurrentPage));
+                const cp = activeTab === 'world' ? currentPage : (activeTab === 'yemen' ? yemenCurrentPage : (activeTab === 'newspaper' ? newspaperCurrentPage : (activeTab === 'dubbed' ? dubbedCurrentPage : recommendedCurrentPage)));
                 if (cp > 1) {
                     if (activeTab === 'world') fetchNews(currentPage - 1);
                     else if (activeTab === 'yemen') fetchYemenNews(yemenCurrentPage - 1);
                     else if (activeTab === 'newspaper') fetchNewspaperNews(newspaperCurrentPage - 1);
+                    else if (activeTab === 'dubbed') fetchDubbedNews(dubbedCurrentPage - 1);
                     else fetchRecommendedNews(recommendedCurrentPage - 1);
                 }
                 window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -3153,6 +3236,7 @@
                 if (activeTab === 'world') fetchNews(currentPage + 1);
                 else if (activeTab === 'yemen') fetchYemenNews(yemenCurrentPage + 1);
                 else if (activeTab === 'newspaper') fetchNewspaperNews(newspaperCurrentPage + 1);
+                else if (activeTab === 'dubbed') fetchDubbedNews(dubbedCurrentPage + 1);
                 else fetchRecommendedNews(recommendedCurrentPage + 1);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             };
@@ -3209,7 +3293,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url: url })
                 });
-                
+
                 const result = await response.json();
                 if (result.status === 'success' || result.status === 'partial_success') {
                     alert(result.message + "\n\nالملخص:\n" + result.summary);

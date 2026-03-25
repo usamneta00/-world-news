@@ -127,6 +127,29 @@ class YemenChannelLastVideo(Base):
     last_video_published = Column(DateTime)
     updated_at = Column(DateTime, default=datetime.now)
 
+# Dubbed News Tables
+class DubbedNewsItem(Base):
+    __tablename__ = "dubbed_news"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String)
+    link = Column(String, unique=True)
+    summary = Column(String)
+    published = Column(DateTime)
+    source = Column(String)
+    image_url = Column(String, nullable=True)
+    video_id = Column(String, nullable=True)
+    is_important = Column(Integer, default=0)
+    importance_reason = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+
+class DubbedChannelLastVideo(Base):
+    __tablename__ = "dubbed_channel_last_video"
+    id = Column(Integer, primary_key=True, index=True)
+    channel_name = Column(String, unique=True)
+    last_video_ids = Column(String)  # JSON array of last 5 video IDs
+    last_video_published = Column(DateTime)
+    updated_at = Column(DateTime, default=datetime.now)
+
 # Newspaper News Tables
 class NewspaperNewsItem(Base):
     __tablename__ = "newspaper_news"
@@ -322,6 +345,20 @@ def migrate_database():
                     try: conn.commit()
                     except: pass
             
+            # Check if dubbed_news table exists
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='dubbed_news'"))
+            if not result.fetchone():
+                logger.info("Creating dubbed_news table...")
+                DubbedNewsItem.__table__.create(engine)
+                logger.info("Successfully created dubbed_news table")
+            
+            # Check if dubbed_channel_last_video table exists
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='dubbed_channel_last_video'"))
+            if not result.fetchone():
+                logger.info("Creating dubbed_channel_last_video table...")
+                DubbedChannelLastVideo.__table__.create(engine)
+                logger.info("Successfully created dubbed_channel_last_video table")
+
             # Check if newspaper_last_article table exists
             result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='newspaper_last_article'"))
             if not result.fetchone():
@@ -400,6 +437,11 @@ async def process_event_timeline(db, news_id: int, news_title: str, news_summary
         for n in newspaper_news:
             if not (news_type == 'newspaper' and n.id == news_id):
                 all_news_combined.append({"id": f"newspaper:{n.id}", "title": n.title, "type": "newspaper", "real_id": n.id})
+
+        dubbed_news = db.query(DubbedNewsItem).order_by(desc(DubbedNewsItem.created_at)).limit(200).all()
+        for n in dubbed_news:
+            if not (news_type == 'dubbed' and n.id == news_id):
+                all_news_combined.append({"id": f"dubbed:{n.id}", "title": n.title, "type": "dubbed", "real_id": n.id})
         
         if not all_news_combined:
             return
@@ -592,6 +634,24 @@ YEMEN_YOUTUBE_CHANNELS = [
     {"url": "https://www.youtube.com/@TVyemenshabab/videos", "name": "قناة يمن شباب", "type": "channel"},
     {"url": "https://www.youtube.com/@AsharqNews/videos", "name": "الشرق للأخبار", "type": "channel"},
     {"url": "https://www.youtube.com/@Yementdy/videos", "name": "اليمن اليوم", "type": "channel"},
+]
+
+# Dubbed YouTube Channels List
+DUBBED_YOUTUBE_CHANNELS = [
+    {"url": "https://www.youtube.com/@TheEconomist/videos", "name": "The Economist", "type": "channel"},
+    {"url": "https://www.youtube.com/@TheDuran/videos", "name": "The Duran", "type": "channel"},
+    {"url": "https://www.youtube.com/@CBNnewsonline/videos", "name": "CBN News", "type": "channel"},
+    {"url": "https://www.youtube.com/@Reuters/videos", "name": "Reuters", "type": "channel"},
+    {"url": "https://www.youtube.com/@FoxNews/videos", "name": "Fox News", "type": "channel"},
+    {"url": "https://www.youtube.com/@talktv/videos", "name": "TalkTV", "type": "channel"},
+    {"url": "https://www.youtube.com/@GBNewsOnline/videos", "name": "GB News", "type": "channel"},
+    {"url": "https://www.youtube.com/@PBSNewsHour/videos", "name": "PBS NewsHour", "type": "channel"},
+    {"url": "https://www.youtube.com/@AlexChristoforou/videos", "name": "Alex Christoforou", "type": "channel"},
+    {"url": "https://www.youtube.com/@ABCNews/videos", "name": "ABC News", "type": "channel"},
+    {"url": "https://www.youtube.com/@BloombergPodcasts/videos", "name": "Bloomberg", "type": "channel"},
+    {"url": "https://www.youtube.com/@SkyNews/videos", "name": "Sky News", "type": "channel"},
+    {"url": "https://www.youtube.com/@judgingfreedom/videos", "name": "Judging Freedom", "type": "channel"},
+    {"url": "https://www.youtube.com/@ForbesBreakingNews/videos", "name": "Forbes Breaking News", "type": "channel"},
 ]
 
 # World Newspapers Sources List
@@ -1056,7 +1116,6 @@ async def analyze_geopolitical_ai(text):
 - لا تعيد نفس المعنى بصيغ مختلفة
 - استخدم منطق (سبب → نتيجة → تأثير)
 - اجعل النقد واضح لكن بدون مبالغة لغوية
-
 
 ممنوع أي خاتمة متفائلة. يجب أن تنتهي بخلاصة قاتمة تؤكد أن ما يحدث ممنهج ومستمر.
 
@@ -2778,11 +2837,158 @@ async def fetch_yemen_youtube_feeds():
         logger.info("[Yemen] Waiting 20 minutes before next fetch...")
         await asyncio.sleep(1200)
 
+async def fetch_all_dubbed_youtube_channels(db) -> List[dict]:
+    """Fetch NEW videos from all Dubbed YouTube channels"""
+    
+    channel_last_videos = {}
+    for channel in DUBBED_YOUTUBE_CHANNELS:
+        last_video_record = db.query(DubbedChannelLastVideo).filter(DubbedChannelLastVideo.channel_name == channel['name']).first()
+        if last_video_record and last_video_record.last_video_ids:
+            try:
+                channel_last_videos[channel['name']] = json.loads(last_video_record.last_video_ids)
+            except:
+                channel_last_videos[channel['name']] = None
+        else:
+            channel_last_videos[channel['name']] = None
+    
+    semaphore = asyncio.Semaphore(3)
+    async def fetch_with_semaphore(channel):
+        async with semaphore:
+            await pause_background_tasks.wait()
+            last_video_ids = channel_last_videos.get(channel['name'])
+            is_playlist = channel.get('type') == 'playlist'
+            return await asyncio.to_thread(fetch_youtube_channel_videos, channel['url'], channel['name'], last_video_ids, is_playlist)
+
+    tasks = [fetch_with_semaphore(channel) for channel in DUBBED_YOUTUBE_CHANNELS]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    all_videos = []
+    for idx, videos in enumerate(results):
+        if isinstance(videos, Exception):
+            logger.error(f"[Dubbed] Error in channel fetch for {DUBBED_YOUTUBE_CHANNELS[idx]['name']}: {videos}")
+            continue
+        all_videos.extend(videos)
+    
+    all_videos.sort(key=lambda x: x['published'], reverse=True)
+    return all_videos
+
+async def fetch_dubbed_youtube_feeds():
+    """Main function to fetch and store ONLY NEW Dubbed YouTube videos"""
+    first_run = True
+    while True:
+        db = SessionLocal()
+        new_items_found = []
+        
+        try:
+            videos = await fetch_all_dubbed_youtube_channels(db)
+            logger.info(f"[Dubbed] Found {len(videos)} NEW Dubbed videos from all channels combined")
+            
+            videos_by_channel = {}
+            for video in videos:
+                channel_name = video['source']
+                if channel_name not in videos_by_channel:
+                    videos_by_channel[channel_name] = []
+                videos_by_channel[channel_name].append(video)
+            
+            for video in videos:
+                try:
+                    exists = db.query(DubbedNewsItem).filter(DubbedNewsItem.link == video['link']).first()
+                    if exists:
+                        continue
+                    
+                    new_item = DubbedNewsItem(
+                        title=video['title'],
+                        link=video['link'],
+                        summary=video.get('summary', ''),
+                        published=video['published'],
+                        source=video['source'],
+                        image_url=video.get('image_url'),
+                        video_id=video.get('video_id')
+                    )
+                    db.add(new_item)
+                    db.commit()
+                    db.refresh(new_item)
+                    
+                    item_dict = {
+                        "id": new_item.id,
+                        "title": new_item.title,
+                        "link": new_item.link,
+                        "summary": new_item.summary,
+                        "published": str(new_item.published),
+                        "source": new_item.source,
+                        "image_url": new_item.image_url,
+                        "video_id": new_item.video_id,
+                        "is_important": getattr(new_item, 'is_important', 0),
+                        "importance_reason": getattr(new_item, 'importance_reason', None)
+                    }
+                    new_items_found.append(item_dict)
+                    logger.info(f"[Dubbed] ✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"[Dubbed] ✗ FAILED to save video: {video['title'][:50]}... Error: {e}")
+            
+            for channel in DUBBED_YOUTUBE_CHANNELS:
+                channel_name = channel['name']
+                channel_videos = videos_by_channel.get(channel_name, [])
+                
+                if not channel_videos:
+                    continue
+                
+                last_video_record = db.query(DubbedChannelLastVideo).filter(DubbedChannelLastVideo.channel_name == channel_name).first()
+                
+                existing_ids = []
+                if last_video_record and last_video_record.last_video_ids:
+                    try:
+                        existing_ids = json.loads(last_video_record.last_video_ids)
+                    except:
+                        existing_ids = []
+                
+                new_video_ids = [v['video_id'] for v in reversed(channel_videos)]
+                combined_ids = new_video_ids + existing_ids
+                seen = set()
+                unique_ids = []
+                for vid_id in combined_ids:
+                    if vid_id not in seen:
+                        seen.add(vid_id)
+                        unique_ids.append(vid_id)
+                
+                final_ids = unique_ids[:5]
+                most_recent_video = channel_videos[-1]
+                
+                if last_video_record:
+                    last_video_record.last_video_ids = json.dumps(final_ids)
+                    last_video_record.last_video_published = most_recent_video['published']
+                    last_video_record.updated_at = datetime.now()
+                    db.commit()
+                else:
+                    last_video_record = DubbedChannelLastVideo(
+                        channel_name=channel_name,
+                        last_video_ids=json.dumps(final_ids),
+                        last_video_published=most_recent_video['published']
+                    )
+                    db.add(last_video_record)
+                    db.commit()
+        
+        except Exception as e:
+            logger.error(f"[Dubbed] Error in fetch_dubbed_youtube_feeds: {e}")
+        
+        if new_items_found:
+            logger.info(f"[Dubbed] Broadcasting {len(new_items_found)} new Dubbed videos")
+            for item in new_items_found:
+                await manager.broadcast(json.dumps({"type": "new_dubbed_news", "data": item}))
+        
+        db.close()
+        first_run = False
+        
+        logger.info("[Dubbed] Waiting 5 minutes before next fetch...")
+        await asyncio.sleep(300)
+
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(fetch_youtube_feeds())
     asyncio.create_task(fetch_yemen_youtube_feeds())
     asyncio.create_task(fetch_newspaper_feeds())
+    asyncio.create_task(fetch_dubbed_youtube_feeds())
 
 @app.get("/api/news")
 async def get_news(page: int = 1, limit: int = 20):
@@ -2806,6 +3012,20 @@ async def get_yemen_news(page: int = 1, limit: int = 20):
     # Order by created_at DESC (newest added first) and id DESC as tie-breaker
     news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at), desc(YemenNewsItem.id)).offset(skip).limit(limit).all()
     total = db.query(YemenNewsItem).count()
+    db.close()
+    return {
+        "items": news,
+        "total": total,
+        "page": page,
+        "limit": limit
+    }
+
+@app.get("/api/dubbed-news")
+async def get_dubbed_news(page: int = 1, limit: int = 20):
+    db = SessionLocal()
+    skip = (page - 1) * limit
+    news = db.query(DubbedNewsItem).order_by(desc(DubbedNewsItem.created_at), desc(DubbedNewsItem.id)).offset(skip).limit(limit).all()
+    total = db.query(DubbedNewsItem).count()
     db.close()
     return {
         "items": news,
@@ -3010,8 +3230,10 @@ async def get_event_timeline(news_type: str, news_id: int):
                     news_item = db.query(NewsItem).filter(NewsItem.id == rid).first()
                 elif rtype == 'yemen':
                     news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == rid).first()
-                else:  # newspaper
+                elif rtype == 'newspaper':
                     news_item = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id == rid).first()
+                elif rtype == 'dubbed':
+                    news_item = db.query(DubbedNewsItem).filter(DubbedNewsItem.id == rid).first()
                 
                 if news_item:
                     related_news.append({
@@ -3052,6 +3274,7 @@ async def get_heatmap_data():
         world_news = db.query(NewsItem).order_by(desc(NewsItem.created_at)).limit(200).all()
         yemen_news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(200).all()
         newspaper_news = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(200).all()
+        dubbed_news = db.query(DubbedNewsItem).order_by(desc(DubbedNewsItem.created_at)).limit(200).all()
         
         # Combine all news items
         all_items = []
@@ -3072,6 +3295,12 @@ async def get_heatmap_data():
                 "id": n.id, "title": n.title, "link": n.link,
                 "source": n.source, "published": str(n.published),
                 "image_url": n.image_url, "type": "newspaper"
+            })
+        for n in dubbed_news:
+            all_items.append({
+                "id": n.id, "title": n.title, "link": n.link,
+                "source": n.source, "published": str(n.published),
+                "image_url": n.image_url, "type": "dubbed"
             })
         
         # Process each item and aggregate by country
@@ -3146,6 +3375,7 @@ async def get_news_clusters(rebuild: bool = False):
         world_news = db.query(NewsItem).order_by(desc(NewsItem.created_at)).limit(250).all()
         yemen_news = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(200).all()
         newspaper_news = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(200).all()
+        dubbed_news = db.query(DubbedNewsItem).order_by(desc(DubbedNewsItem.created_at)).limit(200).all()
 
         all_news = []
         for n in world_news:
@@ -3167,6 +3397,14 @@ async def get_news_clusters(rebuild: bool = False):
                 "id": n.id, "type": "newspaper", "title": n.title, "link": n.link,
                 "summary": n.summary, "source": n.source, "published": str(n.published),
                 "image_url": n.image_url, "video_id": None,
+                "is_important": getattr(n, 'is_important', 0),
+                "importance_reason": getattr(n, 'importance_reason', None)
+            })
+        for n in dubbed_news:
+            all_news.append({
+                "id": n.id, "type": "dubbed", "title": n.title, "link": n.link,
+                "summary": n.summary, "source": n.source, "published": str(n.published),
+                "image_url": n.image_url, "video_id": n.video_id,
                 "is_important": getattr(n, 'is_important', 0),
                 "importance_reason": getattr(n, 'importance_reason', None)
             })
@@ -3359,8 +3597,10 @@ async def debug_info():
         world_news_count = db.query(NewsItem).count()
         yemen_news_count = db.query(YemenNewsItem).count()
         newspaper_news_count = db.query(NewspaperNewsItem).count()
+        dubbed_news_count = db.query(DubbedNewsItem).count()
         world_channels_count = db.query(ChannelLastVideo).count()
         yemen_channels_count = db.query(YemenChannelLastVideo).count()
+        dubbed_channels_count = db.query(DubbedChannelLastVideo).count()
         newspaper_sources_count = db.query(NewspaperLastArticle).count()
         
         # Get latest news items
@@ -3377,8 +3617,10 @@ async def debug_info():
                 "world_news": world_news_count,
                 "yemen_news": yemen_news_count,
                 "newspaper_news": newspaper_news_count,
+                "dubbed_news": dubbed_news_count,
                 "world_channels_tracked": world_channels_count,
                 "yemen_channels_tracked": yemen_channels_count,
+                "dubbed_channels_tracked": dubbed_channels_count,
                 "newspaper_sources_tracked": newspaper_sources_count
             },
             "latest_world_news": [{"title": n.title[:50], "published": str(n.published), "source": n.source} for n in latest_world],
@@ -3397,8 +3639,10 @@ async def clear_all_news():
         db.query(NewsItem).delete()
         db.query(YemenNewsItem).delete()
         db.query(NewspaperNewsItem).delete()
+        db.query(DubbedNewsItem).delete()
         db.query(ChannelLastVideo).delete()
         db.query(YemenChannelLastVideo).delete()
+        db.query(DubbedChannelLastVideo).delete()
         db.query(NewspaperLastArticle).delete()
         db.query(EventThread).delete()
         db.query(NewsEmbeddingCache).delete()
