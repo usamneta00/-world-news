@@ -2980,8 +2980,8 @@ async def fetch_dubbed_youtube_feeds():
         db.close()
         first_run = False
         
-        logger.info("[Dubbed] Waiting 5 minutes before next fetch...")
-        await asyncio.sleep(300)
+        logger.info("[Dubbed] Waiting 10 minutes before next fetch...")
+        await asyncio.sleep(600)
 
 @app.on_event("startup")
 async def startup_event():
