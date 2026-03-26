@@ -1295,13 +1295,27 @@ async def run_video_processing_flow(
                     logger.info("🎉 تم نشر المنشور الثاني (التحليل الجيوسياسي) بنجاح.")
                 
                 return body, None, cached_transcript, fallback_title or "خبر"
-            return None, "فشل النشر في تيليجرام"
+            return None, "فشل النشر في تيليجرام", transcript, original_title
 
         transcript = None
         original_title = None
         error = None
 
         if not skip_transcript:
+            # محاولة جلب النص من قاعدة البيانات أولاً إذا لم يتم تمريره
+            if not cached_transcript:
+                db_internal = SessionLocal()
+                try:
+                    # البحث في كل الجداول الممكنة
+                    item = db_internal.query(NewsItem).filter(NewsItem.link == video_url).first() or \
+                           db_internal.query(YemenNewsItem).filter(YemenNewsItem.link == video_url).first() or \
+                           db_internal.query(DubbedNewsItem).filter(DubbedNewsItem.link == video_url).first()
+                    if item and item.full_transcript:
+                        cached_transcript = item.full_transcript
+                        if not fallback_title: fallback_title = item.title
+                finally:
+                    db_internal.close()
+
             if cached_transcript:
                 logger.info("♻️ استخدام النص المخزن مسبقاً من قاعدة البيانات.")
                 transcript = cached_transcript
@@ -1312,10 +1326,24 @@ async def run_video_processing_flow(
                 transcript = res["txt"]
                 original_title = res["title"]
                 error = res["error"]
+                
+                # حفظ النص المجلوب حديثاً في قاعدة البيانات للاستخدام في المرات القادمة
+                if transcript:
+                    db_internal = SessionLocal()
+                    try:
+                        item = db_internal.query(NewsItem).filter(NewsItem.link == video_url).first() or \
+                               db_internal.query(YemenNewsItem).filter(YemenNewsItem.link == video_url).first() or \
+                               db_internal.query(DubbedNewsItem).filter(DubbedNewsItem.link == video_url).first()
+                        if item:
+                            item.full_transcript = transcript
+                            db_internal.commit()
+                            logger.info("💾 تم حفظ النص الجديد في قاعدة البيانات تلقائياً.")
+                    finally:
+                        db_internal.close()
 
         if skip_transcript or error or not transcript or len(transcript) < 10:
             if skip_transcript:
-                return None, "تخطي النص مفعّل لكن لا يوجد ملخص كافٍ في البطاقة"
+                return None, "تخطي النص مفعّل لكن لا يوجد ملخص كافٍ في البطاقة", None, None
             if error:
                 logger.error(f"❌ فشل جلب النص من DownSub: {error}")
             else:
