@@ -1254,7 +1254,8 @@ async def run_video_processing_flow(
     fallback_summary: Optional[str] = None,
     skip_transcript: bool = False,
     cached_transcript: Optional[str] = None,
-):
+) -> tuple:
+    """Returns (summary, error, transcript, original_title)"""
     """جلب النص (أو تخطيه) → تلخيص/ملخص احتياطي → ترجمة عنوان → نشر. عند الإلغاء (reload) يُسجَّل تحذير ويُعاد رفع التجميد."""
     pause_background_tasks.clear()
     logger.info("--- 🚀 [أولوية قصوى] بدء عملية النشر، تم تجميد مهام الخلفية مؤقتاً ---")
@@ -1293,7 +1294,7 @@ async def run_video_processing_flow(
                     await post_to_telegram_channel(final_message_2)
                     logger.info("🎉 تم نشر المنشور الثاني (التحليل الجيوسياسي) بنجاح.")
                 
-                return body, None
+                return body, None, cached_transcript, fallback_title or "خبر"
             return None, "فشل النشر في تيليجرام"
 
         transcript = None
@@ -1321,9 +1322,9 @@ async def run_video_processing_flow(
                 logger.warning("⚠️ النص المستخرج فارغ أو غير كافٍ.")
             fb_summary, fb_err = await _publish_db_fallback(error or "نص غير كافٍ")
             if fb_summary is not None:
-                return fb_summary, fb_err
+                return fb_summary, fb_err, transcript, original_title
             base = error or "النص المستخرج غير كافٍ للتلخيص"
-            return None, f"{base} — ولا يوجد ملخص احتياطي في البطاقة"
+            return None, f"{base} — ولا يوجد ملخص احتياطي في البطاقة", None, None
 
         logger.info(f"✅ تم استخلاص النص بنجاح! الطول: {len(transcript)} حرف.")
 
@@ -1339,8 +1340,8 @@ async def run_video_processing_flow(
             logger.error(f"❌ فشل التلخيص بالذكاء الاصطناعي: {ai_error}")
             fb_summary, fb_err = await _publish_db_fallback(f"فشل التلخيص: {ai_error}")
             if fb_summary is not None:
-                return fb_summary, fb_err
-            return None, f"فشل التلخيص: {ai_error}"
+                return fb_summary, fb_err, transcript, original_title
+            return None, f"فشل التلخيص: {ai_error}", transcript, original_title
 
         logger.info("📝 اكتمل التلخيص والتحليل بنجاح.")
 
@@ -1363,12 +1364,12 @@ async def run_video_processing_flow(
             else:
                 logger.warning(f"⚠️ تخطي المنشور الثاني بسبب خطأ في التحليل: {geo_error}")
                 
-            return summary, None
+            return summary, None, transcript, original_title
             
         fb_summary, fb_err = await _publish_db_fallback("فشل إرسال تيليجرام للرسالة الملخّصة")
         if fb_summary is not None:
-            return fb_summary, fb_err
-        return None, "فشل النشر في تيليجرام"
+            return fb_summary, fb_err, transcript, original_title
+        return None, "فشل النشر في تيليجرام", transcript, original_title
 
     except asyncio.CancelledError:
         logger.warning(
@@ -1387,7 +1388,7 @@ async def process_world_video_endpoint(payload: dict):
         return {"error": "رابط الفيديو مطلوب"}, 400
     
     logger.info(f"🚀 بدء معالجة فيديو يدوي: {video_url}")
-    summary, error = await run_video_processing_flow(video_url)
+    summary, error, transcript, orig_title = await run_video_processing_flow(video_url)
     
     if error and not summary:
         return {"error": error}, 500
@@ -1417,13 +1418,19 @@ async def telegram_publish_by_id_endpoint(
         video_url = news_item.link
         logger.info(f"🚀 بدء نشر خبر من البطاقة ({news_type}:{news_id}): {video_url}")
         
-        summary, error = await run_video_processing_flow(
+        summary, error, transcript, orig_title = await run_video_processing_flow(
             video_url,
             fallback_title=news_item.title,
             fallback_summary=news_item.summary,
             skip_transcript=use_db_only,
             cached_transcript=news_item.full_transcript,
         )
+        
+        # Cache the transcript if we just fetched it and don't have it yet
+        if transcript and not news_item.full_transcript:
+            news_item.full_transcript = transcript
+            db.commit()
+            logger.info("💾 تم حفظ النص في قاعدة البيانات للاستخدام اللاحق.")
         
         if error and not summary:
             return {"error": error}, 500
