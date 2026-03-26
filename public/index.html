@@ -2275,6 +2275,16 @@
             document.getElementById('insight-video-id').textContent = videoId;
 
             // Load Video via API if available, else fallback
+            const playerVars = {
+                autoplay: 1,
+                enablejsapi: 1,
+                cc_load_policy: 1,
+                cc_lang_pref: 'ar',
+                fs: 1,
+                rel: 0,
+                playsinline: 1
+            };
+
             if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
                 ytPlayer.loadVideoById({
                     videoId: videoId,
@@ -2282,11 +2292,13 @@
                 });
             } else {
                 const playerEl = document.getElementById('insight-player');
-                playerEl.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1&hl=ar&cc_lang_pref=ar&cc_load_policy=1`;
+                const params = new URLSearchParams(playerVars);
+                playerEl.src = `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
                 
                 // Initialize API if YT is loaded
                 if (window.YT && window.YT.Player) {
                     ytPlayer = new YT.Player('insight-player', {
+                        playerVars: playerVars,
                         events: {
                             'onReady': (e) => { console.log('YT Player Ready'); }
                         }
@@ -2347,7 +2359,7 @@
                 if (typeof ytPlayer.playVideo === 'function') ytPlayer.playVideo();
             } else {
                 const player = document.getElementById('insight-player');
-                player.src = `https://www.youtube.com/embed/${videoId}?start=${seconds}&autoplay=1&enablejsapi=1&hl=ar&cc_lang_pref=ar&cc_load_policy=1`;
+                player.src = `https://www.youtube.com/embed/${videoId}?start=${seconds}&autoplay=1&enablejsapi=1&cc_lang_pref=ar&cc_load_policy=1&fs=1&playsinline=1`;
             }
 
             // Highlight active moment
