@@ -2058,6 +2058,9 @@
         }
 
         let activeTab = 'world';
+        let ytPlayer = null;
+        let ytReady = false;
+        function onYouTubeIframeAPIReady() { ytReady = true; }
         let currentPage = 1, allNews = [], pendingNews = [], totalItems = 0;
         let yemenCurrentPage = 1, yemenNews = [], yemenPendingNews = [], yemenTotalItems = 0;
         let newspaperCurrentPage = 1, newspaperNews = [], newspaperPendingNews = [], newspaperTotalItems = 0;
@@ -2270,7 +2273,26 @@
             // Set Meta info
             document.getElementById('insight-title').textContent = item.title;
             document.getElementById('insight-video-id').textContent = videoId;
-            document.getElementById('insight-player').src = `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1`;
+
+            // Load Video via API if available, else fallback
+            if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+                ytPlayer.loadVideoById({
+                    videoId: videoId,
+                    startSeconds: 0
+                });
+            } else {
+                const playerEl = document.getElementById('insight-player');
+                playerEl.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1&hl=ar&cc_lang_pref=ar&cc_load_policy=1`;
+                
+                // Initialize API if YT is loaded
+                if (window.YT && window.YT.Player) {
+                    ytPlayer = new YT.Player('insight-player', {
+                        events: {
+                            'onReady': (e) => { console.log('YT Player Ready'); }
+                        }
+                    });
+                }
+            }
 
             lucide.createIcons();
 
@@ -2308,7 +2330,11 @@
 
         function closeInsight() {
             document.getElementById('insight-modal').classList.add('hidden');
-            document.getElementById('insight-player').src = '';
+            if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
+                ytPlayer.stopVideo();
+            } else {
+                document.getElementById('insight-player').src = '';
+            }
             document.body.style.overflow = 'auto';
             currentInsightId = null;
             currentInsightType = null;
@@ -2316,8 +2342,13 @@
         }
 
         function seekVideo(videoId, seconds, el) {
-            const player = document.getElementById('insight-player');
-            player.src = `https://www.youtube.com/embed/${videoId}?start=${seconds}&autoplay=1&enablejsapi=1`;
+            if (ytPlayer && typeof ytPlayer.seekTo === 'function') {
+                ytPlayer.seekTo(seconds, true);
+                if (typeof ytPlayer.playVideo === 'function') ytPlayer.playVideo();
+            } else {
+                const player = document.getElementById('insight-player');
+                player.src = `https://www.youtube.com/embed/${videoId}?start=${seconds}&autoplay=1&enablejsapi=1&hl=ar&cc_lang_pref=ar&cc_load_policy=1`;
+            }
 
             // Highlight active moment
             document.querySelectorAll('.moment-card').forEach(card => {
@@ -3601,6 +3632,7 @@
             initThree(); initDate(); fetchNews(1); connectWS();
         });
     </script>
+    <script src="https://www.youtube.com/iframe_api"></script>
 </body>
 
 </html>
