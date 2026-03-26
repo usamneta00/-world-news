@@ -95,6 +95,9 @@ class NewsItem(Base):
     is_important = Column(Integer, default=0) # 1 if marked as important by Google/classification
     importance_reason = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.now) # Track when added to our DB
+    srt_transcript = Column(String, nullable=True) # SRT transcript from DownSub
+    full_transcript = Column(String, nullable=True) # TXT transcript from DownSub
+    highlights = Column(String, nullable=True) # JSON string of highlights (moments)
 
 class ChannelLastVideo(Base):
     __tablename__ = "channel_last_video"
@@ -118,6 +121,9 @@ class YemenNewsItem(Base):
     is_important = Column(Integer, default=0)
     importance_reason = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.now) # Track when added to our DB
+    srt_transcript = Column(String, nullable=True)
+    full_transcript = Column(String, nullable=True)
+    highlights = Column(String, nullable=True)
 
 class YemenChannelLastVideo(Base):
     __tablename__ = "yemen_channel_last_video"
@@ -141,6 +147,9 @@ class DubbedNewsItem(Base):
     is_important = Column(Integer, default=0)
     importance_reason = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
+    srt_transcript = Column(String, nullable=True)
+    full_transcript = Column(String, nullable=True)
+    highlights = Column(String, nullable=True)
 
 class DubbedChannelLastVideo(Base):
     __tablename__ = "dubbed_channel_last_video"
@@ -253,6 +262,24 @@ def migrate_database():
                 conn.execute(text("ALTER TABLE news ADD COLUMN importance_reason VARCHAR"))
                 try: conn.commit() 
                 except: pass 
+            
+            if 'srt_transcript' not in columns:
+                logger.info("Adding srt_transcript column to news table...")
+                conn.execute(text("ALTER TABLE news ADD COLUMN srt_transcript TEXT"))
+                try: conn.commit() 
+                except: pass 
+            
+            if 'full_transcript' not in columns:
+                logger.info("Adding full_transcript column to news table...")
+                conn.execute(text("ALTER TABLE news ADD COLUMN full_transcript TEXT"))
+                try: conn.commit() 
+                except: pass 
+                
+            if 'highlights' not in columns:
+                logger.info("Adding highlights column to news table...")
+                conn.execute(text("ALTER TABLE news ADD COLUMN highlights TEXT"))
+                try: conn.commit() 
+                except: pass 
 
             # Check for yemen_news columns
             result = conn.execute(text("PRAGMA table_info(yemen_news)"))
@@ -262,7 +289,25 @@ def migrate_database():
                 conn.execute(text("ALTER TABLE yemen_news ADD COLUMN created_at DATETIME"))
                 try: conn.commit() 
                 except: pass 
+            
+            if 'srt_transcript' not in yemen_columns:
+                logger.info("Adding srt_transcript column to yemen_news table...")
+                conn.execute(text("ALTER TABLE yemen_news ADD COLUMN srt_transcript TEXT"))
+                try: conn.commit() 
+                except: pass 
+            
+            if 'highlights' not in yemen_columns:
+                logger.info("Adding highlights column to yemen_news table...")
+                conn.execute(text("ALTER TABLE yemen_news ADD COLUMN highlights TEXT"))
+                try: conn.commit() 
+                except: pass 
 
+            if 'full_transcript' not in yemen_columns:
+                logger.info("Adding full_transcript column to yemen_news table...")
+                conn.execute(text("ALTER TABLE yemen_news ADD COLUMN full_transcript TEXT"))
+                try: conn.commit() 
+                except: pass 
+                
             if 'is_important' not in yemen_columns:
                 logger.info("Adding is_important column to yemen_news table...")
                 conn.execute(text("ALTER TABLE yemen_news ADD COLUMN is_important INTEGER DEFAULT 0"))
@@ -351,6 +396,29 @@ def migrate_database():
                 logger.info("Creating dubbed_news table...")
                 DubbedNewsItem.__table__.create(engine)
                 logger.info("Successfully created dubbed_news table")
+            else:
+                result = conn.execute(text("PRAGMA table_info(dubbed_news)"))
+                dubbed_columns = [row[1] for row in result]
+                if 'srt_transcript' not in dubbed_columns:
+                    conn.execute(text("ALTER TABLE dubbed_news ADD COLUMN srt_transcript TEXT"))
+                    try: conn.commit() 
+                    except: pass 
+                if 'full_transcript' not in dubbed_columns:
+                    conn.execute(text("ALTER TABLE dubbed_news ADD COLUMN full_transcript TEXT"))
+                    try: conn.commit() 
+                    except: pass 
+                if 'highlights' not in dubbed_columns:
+                    conn.execute(text("ALTER TABLE dubbed_news ADD COLUMN highlights TEXT"))
+                    try: conn.commit() 
+                    except: pass 
+                if 'is_important' not in dubbed_columns:
+                    conn.execute(text("ALTER TABLE dubbed_news ADD COLUMN is_important INTEGER DEFAULT 0"))
+                    try: conn.commit() 
+                    except: pass 
+                if 'importance_reason' not in dubbed_columns:
+                    conn.execute(text("ALTER TABLE dubbed_news ADD COLUMN importance_reason VARCHAR"))
+                    try: conn.commit() 
+                    except: pass 
             
             # Check if dubbed_channel_last_video table exists
             result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='dubbed_channel_last_video'"))
@@ -905,8 +973,8 @@ async def post_to_telegram_channel(message_text):
         logger.error(f"❌ فشل النشر في تيليجرام: {e}")
         return False
 
-def fetch_youtube_transcript_downsub(video_url):
-    """جلب نص الفيديو من DownSub مع مهل أطول وإعادة محاولة عند المهلات وأخطاء الشبكة."""
+def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
+    """جلب SRT و TXT من DownSub في طلب واحد."""
     api_url = 'https://api.downsub.com/download'
     headers = {
         'Authorization': 'Bearer AIzalTjrrsT1cKdr4HSWUryzgFRiqNYc8XBzztm',
@@ -917,87 +985,122 @@ def fetch_youtube_transcript_downsub(video_url):
     post_timeout = int(os.environ.get('DOWNSUB_POST_TIMEOUT', '55'))
     get_timeout = int(os.environ.get('DOWNSUB_GET_TIMEOUT', '90'))
 
+    results = {"srt": None, "txt": None, "title": None, "error": None}
     last_err: Optional[str] = None
+
     for attempt in range(1, max_retries + 1):
-        data = None
         try:
-            logger.info(f"📡 [DownSub] محاولة {attempt}/{max_retries} — طلب المعالجة (مهلة {post_timeout}s)...")
+            logger.info(f"📡 [DownSub] محاولة {attempt}/{max_retries} — طلب المعالجة لـ {video_url}")
             resp = requests.post(api_url, headers=headers, json=payload, timeout=post_timeout)
             resp.raise_for_status()
             data = resp.json()
-        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
-            last_err = str(e)
-            logger.warning(f"⚠️ [DownSub] مهلة أو فشل اتصال: {e}")
-            if attempt < max_retries:
-                time.sleep(min(2 ** (attempt - 1), 12))
-            continue
-        except requests.exceptions.HTTPError as e:
-            code = e.response.status_code if e.response is not None else 0
-            last_err = str(e)
-            if code >= 500 and attempt < max_retries:
-                logger.warning(f"⚠️ [DownSub] HTTP {code} — إعادة المحاولة")
-                time.sleep(min(2 ** (attempt - 1), 12))
+            
+            if data.get('status') != 'success':
+                return {"srt": None, "txt": None, "title": None, "error": "DownSub Error: " + data.get('message', 'Unknown')}
+
+            original_subs = data.get('data', {}).get('subtitles', [])
+            if not original_subs:
+                return {"srt": None, "txt": None, "title": None, "error": "لم يتم العثور على أي ترجمات لهذا الفيديو"}
+
+            results["title"] = data.get('data', {}).get('title')
+            
+            # 1. التفضيل للترجمة غير التلقائية
+            selected_sub = original_subs[0]
+            for sub in original_subs:
+                if "auto-generated" not in sub.get('language', '').lower():
+                    selected_sub = sub
+                    break
+            
+            # 2. جلب الروابط المطلوبة
+            found_urls = {}
+            for fmt in selected_sub.get('formats', []):
+                f_type = fmt.get('format')
+                if f_type in formats:
+                    found_urls[f_type] = fmt.get('url')
+
+            # 3. تحميل المحتويات
+            for f_type, url in found_urls.items():
+                try:
+                    logger.info(f"📡 [DownSub] تحميل ملف {f_type.upper()}...")
+                    f_resp = requests.get(url, timeout=get_timeout)
+                    f_resp.raise_for_status()
+                    results[f_type] = f_resp.text
+                except Exception as e:
+                    logger.warning(f"⚠️ [DownSub] فشل تحميل {f_type}: {e}")
+            
+            # إذا لم يتم العثور على أي نتيجة رغم وجود روابط
+            if not any(results[f] for f in formats if f in found_urls):
                 continue
-            logger.error(f"🚨 [DownSub] خطأ HTTP: {e}")
-            return None, None, str(e)
-        except ValueError as e:
+                
+            return results
+
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.HTTPError) as e:
             last_err = str(e)
-            logger.warning(f"⚠️ [DownSub] رد JSON غير صالح: {e}")
             if attempt < max_retries:
                 time.sleep(min(2 ** (attempt - 1), 12))
             continue
         except Exception as e:
-            logger.error(f"🚨 [DownSub] خطأ غير متوقع: {e}")
-            return None, None, str(e)
+            return {"srt": None, "txt": None, "title": None, "error": str(e)}
 
-        if data.get('status') != 'success':
-            logger.error(f"❌ [DownSub] رد غير ناجح من الخادم: {data.get('message')}")
-            return None, None, "فشل في جلب بيانات الفيديو من المصدر"
+    return {"srt": None, "txt": None, "title": results.get("title"), "error": last_err or "فشل الاتصال بـ DownSub"}
 
-        original_subs = data.get('data', {}).get('subtitles', [])
-        if not original_subs:
-            logger.warning(f"⚠️ [DownSub] لم يتم العثور على أي ترجمات لهذا الفيديو.")
-            return None, None, "لم يتم العثور على ترجمة أصلية"
+# No more wrappers here
 
-        selected_sub = original_subs[0]
-        for sub in original_subs:
-            if "auto-generated" not in sub.get('language', '').lower():
-                selected_sub = sub
-                break
+async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title: str = ""):
+    """استخدام OpenAI لاستخراج اللحظات الهامة من ملف SRT (تطبيق نفس برومبت المشروع الثاني)."""
+    if not OPENAI_API_KEY or not srt_content:
+        return []
 
-        txt_url = None
-        for fmt in selected_sub.get('formats', []):
-            if fmt.get('format') == 'txt':
-                txt_url = fmt.get('url')
-                break
+    # نأخذ أول 150 ألف حرف (حوالي 25-30 دقيقة من الحوار)
+    srt_slice = srt_content[:150000]
+    
+    prompt = f"""
+    Below is a video transcript in SRT format. 
+    VIDEO TITLE: {title}
+    VIDEO DURATION: {duration} seconds (approx {duration // 60} minutes).
+    
+    TASK: Identify the 5-7 most "Powerful" and "High-Impact" moments across the ENTIRE video.
+    
+    CONSTRAINTS:
+    1. EVERYTHING (title and reason) must be in ARABIC.
+    2. Moments MUST be from throughout the whole video timeline (START, MIDDLE, END).
+    3. Timestamps MUST NOT exceed the video duration of {duration} seconds.
+    4. Provide the result strictly in JSON list.
+    
+    For each moment:
+    - title: Catchy Arabic title (max 5 words).
+    - seconds: Exact integer timestamp.
+    - reason_ar: High-quality Arabic explanation of why this moment matters, with no ambiguity.
+    
+    SRT CONTENT:
+    {srt_slice}
+    """
 
-        if not txt_url:
-            logger.error(f"❌ [DownSub] لم يتم العثور على رابط لملف TXT.")
-            return None, None, "لم يتم العثور على صيغة نصية (TXT)"
-
-        page_title = data.get('data', {}).get('title')
-        try:
-            logger.info(f"📡 [DownSub] تحميل ملف TXT (مهلة {get_timeout}s)...")
-            txt_resp = requests.get(txt_url, timeout=get_timeout)
-            txt_resp.raise_for_status()
-            logger.info(f"✅ [DownSub] اكتمل تحميل النص بنجاح.")
-            return txt_resp.text, page_title, None
-        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
-            last_err = str(e)
-            logger.warning(f"⚠️ [DownSub] فشل تحميل TXT: {e}")
-            if attempt < max_retries:
-                time.sleep(min(2 ** (attempt - 1), 12))
-            continue
-        except requests.exceptions.HTTPError as e:
-            last_err = str(e)
-            if e.response is not None and e.response.status_code >= 500 and attempt < max_retries:
-                logger.warning(f"⚠️ [DownSub] فشل تحميل TXT HTTP — إعادة المحاولة")
-                time.sleep(min(2 ** (attempt - 1), 12))
-                continue
-            logger.error(f"🚨 [DownSub] خطأ تحميل TXT: {e}")
-            return None, None, str(e)
-
-    return None, None, last_err or "فشل الاتصال بـ DownSub بعد عدة محاولات"
+    try:
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": "أنت خبير في تلخيص الفيديوهات واستخراج اللحظات الهامة والدرامية."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.2
+        }
+        
+        response = await asyncio.to_thread(
+            lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=60)
+        )
+        
+        if response.status_code == 200:
+            content = response.json()['choices'][0]['message']['content'].strip()
+            # استخراج الـ JSON
+            match = re.search(r'\[.*\]', content, re.DOTALL)
+            if match:
+                return json.loads(match.group(0))
+        return []
+    except Exception as e:
+        logger.error(f"Error in highlights AI: {e}")
+        return []
 
 async def translate_title_ai(english_title: str) -> str:
     """ترجمة عنوان الفيديو إلى العربية بأسلوب إخباري باستخدام AI."""
@@ -1150,6 +1253,7 @@ async def run_video_processing_flow(
     fallback_title: Optional[str] = None,
     fallback_summary: Optional[str] = None,
     skip_transcript: bool = False,
+    cached_transcript: Optional[str] = None,
 ):
     """جلب النص (أو تخطيه) → تلخيص/ملخص احتياطي → ترجمة عنوان → نشر. عند الإلغاء (reload) يُسجَّل تحذير ويُعاد رفع التجميد."""
     pause_background_tasks.clear()
@@ -1197,8 +1301,16 @@ async def run_video_processing_flow(
         error = None
 
         if not skip_transcript:
-            logger.info("⏳ [1/4] جاري استخلاص النصوص من يوتيوب (قد يستغرق وقتاً مع الفيديوهات الطويلة)...")
-            transcript, original_title, error = await asyncio.to_thread(fetch_youtube_transcript_downsub, video_url)
+            if cached_transcript:
+                logger.info("♻️ استخدام النص المخزن مسبقاً من قاعدة البيانات.")
+                transcript = cached_transcript
+                original_title = fallback_title or "خبر"
+            else:
+                logger.info("⏳ [1/4] جاري استخلاص النصوص من يوتيوب (قد يستغرق وقتاً مع الفيديوهات الطويلة)...")
+                res = await asyncio.to_thread(fetch_youtube_subs_downsub, video_url, formats=['txt'])
+                transcript = res["txt"]
+                original_title = res["title"]
+                error = res["error"]
 
         if skip_transcript or error or not transcript or len(transcript) < 10:
             if skip_transcript:
@@ -1310,6 +1422,7 @@ async def telegram_publish_by_id_endpoint(
             fallback_title=news_item.title,
             fallback_summary=news_item.summary,
             skip_transcript=use_db_only,
+            cached_transcript=news_item.full_transcript,
         )
         
         if error and not summary:
@@ -1317,6 +1430,69 @@ async def telegram_publish_by_id_endpoint(
         return {"status": "success" if not error else "partial_success", "message": error or "تمت العملية بنجاح!", "summary": summary}
     finally:
         db.close()
+
+@app.get("/api/video-insight/{news_type}/{news_id}")
+async def get_video_insight_endpoint(news_type: str, news_id: int, db: Session = Depends(get_db)):
+    """جلب أو استخراج 'اللحظات الهامة' للفيديو."""
+    news_item = None
+    if news_type == 'world':
+        news_item = db.query(NewsItem).filter(NewsItem.id == news_id).first()
+    elif news_type == 'yemen':
+        news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == news_id).first()
+    elif news_type == 'dubbed':
+        news_item = db.query(DubbedNewsItem).filter(DubbedNewsItem.id == news_id).first()
+        
+    if not news_item:
+        return {"error": "Item not found"}, 404
+
+    # إذا كانت النتائج مخزنة مسبقاً
+    if news_item.highlights and news_item.srt_transcript:
+        try:
+            return {
+                "id": news_item.id,
+                "video_id": news_item.video_id,
+                "title": news_item.title,
+                "highlights": json.loads(news_item.highlights),
+                "has_transcript": True
+            }
+        except: pass
+
+    # استخراج جديد
+    logger.info(f"🔍 Extracting insights for: {news_item.link}")
+    res = await asyncio.to_thread(fetch_youtube_subs_downsub, news_item.link, formats=['txt', 'srt'])
+    
+    if res["error"]:
+        return {"error": f"Extraction failed: {res['error']}"}, 500
+        
+    srt = res["srt"]
+    if not srt:
+        return {"error": "لم يتم العثور على ترجمة SRT لهذا الفيديو"}, 500
+
+    # جلب مدة الفيديو للتأكد من دقة التوقيتات
+    duration = 0
+    try:
+        ydl_opts = {"quiet": True, "no_warnings": True, "extract_flat": True}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            meta = ydl.extract_info(news_item.link, download=False)
+            duration = meta.get("duration") or 0
+    except: pass
+
+    highlights = await analyze_video_highlights_ai(srt, duration, news_item.title or "")
+    
+    if highlights:
+        # حفظ في قاعدة البيانات
+        news_item.srt_transcript = srt
+        news_item.full_transcript = res.get("txt")
+        news_item.highlights = json.dumps(highlights)
+        db.commit()
+
+    return {
+        "id": news_item.id,
+        "video_id": news_item.video_id,
+        "title": news_item.title,
+        "highlights": highlights,
+        "has_transcript": bool(srt)
+    }
 
 # ============================================
 # News Clustering - Embedding & Clustering Logic

@@ -1234,6 +1234,77 @@
         .world-ai-btn:active {
             transform: translateY(0) scale(0.98);
         }
+
+        /* Video Insight Styles */
+        .moment-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            text-align: right;
+        }
+
+        .moment-card:hover {
+            background: rgba(45, 212, 191, 0.05);
+            border-color: rgba(45, 212, 191, 0.3);
+            transform: translateX(-4px);
+        }
+
+        .moment-card.active {
+            background: rgba(45, 212, 191, 0.1);
+            border-color: rgba(45, 212, 191, 0.5);
+            box-shadow: 0 0 20px rgba(45, 212, 191, 0.1);
+        }
+
+        .moment-time {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: #2dd4bf;
+            background: rgba(45, 212, 191, 0.1);
+            padding: 2px 8px;
+            border-radius: 6px;
+            width: fit-content;
+            margin-bottom: 8px;
+            margin-right: auto;
+        }
+
+        .moment-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 6px;
+            line-height: 1.4;
+        }
+
+        .moment-reason {
+            font-size: 11px;
+            color: #9ca3af;
+            line-height: 1.6;
+            margin-top: 6px;
+        }
+
+        /* Premium Slim Scrollbar */
+        .insight-scrollbar::-webkit-scrollbar {
+            width: 3px;
+        }
+        .insight-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .insight-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            transition: background 0.3s ease;
+        }
+        .insight-scrollbar:hover::-webkit-scrollbar-thumb {
+            background: rgba(45, 212, 191, 0.3);
+        }
+        .insight-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(45, 212, 191, 0.6) !important;
+        }
     </style>
 </head>
 
@@ -1874,6 +1945,95 @@
         </div>
     </div>
 
+    <!-- Video Insight Modal -->
+    <div id="insight-modal"
+        class="hidden fixed inset-0 z-[110] bg-obsidian/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div
+            class="glass-panel w-full max-w-6xl h-[85vh] rounded-xl overflow-hidden flex flex-col animate-in zoom-in duration-300 border border-white/10 shadow-2xl">
+            <div class="p-4 border-b border-white/10 flex justify-between items-center bg-black/20">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-neon-blue/20 rounded-lg flex items-center justify-center">
+                        <i data-lucide="sparkles" class="w-5 h-5 text-neon-blue"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white leading-none">Video Intelligence Analysis</h3>
+                        <p class="text-[10px] text-neutral-500 font-mono mt-1">POWERED BY AI MOMENTS</p>
+                    </div>
+                </div>
+                <button onclick="closeInsight()" class="p-2 hover:bg-white/10 rounded-full transition-colors">
+                    <i data-lucide="x" class="w-5 h-5 text-neutral-400"></i>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-hidden flex flex-col lg:flex-row">
+                <!-- Video Player Area -->
+                <div class="flex-1 bg-black flex flex-col overflow-y-auto no-scrollbar">
+                    <div class="relative w-full aspect-video bg-neutral-900 group">
+                        <iframe id="insight-player" class="w-full h-full" src="" frameborder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowfullscreen></iframe>
+                    </div>
+                    <div class="p-6">
+                        <h2 id="insight-title" class="text-2xl font-serif font-bold text-white mb-4 text-right">عنوان
+                            الفيديو</h2>
+                        <div id="insight-info"
+                            class="flex flex-wrap items-center justify-end gap-4 text-xs text-neutral-400 mb-6 bg-white/5 p-3 rounded-lg border border-white/5">
+                            <span class="flex items-center gap-2 text-emerald-400"><i data-lucide="check-circle"
+                                    class="w-3.5 h-3.5"></i> التحليل متاح</span>
+                            <span class="h-4 w-px bg-white/10 hidden sm:block"></span>
+                            <span class="flex items-center gap-2 text-neutral-300"><i data-lucide="video"
+                                    class="w-3.5 h-3.5"></i> <span id="insight-video-id">ID</span></span>
+                        </div>
+                        <div class="space-y-4">
+                            <button id="insight-publish-direct" onclick="confirmTelegramPublish()"
+                                class="w-full py-4 bg-neon-blue text-black font-black text-sm rounded-xl hover:bg-white transition-all transform hover:scale-[1.01] active:scale-95 flex items-center justify-center gap-3 shadow-lg shadow-neon-blue/20">
+                                <i data-lucide="send" class="w-5 h-5"></i>
+                                <span>نشر الملخص والتحليل إلى تيليجرام</span>
+                            </button>
+                            <p
+                                class="text-[10px] text-neutral-500 text-center font-mono opacity-50 uppercase tracking-widest leading-relaxed">
+                                THIS ACTION GENERATES A COMPREHENSIVE SUMMARY AND GEOPOLITICAL IMPACT ANALYSIS</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Highlights Area -->
+                <div
+                    class="w-full lg:w-80 bg-neutral-900/50 border-t lg:border-t-0 lg:border-l border-white/10 flex flex-col">
+                    <div class="p-4 border-b border-white/10 flex items-center justify-between">
+                        <h4
+                            class="text-xs font-black text-neutral-300 uppercase tracking-widest flex items-center gap-2">
+                            <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-400"></i> خريطة اللحظات
+                        </h4>
+                        <span id="moments-count"
+                            class="text-[10px] bg-white/5 px-2 py-0.5 rounded border border-white/10 text-neutral-500">0</span>
+                    </div>
+
+                    <div id="insight-loading"
+                        class="flex-1 flex flex-col items-center justify-center p-8 text-center bg-black/40">
+                        <div
+                            class="w-12 h-12 border-4 border-neon-blue border-t-transparent rounded-full animate-spin mb-6">
+                        </div>
+                        <p class="text-sm text-neutral-300 font-bold mb-2">جاري استخراج الخريطة الذهنية...</p>
+                        <p class="text-[10px] text-neutral-500 font-mono leading-relaxed uppercase">Neural scan of
+                            transcript in progress</p>
+                    </div>
+
+                    <div id="insight-highlights" class="flex-1 overflow-y-auto p-3 space-y-3 insight-scrollbar hidden">
+                        <!-- Highlights Injected -->
+                    </div>
+
+                    <div id="insight-error"
+                        class="flex-1 flex flex-col items-center justify-center p-8 text-center hidden">
+                        <i data-lucide="alert-circle" class="w-12 h-12 text-red-500/50 mb-4"></i>
+                        <p class="text-sm text-neutral-400">فشل في استخراج اللحظات</p>
+                        <p class="text-[10px] text-neutral-600 mt-2">يرجى المحاولة لاحقاً</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript Logic -->
     <script>
         // --- Logic Configuration ---
@@ -2068,28 +2228,154 @@
             `;
         }
 
+        let currentInsightId = null;
+        let currentInsightType = null;
+        let currentInsightBtn = null;
+
         async function publishToTelegram(id, type, btn) {
-            if (btn.disabled) return;
-            const originalHTML = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>جاري النشر...</span>';
-            if (window.lucide) lucide.createIcons();
+            // Open the insight modal instead of direct publishing
+            openInsight(id, type, btn);
+        }
+
+        async function openInsight(id, type, btn) {
+            // Find news item
+            const allPossibleNews = [...allNews, ...yemenNews, ...newspaperNews, ...dubbedNews, ...(recommendedNews || [])];
+            const item = allPossibleNews.find(n => n.id === id);
+            if (!item) {
+                console.error("News item not found for insight:", id);
+                return;
+            }
+
+            currentInsightId = id;
+            currentInsightType = type;
+            currentInsightBtn = btn;
+
+            // Extract YouTube ID
+            const videoId = item.link?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/)?.[1];
+            if (!videoId) {
+                // If not a video, fallback to direct publish or show error
+                alert("هذا النوع من الأخبار لا يدعم استخلاص اللحظات المرئية.");
+                return;
+            }
+            item.video_id = videoId; // Store temporarily
+
+            // Show Modal & Loader
+            const modal = document.getElementById('insight-modal');
+            modal.classList.remove('hidden');
+            document.getElementById('insight-loading').classList.remove('hidden');
+            document.getElementById('insight-highlights').classList.add('hidden');
+            document.getElementById('insight-error').classList.add('hidden');
+            document.body.style.overflow = 'hidden';
+
+            // Set Meta info
+            document.getElementById('insight-title').textContent = item.title;
+            document.getElementById('insight-video-id').textContent = videoId;
+            document.getElementById('insight-player').src = `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1`;
+
+            lucide.createIcons();
 
             try {
-                const r = await fetch(`/api/telegram-publish/${type}/${id}`, { method: 'POST' });
+                // Call backend for transcript and highlights
+                const r = await fetch(`/api/video-insight/${type}/${id}`);
+                const data = await r.json();
+
+                if (data.error) throw new Error(data.error);
+
+                document.getElementById('insight-loading').classList.add('hidden');
+                const listEl = document.getElementById('insight-highlights');
+                listEl.classList.remove('hidden');
+
+                if (data.highlights && data.highlights.length > 0) {
+                    document.getElementById('moments-count').textContent = data.highlights.length;
+                    listEl.innerHTML = data.highlights.map((m, i) => `
+                        <div class="moment-card" onclick="seekVideo('${videoId}', ${m.seconds}, this)">
+                            <div class="moment-time">${formatSeconds(m.seconds)}</div>
+                            <div class="moment-title">${m.title}</div>
+                            <div class="moment-reason">${m.reason_ar || m.reason || ''}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    listEl.innerHTML = '<p class="text-[10px] text-neutral-500 text-center py-10 uppercase font-mono">No specific thematic moments detected</p>';
+                    document.getElementById('moments-count').textContent = '0';
+                }
+
+            } catch (e) {
+                console.error("Insight Error:", e);
+                document.getElementById('insight-loading').classList.add('hidden');
+                document.getElementById('insight-error').classList.remove('hidden');
+            }
+        }
+
+        function closeInsight() {
+            document.getElementById('insight-modal').classList.add('hidden');
+            document.getElementById('insight-player').src = '';
+            document.body.style.overflow = 'auto';
+            currentInsightId = null;
+            currentInsightType = null;
+            currentInsightBtn = null;
+        }
+
+        function seekVideo(videoId, seconds, el) {
+            const player = document.getElementById('insight-player');
+            player.src = `https://www.youtube.com/embed/${videoId}?start=${seconds}&autoplay=1&enablejsapi=1`;
+
+            // Highlight active moment
+            document.querySelectorAll('.moment-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            el.classList.add('active');
+        }
+
+        function formatSeconds(s) {
+            const mins = Math.floor(s / 60);
+            const secs = Math.floor(s % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        async function confirmTelegramPublish() {
+            if (!currentInsightId) return;
+            const btn = document.getElementById('insight-publish-direct');
+            const originalHTML = btn.innerHTML;
+
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i><span>جاري المعالجة والنشر...</span>';
+            lucide.createIcons();
+
+            try {
+                const r = await fetch(`/api/telegram-publish/${currentInsightType}/${currentInsightId}`, { method: 'POST' });
                 const d = await r.json();
                 if (d.error) throw new Error(d.error);
 
-                btn.innerHTML = '<i data-lucide="check" class="w-3.5 h-3.5"></i><span>تم النشر</span>';
-                btn.classList.add('bg-emerald-500/10', 'border-emerald-500/30', 'text-emerald-400');
-                showToast('تم النشر في تيليجرام بنجاح');
+                btn.classList.remove('bg-neon-blue');
+                btn.classList.add('bg-emerald-500', 'text-white');
+                btn.innerHTML = '<i data-lucide="check" class="w-5 h-5 text-white"></i><span>تم النشر بنجاح!</span>';
+                lucide.createIcons();
+
+                showToast('تم إرسال التحليل إلى قناة تيليجرام');
+
+                // Update original button if exists
+                if (currentInsightBtn) {
+                    currentInsightBtn.innerHTML = '<i data-lucide="check" class="w-3.5 h-3.5"></i><span>تم نُشر</span>';
+                    currentInsightBtn.classList.add('bg-emerald-500/10', 'border-emerald-500/30', 'text-emerald-400');
+                    if (window.lucide) lucide.createIcons();
+                }
+
+                setTimeout(() => {
+                    closeInsight();
+                    // Reset button for next time
+                    btn.disabled = false;
+                    btn.innerHTML = originalHTML;
+                    btn.classList.add('bg-neon-blue');
+                    btn.classList.remove('bg-emerald-500', 'text-white');
+                }, 1500);
+
             } catch (e) {
-                console.error(e);
-                btn.innerHTML = originalHTML;
+                console.error("Publish Error:", e);
                 btn.disabled = false;
+                btn.innerHTML = originalHTML;
                 alert('فشل النشر: ' + e.message);
+                lucide.createIcons();
             }
-            if (window.lucide) lucide.createIcons();
         }
 
         async function processNewsAI(id, type, btn) {
