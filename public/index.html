@@ -2355,6 +2355,21 @@
             currentInsightId = null;
             currentInsightType = null;
             currentInsightBtn = null;
+
+            // Show any pending banners that were suppressed while modal was open
+            if (activeTab === 'clusters' && typeof pendingClusterUpdates !== 'undefined' && pendingClusterUpdates.length > 0) {
+                showClusterBanner(pendingClusterUpdates.length);
+            } else {
+                const pending = activeTab === 'world' ? pendingNews : (activeTab === 'yemen' ? yemenPendingNews : (activeTab === 'newspaper' ? newspaperPendingNews : dubbedPendingNews));
+                if (pending && pending.length > 0) {
+                    const banner = document.getElementById('new-news-banner');
+                    if (banner) {
+                        const txt = banner.querySelector('span.text-xs');
+                        if (txt) txt.textContent = `${pending.length} NEW UPDATES AVAILABLE`;
+                        banner.classList.remove('hidden');
+                    }
+                }
+            }
         }
 
         function seekVideo(videoId, seconds, el) {
@@ -3213,7 +3228,12 @@
             pendingClusterUpdates.push(d);
 
             if (activeTab === 'clusters') {
-                showClusterBanner(pendingClusterUpdates.length);
+                const isInsightOpen = !document.getElementById('insight-modal').classList.contains('hidden');
+                if (isInsightOpen) {
+                    showToast('تحديثات جديدة لمجموعات الأخبار في الخلفية');
+                } else {
+                    showClusterBanner(pendingClusterUpdates.length);
+                }
             }
         }
 
@@ -3524,6 +3544,13 @@
                     let pending = activeTab === 'world' ? pendingNews : (activeTab === 'yemen' ? yemenPendingNews : (activeTab === 'newspaper' ? newspaperPendingNews : dubbedPendingNews));
                     if ((msg.type === 'new_news' && activeTab === 'world') || (msg.type === 'new_yemen_news' && activeTab === 'yemen') || (msg.type === 'new_newspaper_news' && activeTab === 'newspaper') || (msg.type === 'new_dubbed_news' && activeTab === 'dubbed')) {
                         pending.push(msg.data);
+
+                        const isInsightOpen = !document.getElementById('insight-modal').classList.contains('hidden');
+                        if (isInsightOpen) {
+                            showToast('تحديثات إخبارية جديدة متوفرة في الخلفية');
+                            return;
+                        }
+
                         const banner = document.getElementById('new-news-banner');
                         if (banner) {
                             const txt = banner.querySelector('span.text-xs');
