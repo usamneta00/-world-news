@@ -1291,17 +1291,21 @@
         .insight-scrollbar::-webkit-scrollbar {
             width: 3px;
         }
+
         .insight-scrollbar::-webkit-scrollbar-track {
             background: transparent;
         }
+
         .insight-scrollbar::-webkit-scrollbar-thumb {
             background: rgba(255, 255, 255, 0.05);
             border-radius: 20px;
             transition: background 0.3s ease;
         }
+
         .insight-scrollbar:hover::-webkit-scrollbar-thumb {
             background: rgba(45, 212, 191, 0.3);
         }
+
         .insight-scrollbar::-webkit-scrollbar-thumb:hover {
             background: rgba(45, 212, 191, 0.6) !important;
         }
@@ -1947,9 +1951,9 @@
 
     <!-- Video Insight Modal -->
     <div id="insight-modal"
-        class="hidden fixed inset-0 z-[110] bg-obsidian/80 backdrop-blur-md flex items-center justify-center p-4">
+        class="hidden fixed inset-0 z-[110] bg-obsidian/80 backdrop-blur-md flex items-center justify-center p-4 xl:p-0">
         <div
-            class="glass-panel w-full max-w-6xl h-[90vh] lg:h-[85vh] rounded-xl overflow-hidden flex flex-col animate-in zoom-in duration-300 border border-white/10 shadow-2xl">
+            class="glass-panel w-full max-w-6xl xl:max-w-full h-[90vh] lg:h-[85vh] xl:h-screen rounded-xl xl:rounded-none overflow-hidden flex flex-col animate-in zoom-in duration-300 border border-white/10 shadow-2xl">
             <div class="p-4 border-b border-white/10 flex justify-between items-center bg-black/20">
                 <div class="flex items-center gap-3">
                     <div class="w-8 h-8 bg-neon-blue/20 rounded-lg flex items-center justify-center">
@@ -2294,7 +2298,7 @@
                 const playerEl = document.getElementById('insight-player');
                 const params = new URLSearchParams(playerVars);
                 playerEl.src = `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
-                
+
                 // Initialize API if YT is loaded
                 if (window.YT && window.YT.Player) {
                     ytPlayer = new YT.Player('insight-player', {
