@@ -1047,40 +1047,62 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
 # No more wrappers here
 
 async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title: str = ""):
-    """استخدام OpenAI لاستخراج اللحظات الهامة من ملف SRT (تطبيق نفس برومبت المشروع الثاني)."""
+    """استخراج اللحظات الهامة من ملف SRT مع ضمان دقة التوقيتات وعدم تجاوز مدة الفيديو."""
     if not OPENAI_API_KEY or not srt_content:
         return []
 
-    # نأخذ أول 150 ألف حرف (حوالي 25-30 دقيقة من الحوار)
-    srt_slice = srt_content[:150000]
+    # تحسين استخراج المدة من SRT في حال تعثر yt-dlp
+    if duration <= 0:
+        try:
+            times = re.findall(r'(\d{2}:\d{2}:\d{2},\d{3})', srt_content)
+            if times:
+                last_time = times[-1]
+                h, m, s_ms = last_time.split(':')
+                s, _ = s_ms.split(',')
+                duration = int(h) * 3600 + int(m) * 60 + int(s)
+        except: pass
+
+    # تقسيم النص لضمان تغطية الفيديو بالكامل للفيديوهات الطويلة (أكثر من 25-30 دقيقة)
+    if len(srt_content) > 170000:
+        part = 55000
+        start_part = srt_content[:part]
+        mid_point = len(srt_content) // 2
+        mid_part = srt_content[mid_point - part//2 : mid_point + part//2]
+        end_part = srt_content[-part:]
+        srt_slice = f"{start_part}\n...[Bypassed content]...\n{mid_part}\n...[Bypassed content]...\n{end_part}"
+    else:
+        srt_slice = srt_content
     
     prompt = f"""
-    بناءً على ملف الترجمة (SRT) المرفق أدناه للفيديو المعنون: "{title}".
-    المدة الإجمالية للفيديو: {duration} ثانية.
-
-    المهمة المطلوبة:
-    استخرج أهم (5-7) لحظات قوية ومؤثرة من الفيديو تعبر عن جوهر الحدث.
-
-    القواعد الصارمة:
-    1. المخرجات (العنوان والسبب): يجب أن تكون باللغة العربية الفصحى وبأسلوب إخباري احترافي.
-    2. التوقيت (seconds): يجب أن يكون توقيتاً دقيقاً بالثواني (Integer) مستخرجا مباشرة من ملف الـ SRT المرفق.
-    3. الدقة: تأكد تماماً أن التوقيت لا يتجاوز المدة الإجمالية للفيديو ({duration} ثانية).
-    4. الشمولية: اختر لحظات مفصلية من (بداية، منتصف، ونهاية) الفيديو بشكل متوازن لتغطية كافة الأحداث.
-    5. الصيغة: أرجع النتيجة على شكل قائمة JSON فقط تحتوي على الحقول التالية:
-       - "title": عنوان عربي جذاب وموجز (بحد أقصى 5 كلمات).
-       - "seconds": التوقيت بالثواني (رقم صحيح).
-       - "reason_ar": شرح دقيق وبلغة رصينة لسبب أهمية هذه اللحظة.
-
-    نص ملف الـ SRT:
+    Below is a video transcript in SRT format. 
+    VIDEO TITLE: {title}
+    VIDEO DURATION: {duration} seconds (approx {duration // 60} minutes).
+    
+    TASK: Identify the 5-7 most "Powerful" and "High-Impact" moments across the ENTIRE video.
+    
+    CONSTRAINTS:
+    1. EVERYTHING (title and reason) must be in ARABIC.
+    2. Moments MUST be from throughout the whole video timeline (START, MIDDLE, END).
+    3. Timestamps MUST NOT exceed the video duration of {duration} seconds.
+    4. Provide the result strictly in JSON list.
+    5. ACCURACY & PRECISION: The "seconds" value must match the exact time speech starts in the SRT. Convert HH:MM:SS format to total seconds correctly. No hallucinations.
+    
+    For each moment:
+    - title: Catchy Arabic title (max 5 words).
+    - seconds: Exact integer timestamp.
+    - reason_ar: High-quality Arabic explanation of why this moment matters, with no ambiguity.
+    
+    SRT CONTENT:
     {srt_slice}
     """
 
     try:
         headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+        # استخدام gpt-4o لضمان أعلى دقة في التوقيتات والتحليل
         payload = {
-            "model": "gpt-4o-mini",
+            "model": "gpt-4.1",
             "messages": [
-                {"role": "system", "content": "أنت خبير في تقييم محتوى الفيديو واستخراج اللحظات الهامة والدرامية بدقة عالية في التوقيت."},
+                {"role": "system", "content": "أنت خبير محترف في تحليل الفيديوهات واستخراج اللحظات الدرامية بدقة زمنية متناهية."},
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0.1
@@ -1092,13 +1114,20 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
         
         if response.status_code == 200:
             content = response.json()['choices'][0]['message']['content'].strip()
-            # استخراج الـ JSON
             match = re.search(r'\[.*\]', content, re.DOTALL)
             if match:
                 highlights = json.loads(match.group(0))
-                # فلترة أي توقيتات خاطئة تتجاوز مدة الفيديو
+                # ضمان بقاء التوقيتات داخل نطاق الفيديو
                 if duration > 0:
-                    highlights = [m for m in highlights if m.get("seconds", 0) <= duration]
+                    for h in highlights:
+                        if not isinstance(h.get('seconds'), (int, float)):
+                            try: h['seconds'] = int(h.get('seconds', 0))
+                            except: h['seconds'] = 0
+                        
+                        if h['seconds'] > duration:
+                            h['seconds'] = duration
+                        if h['seconds'] < 0:
+                            h['seconds'] = 0
                 return highlights
         return []
     except Exception as e:
@@ -1150,7 +1179,7 @@ async def summarize_world_video_ai(transcript, original_url):
     try:
         headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
         payload = {
-            "model": "gpt-4o-mini",
+            "model": "gpt-4o",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -1232,7 +1261,7 @@ async def analyze_geopolitical_ai(text):
     try:
         headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
         payload = {
-            "model": "gpt-4o-mini",
+            "model": "gpt-4o",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -1514,16 +1543,6 @@ async def get_video_insight_endpoint(news_type: str, news_id: int, db: Session =
             meta = ydl.extract_info(news_item.link, download=False)
             duration = meta.get("duration") or 0
     except: pass
-
-    # محاولة بديلة إذا فشل yt-dlp في جلب المدة، استخراجها من آخر توقيت في SRT
-    if duration <= 0 and srt:
-        try:
-            # البحث عن صيغة التوقيت 00:00:00,000
-            time_matches = re.findall(r'(\d{2}):(\d{2}):(\d{2}),\d{3}', srt)
-            if time_matches:
-                last_time = time_matches[-1]
-                duration = int(last_time[0]) * 3600 + int(last_time[1]) * 60 + int(last_time[2])
-        except: pass
 
     highlights = await analyze_video_highlights_ai(srt, duration, news_item.title or "")
     
