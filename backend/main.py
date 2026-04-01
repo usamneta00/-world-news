@@ -1207,7 +1207,7 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
         VIDEO TITLE: {title}
         TIME RANGE: {t0} to {t1}
         
-        TASK: Identify the 5-7 most "Powerful" and "High-Impact" moments in THIS segment.
+        TASK: Identify the all most "Powerful" and "High-Impact" moments in THIS segment.
         
         CONSTRAINTS:
         1. EVERYTHING (title and reason) must be in ARABIC.
