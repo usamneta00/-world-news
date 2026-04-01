@@ -1207,19 +1207,20 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
         VIDEO TITLE: {title}
         TIME RANGE: {t0} to {t1}
         
-        TASK: Identify the 2-3 most "Powerful" and "High-Impact" moments in THIS segment only.
+        TASK: Identify the 5-7 most "Powerful" and "High-Impact" moments in THIS segment.
         
         CONSTRAINTS:
         1. EVERYTHING (title and reason) must be in ARABIC.
-        2. ACCURACY & PRECISION: For each moment, you MUST copy the **start_time** literally from the SRT timestamp (the part before -->).
-           Example: if you find a moment at 00:05:22,120, set start_time to "00:05:22,120".
-        3. NO HALLUCINATIONS. Only use times that exist in the text below.
-        4. Provide the result strictly in JSON list.
+        2. Moments MUST be from throughout this segment timeline.
+        3. Provide the result strictly in JSON list.
+        4. ACCURACY & PRECISION: For each moment, you MUST copy the **start_time** literally from the SRT timestamp (the part before -->). Example: "00:05:22,120".
+        5. The "seconds" value must match the exact time speech starts in the SRT.
         
         For each moment:
         - title: Catchy Arabic title (max 5 words).
         - start_time: EXACT STRING copied from the SRT below.
-        - reason_ar: High-quality Arabic explanation of why this moment matters.
+        - seconds: Exact integer timestamp from beginning of this segment.
+        - reason_ar: High-quality Arabic explanation of why this moment matters, with no ambiguity.
         
         SRT SEGMENT:
         {part_srt}
