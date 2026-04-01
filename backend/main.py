@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Set
+from typing import List, Optional, Dict, Set, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, desc
@@ -942,6 +942,137 @@ def translate_to_arabic(text: str) -> str:
         logger.warning(f"Translation skipped (timeout/error): {e}")
         return text
 
+
+# ============================================
+# SRT & Timing Utilities (from mosalslat)
+# ============================================
+
+def parse_srt_time_to_seconds(ts: str) -> Optional[float]:
+    """Parse SRT timestamp 'HH:MM:SS,mmm' or 'HH:MM:SS.mmm' to seconds."""
+    ts = (ts or "").strip().replace("\ufeff", "")
+    if not ts:
+        return None
+    ts = ts.replace(".", ",")
+    if "," not in ts:
+        ts += ",000"
+    try:
+        time_part, ms_part = ts.rsplit(",", 1)
+        h, m, s = time_part.split(":")
+        return int(h) * 3600 + int(m) * 60 + int(s) + int(ms_part) / 1000.0
+    except (ValueError, AttributeError):
+        return None
+
+def parse_srt_cues(srt_content: str) -> List[Dict[str, Any]]:
+    """Parse SRT into cue dicts with absolute timeline (same as video)."""
+    cues: List[Dict[str, Any]] = []
+    blocks = re.split(r"\n\s*\n", (srt_content or "").strip())
+    for block in blocks:
+        lines = [ln.rstrip() for ln in block.splitlines()]
+        if not any(line.strip() for line in lines):
+            continue
+        idx = 0
+        if idx < len(lines) and re.match(r"^\d+$", lines[idx].strip()):
+            idx += 1
+        if idx >= len(lines):
+            continue
+        m = re.match(
+            r"(\d{2}:\d{2}:\d{2}[,.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,.]\d{3})",
+            lines[idx].strip(),
+        )
+        if not m:
+            continue
+        start_str = m.group(1).replace(".", ",")
+        end_str = m.group(2).replace(".", ",")
+        text_lines = lines[idx + 1 :]
+        text = "\n".join(text_lines).strip()
+        ss = parse_srt_time_to_seconds(start_str)
+        es = parse_srt_time_to_seconds(end_str)
+        if ss is None or es is None:
+            continue
+        cues.append(
+            {
+                "start_str": start_str,
+                "end_str": end_str,
+                "start_sec": ss,
+                "end_sec": es,
+                "text": text,
+            }
+        )
+    return cues
+
+def split_cues_into_time_windows(cues: List[Dict[str, Any]], window_sec: int = 600) -> List[List[Dict[str, Any]]]:
+    """Split cues into groups covering ~window_sec of the timeline (not byte size)."""
+    if not cues:
+        return []
+    chunks: List[List[Dict[str, Any]]] = []
+    chunk: List[Dict[str, Any]] = [cues[0]]
+    anchor = cues[0]["start_sec"]
+    for c in cues[1:]:
+        if c["start_sec"] - anchor >= window_sec:
+            chunks.append(chunk)
+            chunk = []
+            anchor = c["start_sec"]
+        chunk.append(c)
+    if chunk:
+        chunks.append(chunk)
+    return chunks
+
+def cues_to_srt_string(cues: List[Dict[str, Any]]) -> str:
+    """Rebuild SRT text from cue list."""
+    parts: List[str] = []
+    for i, c in enumerate(cues, 1):
+        parts.append(str(i))
+        parts.append(f"{c['start_str']} --> {c['end_str']}")
+        parts.append(c["text"])
+        parts.append("")
+    return "\n".join(parts)
+
+def _normalize_ts(s: str) -> str:
+    return s.strip().replace(".", ",")
+
+def resolve_highlight_seconds(
+    h: dict,
+    part_cues: List[Dict[str, Any]],
+    part_index: int,
+    duration_cap: int,
+) -> int:
+    """Turn GPT output into absolute seconds on the video timeline."""
+    st = h.get("start_time") or h.get("timecode")
+    if isinstance(st, str) and st.strip():
+        sec_f = parse_srt_time_to_seconds(st.strip())
+        if sec_f is not None:
+            allowed = {_normalize_ts(c["start_str"]) for c in part_cues}
+            n = _normalize_ts(st)
+            if n in allowed:
+                s = int(sec_f)
+            elif part_cues:
+                nearest = min(part_cues, key=lambda c: abs(c["start_sec"] - sec_f))
+                if abs(nearest["start_sec"] - sec_f) <= 3.0:
+                    s = int(nearest["start_sec"])
+                else:
+                    s = int(sec_f)
+            else:
+                s = int(sec_f)
+            return max(0, min(s, duration_cap))
+    try:
+        sec = int(float(h.get("seconds", 0)))
+    except (TypeError, ValueError):
+        sec = 0
+    return max(0, min(sec, duration_cap))
+
+def dedupe_highlights_by_time(highlights: List[dict], gap_sec: float = 4.0) -> List[dict]:
+    if not highlights:
+        return []
+    highlights.sort(key=lambda x: x.get("seconds", 0))
+    out: List[dict] = []
+    last = -1e9
+    for h in highlights:
+        s = float(h.get("seconds", 0))
+        if s - last >= gap_sec:
+            out.append(h)
+            last = s
+    return out
+
 # ============================================
 # World News Video Processing (Manual AI)
 # ============================================
@@ -1047,92 +1178,94 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
 # No more wrappers here
 
 async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title: str = ""):
-    """استخراج اللحظات الهامة من ملف SRT مع ضمان دقة التوقيتات وعدم تجاوز مدة الفيديو."""
+    """استخراج اللحظات الهامة من ملف SRT مع ضمان دقة التوقيتات وعدم تجاوز مدة الفيديو (منطق mosalslat المطور)."""
     if not OPENAI_API_KEY or not srt_content:
         return []
 
-    # تحسين استخراج المدة من SRT في حال تعثر yt-dlp
-    if duration <= 0:
+    cues = parse_srt_cues(srt_content)
+    if not cues:
+        return []
+
+    # Duration: max of passed duration or last cue end
+    max_end = max(c["end_sec"] for c in cues)
+    duration_cap = int(max(duration, int(max_end) + 1)) if duration > 0 else int(max_end) + 1
+
+    # تقسيم النص إلى نوافذ زمنية (~10 دقائق لكل نافذة) لضمان تغطية الفيديو بالكامل بدقة
+    time_windows = split_cues_into_time_windows(cues, window_sec=600)
+    num_parts = len(time_windows)
+    
+    all_highlights: List[dict] = []
+    logger.info(f"🧠 [Highlights] تقسيم SRT إلى {num_parts} أجزاء زمنية للتحليل الكامل...")
+
+    async def fetch_highlights_for_part(part_index: int, part_cues: List[Dict[str, Any]]):
+        part_srt = cues_to_srt_string(part_cues)
+        t0 = part_cues[0]["start_str"]
+        t1 = part_cues[-1]["end_str"]
+
+        prompt = f"""
+        Below is a segment (Part {part_index + 1} of {num_parts}) of a video transcript in SRT format. 
+        VIDEO TITLE: {title}
+        TIME RANGE: {t0} to {t1}
+        
+        TASK: Identify the 2-3 most "Powerful" and "High-Impact" moments in THIS segment only.
+        
+        CONSTRAINTS:
+        1. EVERYTHING (title and reason) must be in ARABIC.
+        2. ACCURACY & PRECISION: For each moment, you MUST copy the **start_time** literally from the SRT timestamp (the part before -->).
+           Example: if you find a moment at 00:05:22,120, set start_time to "00:05:22,120".
+        3. NO HALLUCINATIONS. Only use times that exist in the text below.
+        4. Provide the result strictly in JSON list.
+        
+        For each moment:
+        - title: Catchy Arabic title (max 5 words).
+        - start_time: EXACT STRING copied from the SRT below.
+        - reason_ar: High-quality Arabic explanation of why this moment matters.
+        
+        SRT SEGMENT:
+        {part_srt}
+        """
+
         try:
-            times = re.findall(r'(\d{2}:\d{2}:\d{2},\d{3})', srt_content)
-            if times:
-                last_time = times[-1]
-                h, m, s_ms = last_time.split(':')
-                s, _ = s_ms.split(',')
-                duration = int(h) * 3600 + int(m) * 60 + int(s)
-        except: pass
-
-    # تقسيم النص لضمان تغطية الفيديو بالكامل للفيديوهات الطويلة (أكثر من 25-30 دقيقة)
-    if len(srt_content) > 170000:
-        part = 55000
-        start_part = srt_content[:part]
-        mid_point = len(srt_content) // 2
-        mid_part = srt_content[mid_point - part//2 : mid_point + part//2]
-        end_part = srt_content[-part:]
-        srt_slice = f"{start_part}\n...[Bypassed content]...\n{mid_part}\n...[Bypassed content]...\n{end_part}"
-    else:
-        srt_slice = srt_content
-    
-    prompt = f"""
-    Below is a video transcript in SRT format. 
-    VIDEO TITLE: {title}
-    VIDEO DURATION: {duration} seconds (approx {duration // 60} minutes).
-    
-    TASK: Identify the 5-7 most "Powerful" and "High-Impact" moments across the ENTIRE video.
-    
-    CONSTRAINTS:
-    1. EVERYTHING (title and reason) must be in ARABIC.
-    2. Moments MUST be from throughout the whole video timeline (START, MIDDLE, END).
-    3. Timestamps MUST NOT exceed the video duration of {duration} seconds.
-    4. Provide the result strictly in JSON list.
-    5. ACCURACY & PRECISION: The "seconds" value must match the exact time speech starts in the SRT. Convert HH:MM:SS format to total seconds correctly. No hallucinations.
-    
-    For each moment:
-    - title: Catchy Arabic title (max 5 words).
-    - seconds: Exact integer timestamp.
-    - reason_ar: High-quality Arabic explanation of why this moment matters, with no ambiguity.
-    
-    SRT CONTENT:
-    {srt_slice}
-    """
-
-    try:
-        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
-        # استخدام gpt-4o لضمان أعلى دقة في التوقيتات والتحليل
-        payload = {
+            headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+            payload = {
             "model": "gpt-4.1",
-            "messages": [
-                {"role": "system", "content": "أنت خبير محترف في تحليل الفيديوهات واستخراج اللحظات الدرامية بدقة زمنية متناهية."},
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": 0.1
-        }
-        
-        response = await asyncio.to_thread(
-            lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=60)
-        )
-        
-        if response.status_code == 200:
-            content = response.json()['choices'][0]['message']['content'].strip()
-            match = re.search(r'\[.*\]', content, re.DOTALL)
-            if match:
-                highlights = json.loads(match.group(0))
-                # ضمان بقاء التوقيتات داخل نطاق الفيديو
-                if duration > 0:
-                    for h in highlights:
-                        if not isinstance(h.get('seconds'), (int, float)):
-                            try: h['seconds'] = int(h.get('seconds', 0))
-                            except: h['seconds'] = 0
-                        
-                        if h['seconds'] > duration:
-                            h['seconds'] = duration
-                        if h['seconds'] < 0:
-                            h['seconds'] = 0
-                return highlights
-        return []
-    except Exception as e:
-        logger.error(f"Error in highlights AI: {e}")
-        return []
+                "messages": [
+                    {"role": "system", "content": "أنت خبير محترف في تحليل الفيديوهات. يجب أن يكون الحقل start_time نسخاً حرفياً لأحد توقيتات البداية في نص SRT."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.1
+            }
+            
+            response = await asyncio.to_thread(
+                lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=60)
+            )
+            
+            if response.status_code == 200:
+                content = response.json()['choices'][0]['message']['content'].strip()
+                match = re.search(r'\[.*\]', content, re.DOTALL)
+                if match:
+                    return json.loads(match.group(0))
+            return []
+        except Exception as e:
+            logger.error(f"Error in highlights AI part {part_index}: {e}")
+            return []
+
+    # معالجة الأجزاء (يمكن القيام بذلك بالتوازي إذا لزم الأمر، ولكن هنا نلتزم بالترتيب لضمان الاستقرار)
+    for i, part_cues in enumerate(time_windows):
+        chunk_highlights = await fetch_highlights_for_part(i, part_cues)
+        if chunk_highlights:
+            for h in chunk_highlights:
+                if not isinstance(h, dict): continue
+                # تحويل النص المنسوخ إلى ثوانٍ مطلقة بدقة
+                h["seconds"] = resolve_highlight_seconds(h, part_cues, i, duration_cap)
+            all_highlights.extend(chunk_highlights)
+
+    # إزالة التكرار وترتيب اللحظات
+    all_highlights = dedupe_highlights_by_time(all_highlights, gap_sec=5.0)
+    all_highlights.sort(key=lambda x: x.get("seconds", 0))
+
+    logger.info(f"✅ [Highlights] تم استخراج {len(all_highlights)} لحظة بدقة عالية.")
+    return all_highlights
 
 async def translate_title_ai(english_title: str) -> str:
     """ترجمة عنوان الفيديو إلى العربية بأسلوب إخباري باستخدام AI."""
