@@ -1468,7 +1468,7 @@ async def clean_full_transcript_ai(transcript: str) -> str:
             logger.info(f"🧹 Cleaning transcript chunk {i+1}/{len(chunks)}...")
             headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
             payload = {
-                "model": "gpt-4o",
+                "model": "gpt-5.4",
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"نظف النص التالي بدقة:\n\n{chunk}"}
