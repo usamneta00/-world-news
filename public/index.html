@@ -1237,63 +1237,103 @@
 
         /* Video Insight Styles */
         .moment-card {
-            background: rgba(255, 255, 255, 0.03);
+            background: rgba(255, 255, 255, 0.02);
             border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 12px;
+            border-radius: 16px;
+            padding: 16px;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
             position: relative;
             overflow: hidden;
             text-align: right;
+            backdrop-filter: blur(5px);
+        }
+
+        .moment-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(45, 212, 191, 0.1), transparent);
+            opacity: 0;
+            transition: opacity 0.4s ease;
         }
 
         .moment-card:hover {
-            background: rgba(45, 212, 191, 0.05);
+            background: rgba(255, 255, 255, 0.05);
             border-color: rgba(45, 212, 191, 0.3);
-            transform: translateX(-4px);
+            transform: translateX(-8px) scale(1.02);
+            box-shadow: 20px 0 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .moment-card:hover::before {
+            opacity: 1;
         }
 
         .moment-card.active {
-            background: rgba(45, 212, 191, 0.1);
+            background: rgba(45, 212, 191, 0.08);
             border-color: rgba(45, 212, 191, 0.5);
-            box-shadow: 0 0 20px rgba(45, 212, 191, 0.1);
+            box-shadow: 0 0 30px rgba(45, 212, 191, 0.15);
         }
 
         .moment-time {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 10px;
+            font-size: 11px;
+            font-weight: 700;
             color: #2dd4bf;
             background: rgba(45, 212, 191, 0.1);
-            padding: 2px 8px;
-            border-radius: 6px;
+            padding: 4px 12px;
+            border-radius: 8px;
             width: fit-content;
-            margin-bottom: 8px;
+            margin-bottom: 12px;
             margin-right: auto;
+            border: 1px solid rgba(45, 212, 191, 0.2);
         }
 
         .moment-title {
-            font-size: 13px;
-            font-weight: 700;
+            font-size: 15px;
+            font-weight: 800;
             color: #fff;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
             line-height: 1.4;
+            letter-spacing: -0.02em;
         }
 
         .moment-reason {
-            font-size: 11px;
+            font-size: 12px;
             color: #9ca3af;
-            line-height: 1.6;
-            margin-top: 6px;
+            line-height: 1.7;
+            margin-top: 8px;
+            font-weight: 300;
+        }
+
+        /* Transcript Narrative Styling */
+        #insight-full-text-content p {
+            position: relative;
+            padding-right: 1.5rem;
+            margin-bottom: 2rem;
+            color: #d1d5db;
+        }
+
+        #insight-full-text-content p::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 0.75rem;
+            width: 8px;
+            height: 8px;
+            background: #2dd4bf;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #2dd4bf;
+            opacity: 0.4;
         }
 
         /* Premium Slim Scrollbar */
         .insight-scrollbar::-webkit-scrollbar {
-            width: 3px;
+            width: 4px;
         }
 
         .insight-scrollbar::-webkit-scrollbar-track {
-            background: transparent;
+            background: rgba(0, 0, 0, 0.1);
         }
 
         .insight-scrollbar::-webkit-scrollbar-thumb {
@@ -1303,11 +1343,11 @@
         }
 
         .insight-scrollbar:hover::-webkit-scrollbar-thumb {
-            background: rgba(45, 212, 191, 0.3);
+            background: rgba(45, 212, 191, 0.4);
         }
 
         .insight-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: rgba(45, 212, 191, 0.6) !important;
+            background: #2dd4bf !important;
         }
     </style>
 </head>
@@ -1998,21 +2038,50 @@
                                 class="text-[10px] text-neutral-500 text-center font-mono opacity-50 uppercase tracking-widest leading-relaxed">
                                 THIS ACTION GENERATES A COMPREHENSIVE SUMMARY AND GEOPOLITICAL IMPACT ANALYSIS</p>
                         </div>
-                        <!-- Full Text Section -->
-                        <div class="mt-8 border-t border-white/10 pt-6">
-                            <div class="flex items-center justify-between mb-4">
-                                <h4 class="text-xs font-black text-neutral-300 uppercase tracking-widest flex items-center gap-2">
-                                    <i data-lucide="file-text" class="w-3.5 h-3.5 text-neon-blue"></i> النص الكامل للفيديو
-                                </h4>
-                                <button id="toggle-full-text" onclick="toggleFullText()" class="px-3 py-1 bg-white/5 hover:bg-neon-blue/20 border border-white/10 rounded-lg text-[10px] text-neon-blue hover:text-white transition-all uppercase font-mono">Show Text</button>
-                            </div>
-                            <div id="insight-full-text-container" class="hidden animate-in fade-in slide-in-from-top-2 duration-300">
-                                <div id="insight-full-text-loading" class="hidden py-10 text-center bg-black/20 rounded-xl border border-white/5">
-                                    <div class="w-6 h-6 border-2 border-neon-blue border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-                                    <p class="text-[10px] text-neutral-500 font-mono uppercase tracking-widest">Neural Cleanup in progress...</p>
+                        <!-- Premium Full Text Section -->
+                        <div class="mt-8 border-t border-white/10 pt-8">
+                            <div class="flex items-center justify-between mb-6">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-gradient-to-br from-neon-blue/20 to-neon-accent/20 rounded-xl flex items-center justify-center border border-neon-blue/20">
+                                        <i data-lucide="scroll-text" class="w-5 h-5 text-neon-blue"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-sm font-black text-white uppercase tracking-tighter">النص الكامل والمدقق</h4>
+                                        <p class="text-[9px] text-neutral-500 font-mono uppercase">AI-Refined Narrative Transcript</p>
+                                    </div>
                                 </div>
-                                <div id="insight-full-text-content" class="text-sm text-neutral-300 leading-relaxed text-right bg-black/40 p-5 rounded-xl border border-white/10 max-h-[500px] overflow-y-auto insight-scrollbar font-light">
-                                    <!-- Full text injected here -->
+                                <div class="flex items-center gap-2">
+                                    <button id="copy-full-text" onclick="copyFullText()" class="hidden p-2 bg-white/5 hover:bg-neon-blue/10 border border-white/10 rounded-lg text-neutral-400 hover:text-neon-blue transition-all" title="نسخ النص">
+                                        <i data-lucide="copy" class="w-4 h-4"></i>
+                                    </button>
+                                    <button id="toggle-full-text" onclick="toggleFullText()" class="px-5 py-2 bg-neon-blue/10 hover:bg-neon-blue/20 border border-neon-blue/30 rounded-xl text-[11px] font-bold text-neon-blue transition-all uppercase tracking-wider flex items-center gap-2">
+                                        <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                                        <span>عرض النص</span>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div id="insight-full-text-container" class="hidden animate-in fade-in slide-in-from-top-4 duration-500">
+                                <div class="relative group">
+                                    <!-- Decorative elements -->
+                                    <div class="absolute -inset-0.5 bg-gradient-to-r from-neon-blue/20 to-neon-accent/20 rounded-2xl blur opacity-30 group-hover:opacity-50 transition duration-1000"></div>
+                                    
+                                    <div class="relative bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+                                        <div id="insight-full-text-loading" class="hidden py-16 text-center">
+                                            <div class="relative w-12 h-12 mx-auto mb-4">
+                                                <div class="absolute inset-0 border-2 border-neon-blue/20 rounded-full"></div>
+                                                <div class="absolute inset-0 border-2 border-neon-blue border-t-transparent rounded-full animate-spin"></div>
+                                            </div>
+                                            <p class="text-[10px] text-neutral-400 font-mono uppercase tracking-[0.2em] animate-pulse">Neural Synthesis Active</p>
+                                        </div>
+                                        
+                                        <div id="insight-full-text-content" class="text-base md:text-lg text-neutral-200 leading-[1.8] text-right p-8 md:p-12 max-h-[600px] overflow-y-auto insight-scrollbar font-light selection:bg-neon-blue/30">
+                                            <!-- Full text injected here -->
+                                        </div>
+                                        
+                                        <!-- Bottom fade effect -->
+                                        <div class="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/80 to-transparent pointer-events-none"></div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2367,15 +2436,18 @@
             const btn = document.getElementById('toggle-full-text');
             const contentEl = document.getElementById('insight-full-text-content');
             const loadingEl = document.getElementById('insight-full-text-loading');
+            const copyBtn = document.getElementById('copy-full-text');
 
             if (container.classList.contains('hidden')) {
                 container.classList.remove('hidden');
-                btn.textContent = 'Hide Text';
+                btn.innerHTML = '<i data-lucide="eye-off" class="w-3.5 h-3.5"></i><span>إخفاء النص</span>';
+                if (window.lucide) lucide.createIcons();
                 
                 // If content is empty, fetch it
                 if (!contentEl.textContent.trim()) {
                     loadingEl.classList.remove('hidden');
                     contentEl.classList.add('hidden');
+                    copyBtn.classList.add('hidden');
                     
                     try {
                         const r = await fetch(`/api/video-full-text/${currentInsightType}/${currentInsightId}`);
@@ -2383,21 +2455,47 @@
                         
                         if (data.full_text) {
                             // Convert newlines to paragraphs for better display
-                            contentEl.innerHTML = data.full_text.split('\n\n').map(p => `<p class="mb-4">${p}</p>`).join('');
+                            contentEl.innerHTML = data.full_text.split('\n\n').map(p => `
+                                <p class="mb-8 relative pr-6">
+                                    <span class="absolute right-0 top-3 w-1.5 h-1.5 rounded-full bg-neon-blue/40"></span>
+                                    ${p}
+                                </p>
+                            `).join('');
+                            copyBtn.classList.remove('hidden');
                         } else if (data.error) {
-                            contentEl.textContent = `Error: ${data.error}`;
+                            contentEl.innerHTML = `<div class="text-red-400 text-center py-10 font-mono text-xs uppercase tracking-widest">Neural Link Error: ${data.error}</div>`;
                         }
                     } catch (e) {
-                        contentEl.textContent = "فشل في تحميل النص الكامل.";
+                        contentEl.innerHTML = `<div class="text-red-400 text-center py-10 font-mono text-xs uppercase tracking-widest">Connection to Nexus Lost</div>`;
                     } finally {
                         loadingEl.classList.add('hidden');
                         contentEl.classList.remove('hidden');
                     }
+                } else {
+                    copyBtn.classList.remove('hidden');
                 }
             } else {
                 container.classList.add('hidden');
-                btn.textContent = 'Show Text';
+                btn.innerHTML = '<i data-lucide="eye" class="w-3.5 h-3.5"></i><span>عرض النص</span>';
+                copyBtn.classList.add('hidden');
+                if (window.lucide) lucide.createIcons();
             }
+        }
+
+        function copyFullText() {
+            const contentEl = document.getElementById('insight-full-text-content');
+            const text = contentEl.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const copyBtn = document.getElementById('copy-full-text');
+                const originalHTML = copyBtn.innerHTML;
+                copyBtn.innerHTML = '<i data-lucide="check" class="w-4 h-4 text-emerald-400"></i>';
+                if (window.lucide) lucide.createIcons();
+                showToast('تم نسخ النص الكامل للجهاز');
+                setTimeout(() => {
+                    copyBtn.innerHTML = originalHTML;
+                    if (window.lucide) lucide.createIcons();
+                }, 2000);
+            });
         }
 
         function closeInsight() {
