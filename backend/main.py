@@ -1248,7 +1248,7 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
         try:
             headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
             payload = {
-            "model": "gpt-4o-mini",
+            "model": "gpt-4.1",
                 "messages": [
                     {"role": "system", "content": "أنت خبير محترف في تحليل الفيديوهات. يجب أن يكون الحقل start_time نسخاً حرفياً لأحد توقيتات البداية في نص SRT."},
                     {"role": "user", "content": prompt}
