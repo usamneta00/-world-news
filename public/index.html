@@ -1998,6 +1998,24 @@
                                 class="text-[10px] text-neutral-500 text-center font-mono opacity-50 uppercase tracking-widest leading-relaxed">
                                 THIS ACTION GENERATES A COMPREHENSIVE SUMMARY AND GEOPOLITICAL IMPACT ANALYSIS</p>
                         </div>
+                        <!-- Full Text Section -->
+                        <div class="mt-8 border-t border-white/10 pt-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-xs font-black text-neutral-300 uppercase tracking-widest flex items-center gap-2">
+                                    <i data-lucide="file-text" class="w-3.5 h-3.5 text-neon-blue"></i> النص الكامل للفيديو
+                                </h4>
+                                <button id="toggle-full-text" onclick="toggleFullText()" class="px-3 py-1 bg-white/5 hover:bg-neon-blue/20 border border-white/10 rounded-lg text-[10px] text-neon-blue hover:text-white transition-all uppercase font-mono">Show Text</button>
+                            </div>
+                            <div id="insight-full-text-container" class="hidden animate-in fade-in slide-in-from-top-2 duration-300">
+                                <div id="insight-full-text-loading" class="hidden py-10 text-center bg-black/20 rounded-xl border border-white/5">
+                                    <div class="w-6 h-6 border-2 border-neon-blue border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                                    <p class="text-[10px] text-neutral-500 font-mono uppercase tracking-widest">Neural Cleanup in progress...</p>
+                                </div>
+                                <div id="insight-full-text-content" class="text-sm text-neutral-300 leading-relaxed text-right bg-black/40 p-5 rounded-xl border border-white/10 max-h-[500px] overflow-y-auto insight-scrollbar font-light">
+                                    <!-- Full text injected here -->
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -2344,8 +2362,50 @@
             }
         }
 
+        async function toggleFullText() {
+            const container = document.getElementById('insight-full-text-container');
+            const btn = document.getElementById('toggle-full-text');
+            const contentEl = document.getElementById('insight-full-text-content');
+            const loadingEl = document.getElementById('insight-full-text-loading');
+
+            if (container.classList.contains('hidden')) {
+                container.classList.remove('hidden');
+                btn.textContent = 'Hide Text';
+                
+                // If content is empty, fetch it
+                if (!contentEl.textContent.trim()) {
+                    loadingEl.classList.remove('hidden');
+                    contentEl.classList.add('hidden');
+                    
+                    try {
+                        const r = await fetch(`/api/video-full-text/${currentInsightType}/${currentInsightId}`);
+                        const data = await r.json();
+                        
+                        if (data.full_text) {
+                            // Convert newlines to paragraphs for better display
+                            contentEl.innerHTML = data.full_text.split('\n\n').map(p => `<p class="mb-4">${p}</p>`).join('');
+                        } else if (data.error) {
+                            contentEl.textContent = `Error: ${data.error}`;
+                        }
+                    } catch (e) {
+                        contentEl.textContent = "فشل في تحميل النص الكامل.";
+                    } finally {
+                        loadingEl.classList.add('hidden');
+                        contentEl.classList.remove('hidden');
+                    }
+                }
+            } else {
+                container.classList.add('hidden');
+                btn.textContent = 'Show Text';
+            }
+        }
+
         function closeInsight() {
             document.getElementById('insight-modal').classList.add('hidden');
+            // Reset Full Text container
+            document.getElementById('insight-full-text-container').classList.add('hidden');
+            document.getElementById('insight-full-text-content').innerHTML = '';
+            document.getElementById('toggle-full-text').textContent = 'Show Text';
             if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
                 ytPlayer.stopVideo();
             } else {

@@ -97,6 +97,7 @@ class NewsItem(Base):
     created_at = Column(DateTime, default=datetime.now) # Track when added to our DB
     srt_transcript = Column(String, nullable=True) # SRT transcript from DownSub
     full_transcript = Column(String, nullable=True) # TXT transcript from DownSub
+    full_transcript_cleaned = Column(String, nullable=True) # Cleaned transcript for UI
     highlights = Column(String, nullable=True) # JSON string of highlights (moments)
 
 class ChannelLastVideo(Base):
@@ -123,6 +124,7 @@ class YemenNewsItem(Base):
     created_at = Column(DateTime, default=datetime.now) # Track when added to our DB
     srt_transcript = Column(String, nullable=True)
     full_transcript = Column(String, nullable=True)
+    full_transcript_cleaned = Column(String, nullable=True)
     highlights = Column(String, nullable=True)
 
 class YemenChannelLastVideo(Base):
@@ -149,6 +151,7 @@ class DubbedNewsItem(Base):
     created_at = Column(DateTime, default=datetime.now)
     srt_transcript = Column(String, nullable=True)
     full_transcript = Column(String, nullable=True)
+    full_transcript_cleaned = Column(String, nullable=True)
     highlights = Column(String, nullable=True)
 
 class DubbedChannelLastVideo(Base):
@@ -281,6 +284,12 @@ def migrate_database():
                 try: conn.commit() 
                 except: pass 
 
+            if 'full_transcript_cleaned' not in columns:
+                logger.info("Adding full_transcript_cleaned column to news table...")
+                conn.execute(text("ALTER TABLE news ADD COLUMN full_transcript_cleaned TEXT"))
+                try: conn.commit() 
+                except: pass 
+
             # Check for yemen_news columns
             result = conn.execute(text("PRAGMA table_info(yemen_news)"))
             yemen_columns = [row[1] for row in result]
@@ -299,6 +308,12 @@ def migrate_database():
             if 'highlights' not in yemen_columns:
                 logger.info("Adding highlights column to yemen_news table...")
                 conn.execute(text("ALTER TABLE yemen_news ADD COLUMN highlights TEXT"))
+                try: conn.commit() 
+                except: pass 
+
+            if 'full_transcript_cleaned' not in yemen_columns:
+                logger.info("Adding full_transcript_cleaned column to yemen_news table...")
+                conn.execute(text("ALTER TABLE yemen_news ADD COLUMN full_transcript_cleaned TEXT"))
                 try: conn.commit() 
                 except: pass 
 
@@ -409,6 +424,10 @@ def migrate_database():
                     except: pass 
                 if 'highlights' not in dubbed_columns:
                     conn.execute(text("ALTER TABLE dubbed_news ADD COLUMN highlights TEXT"))
+                    try: conn.commit() 
+                    except: pass 
+                if 'full_transcript_cleaned' not in dubbed_columns:
+                    conn.execute(text("ALTER TABLE dubbed_news ADD COLUMN full_transcript_cleaned TEXT"))
                     try: conn.commit() 
                     except: pass 
                 if 'is_important' not in dubbed_columns:
@@ -1413,6 +1432,64 @@ async def analyze_geopolitical_ai(text):
     except Exception as e:
         return None, str(e)
 
+async def clean_full_transcript_ai(transcript: str) -> str:
+    """تنظيف النص بالكامل وإزالة الحشو والعناوين باستخدام AI."""
+    if not OPENAI_API_KEY or not transcript:
+        return transcript
+
+    # تقسيم النص إلى أجزاء لتجنب حدود التوكنات (حوالي 4000 حرف لكل جزء)
+    max_chunk_size = 4000
+    chunks = []
+    temp_text = transcript
+    while temp_text:
+        chunk = temp_text[:max_chunk_size]
+        if len(temp_text) > max_chunk_size:
+            last_space = chunk.rfind(" ")
+            if last_space != -1:
+                chunk = temp_text[:last_space]
+        chunks.append(chunk)
+        temp_text = temp_text[len(chunk):].lstrip()
+
+    cleaned_chunks = []
+    
+    system_prompt = (
+        "أنت مساعد محترف في معالجة النصوص. مهمتك هي تنظيف النصوص المستخرجة من الفيديوهات وصياغتها بأسلوب عربي سليم.\n"
+        "1. اجعل النص متصلاً وواضحاً ومفهوماً.\n"
+        "2. قم بإزالة كلمات الحشو (مثل: امم، اه، تكرار الكلمات غير المقصود، والعبارات الفارغة التي لا معنى لها).\n"
+        "3. قم بإزالة أي جمل غير مفيدة أو خارجة عن السياق تماماً.\n"
+        "4. ممنوع منعاً باتاً استخدام العناوين (#) أو العناوين الفرعية (##).\n"
+        "5. ممنوع استخدام القوائم النقطية أو الترقيم.\n"
+        "6. يجب أن تكون النتيجة نصاً سردياً متصلاً فقط وبدون أي هوامش أو عناوين.\n"
+        "7. حافظ على المعنى والمحتوى الأصلي دون حذف معلومات مهمة."
+    )
+
+    for i, chunk in enumerate(chunks):
+        try:
+            logger.info(f"🧹 Cleaning transcript chunk {i+1}/{len(chunks)}...")
+            headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+            payload = {
+                "model": "gpt-5.4",
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"نظف النص التالي بدقة:\n\n{chunk}"}
+                ],
+                "temperature": 0.3
+            }
+            response = await asyncio.to_thread(
+                lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=60)
+            )
+            if response.status_code == 200:
+                cleaned_text = response.json()['choices'][0]['message']['content'].strip()
+                cleaned_chunks.append(cleaned_text)
+            else:
+                logger.error(f"AI cleaning failed for chunk {i}: {response.status_code}")
+                cleaned_chunks.append(chunk)
+        except Exception as e:
+            logger.error(f"Exception cleaning transcript chunk {i}: {e}")
+            cleaned_chunks.append(chunk)
+
+    return "\n\n".join(cleaned_chunks)
+
 async def run_video_processing_flow(
     video_url: str,
     *,
@@ -1694,6 +1771,46 @@ async def get_video_insight_endpoint(news_type: str, news_id: int, db: Session =
         "highlights": highlights,
         "has_transcript": bool(srt)
     }
+
+@app.get("/api/video-full-text/{news_type}/{news_id}")
+async def get_video_full_text_endpoint(news_type: str, news_id: int, db: Session = Depends(get_db)):
+    """جلب النص الكامل المنظف للفيديو."""
+    news_item = None
+    if news_type == 'world':
+        news_item = db.query(NewsItem).filter(NewsItem.id == news_id).first()
+    elif news_type == 'yemen':
+        news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == news_id).first()
+    elif news_type == 'dubbed':
+        news_item = db.query(DubbedNewsItem).filter(DubbedNewsItem.id == news_id).first()
+        
+    if not news_item:
+        return {"error": "Item not found"}, 404
+
+    # إذا كان النص المنظف مخزن مسبقاً
+    if hasattr(news_item, 'full_transcript_cleaned') and news_item.full_transcript_cleaned:
+        return {"full_text": news_item.full_transcript_cleaned}
+
+    # التأكد من وجود النص الأصلي
+    transcript = news_item.full_transcript
+    if not transcript:
+        # محاولة جلبه إذا لم يكن موجوداً (نادراً ما يحدث إذا تم عرض اللحظات)
+        logger.info(f"Transcript missing locally, fetching via DownSub: {news_item.link}")
+        res = await asyncio.to_thread(fetch_youtube_subs_downsub, news_item.link, formats=['txt'])
+        transcript = res.get("txt")
+        if not transcript:
+            return {"error": "لا يوجد نص متاح لهذا الفيديو"}, 404
+        news_item.full_transcript = transcript
+        db.commit()
+
+    # تنظيف النص باستخدام الـ AI
+    logger.info(f"Cleaning full transcript for: {news_item.title}")
+    cleaned_text = await clean_full_transcript_ai(transcript)
+    
+    if cleaned_text:
+        news_item.full_transcript_cleaned = cleaned_text
+        db.commit()
+
+    return {"full_text": cleaned_text}
 
 # ============================================
 # News Clustering - Embedding & Clustering Logic
