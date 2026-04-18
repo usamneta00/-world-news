@@ -2502,13 +2502,27 @@
 
         function copyFullText() {
             const contentEl = document.getElementById('insight-full-text-content');
-            const text = contentEl.innerText;
+            let text = contentEl.innerText;
+
+            // إضافة تعليمات معالجة النصوص للذكاء الاصطناعي (ChatGPT)
+            const instructions = "\n\n" +
+                "أنت مساعد محترف في معالجة النصوص والترجمة. مهمتك هي تنظيف النصوص المستخرجة من الفيديوهات وترجمتها بالكامل إلى اللغة العربية وصياغتها بأسلوب سردي سليم.\n" +
+                "1. يجب أن تكون النتيجة باللغة العربية دائماً، بغض النظر عن لغة النص الأصلي (ترجم من الإنجليزية للعربية).\n" +
+                "2. اجعل النص متصلاً وواضحاً ومفهوماً.\n" +
+                "3. قم بإزالة كلمات الحشو والعبارات التكرارية غير المفيدة.\n" +
+                "4. ممنوع منعاً باتاً استخدام أي عناوين (سواء إنجليزية أو عربية) مثل (#) أو (##).\n" +
+                "5. ممنوع استخدام القوائم النقطية أو الترقيم.\n" +
+                "6. يجب أن تكون النتيجة نصاً سردياً عربياً خالصاً وبدون أي هوامش أو مقدمات مثل 'إليك الترجمة'.\n" +
+                "7. حافظ على كافة المعلومات الهامة الواردة في النص الأصلي.";
+
+            text += instructions;
+
             navigator.clipboard.writeText(text).then(() => {
                 const copyBtn = document.getElementById('copy-full-text');
                 const originalHTML = copyBtn.innerHTML;
                 copyBtn.innerHTML = '<i data-lucide="check" class="w-4 h-4 text-emerald-400"></i>';
                 if (window.lucide) lucide.createIcons();
-                showToast('تم نسخ النص الكامل للجهاز');
+                showToast('تم نسخ النص مع تعليمات الذكاء الاصطناعي');
                 setTimeout(() => {
                     copyBtn.innerHTML = originalHTML;
                     if (window.lucide) lucide.createIcons();
