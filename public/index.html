@@ -1991,9 +1991,9 @@
 
     <!-- Video Insight Modal -->
     <div id="insight-modal"
-        class="hidden fixed inset-0 z-[110] bg-obsidian/80 backdrop-blur-md flex items-center justify-center p-4 xl:p-0">
+        class="hidden fixed inset-0 z-[110] bg-obsidian/80 backdrop-blur-md flex items-center justify-center p-0 md:p-4 xl:p-0">
         <div
-            class="glass-panel w-full max-w-6xl xl:max-w-full h-[90vh] lg:h-[85vh] xl:h-screen rounded-xl xl:rounded-none overflow-hidden flex flex-col animate-in zoom-in duration-300 border border-white/10 shadow-2xl">
+            class="glass-panel w-full max-w-6xl xl:max-w-full h-full md:h-[90vh] lg:h-[85vh] xl:h-screen rounded-xl md:rounded-xl xl:rounded-none overflow-hidden flex flex-col animate-in zoom-in duration-300 border border-white/10 shadow-2xl">
             <div class="p-4 border-b border-white/10 flex justify-between items-center bg-black/20">
                 <div class="flex items-center gap-3">
                     <div class="w-8 h-8 bg-neon-blue/20 rounded-lg flex items-center justify-center">
@@ -2009,9 +2009,9 @@
                 </button>
             </div>
 
-            <div class="flex-1 overflow-hidden flex flex-col landscape:flex-row lg:flex-row">
+            <div class="flex-1 overflow-hidden flex flex-col landscape:flex-row lg:flex-row bg-black">
                 <!-- Video Player Area -->
-                <div class="flex-[1.2] lg:flex-1 bg-black flex flex-col overflow-y-auto insight-scrollbar">
+                <div class="flex-1 lg:flex-1 bg-black flex flex-col overflow-y-auto insight-scrollbar border-b border-white/5 landscape:border-b-0 lg:border-b-0">
                     <div class="relative w-full aspect-video bg-neutral-900 group">
                         <iframe id="insight-player" class="w-full h-full" src="" frameborder="0"
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -2108,7 +2108,7 @@
 
                 <!-- Highlights Area -->
                 <div
-                    class="flex-1 lg:w-80 landscape:w-80 bg-neutral-900/50 border-t landscape:border-t-0 lg:border-t-0 border-white/10 landscape:border-l lg:border-l flex flex-col min-h-[200px] md:min-h-[300px] landscape:min-h-0 lg:min-h-0">
+                    class="flex-1 lg:w-80 landscape:w-80 bg-neutral-900/50 border-white/10 landscape:border-l lg:border-l flex flex-col min-h-[300px] landscape:min-h-0 lg:min-h-0">
                     <div class="p-4 border-b border-white/10 flex items-center justify-between">
                         <h4
                             class="text-xs font-black text-neutral-300 uppercase tracking-widest flex items-center gap-2">
