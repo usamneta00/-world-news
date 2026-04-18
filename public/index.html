@@ -2118,8 +2118,24 @@
                             class="text-[10px] bg-white/5 px-2 py-0.5 rounded border border-white/10 text-neutral-500">0</span>
                     </div>
 
-                    <div id="insight-loading"
+                    <div id="insight-start-analysis"
                         class="flex-1 flex flex-col items-center justify-center p-8 text-center bg-black/40">
+                        <div
+                            class="w-16 h-16 bg-neon-blue/10 rounded-full flex items-center justify-center mb-6 border border-neon-blue/20">
+                            <i data-lucide="brain-circuit" class="w-8 h-8 text-neon-blue"></i>
+                        </div>
+                        <p class="text-sm text-neutral-300 font-bold mb-2">الخريطة الذهنية للفيديو</p>
+                        <p class="text-[10px] text-neutral-500 font-mono leading-relaxed uppercase mb-6">Extract thematic
+                            highlights using AI analysis</p>
+                        <button onclick="fetch_highlights_for_part()"
+                            class="px-6 py-2.5 bg-neon-blue text-black font-black text-xs rounded-lg hover:bg-white transition-all uppercase tracking-widest flex items-center gap-2">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                            <span>بدء استخراج اللحظات</span>
+                        </button>
+                    </div>
+
+                    <div id="insight-loading"
+                        class="flex-1 flex flex-col items-center justify-center p-8 text-center bg-black/40 hidden">
                         <div
                             class="w-12 h-12 border-4 border-neon-blue border-t-transparent rounded-full animate-spin mb-6">
                         </div>
@@ -2365,71 +2381,68 @@
             // Extract YouTube ID
             const videoId = item.link?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/)?.[1];
             if (!videoId) {
-                // If not a video, fallback to direct publish or show error
                 alert("هذا النوع من الأخبار لا يدعم استخلاص اللحظات المرئية.");
                 return;
             }
             item.video_id = videoId; // Store temporarily
 
-            // Show Modal & Loader
+            // Show Modal & Reset UI
             const modal = document.getElementById('insight-modal');
             modal.classList.remove('hidden');
-            document.getElementById('insight-loading').classList.remove('hidden');
+            
+            document.getElementById('insight-start-analysis').classList.remove('hidden');
+            document.getElementById('insight-loading').classList.add('hidden');
             document.getElementById('insight-highlights').classList.add('hidden');
             document.getElementById('insight-error').classList.add('hidden');
+            document.getElementById('moments-count').textContent = '0';
             document.body.style.overflow = 'hidden';
 
             // Set Meta info
             document.getElementById('insight-title').textContent = item.title;
             document.getElementById('insight-video-id').textContent = videoId;
 
-            // Load Video via API if available, else fallback
-            const playerVars = {
-                autoplay: 1,
-                enablejsapi: 1,
-                cc_load_policy: 1,
-                cc_lang_pref: 'ar',
-                fs: 1,
-                rel: 0,
-                playsinline: 1
-            };
-
+            // Load Video
+            const playerVars = { autoplay: 1, enablejsapi: 1, cc_load_policy: 1, cc_lang_pref: 'ar', fs: 1, rel: 0, playsinline: 1 };
             if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
-                ytPlayer.loadVideoById({
-                    videoId: videoId,
-                    startSeconds: 0
-                });
+                ytPlayer.loadVideoById({ videoId: videoId, startSeconds: 0 });
             } else {
                 const playerEl = document.getElementById('insight-player');
                 const params = new URLSearchParams(playerVars);
                 playerEl.src = `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
-
-                // Initialize API if YT is loaded
                 if (window.YT && window.YT.Player) {
                     ytPlayer = new YT.Player('insight-player', {
                         playerVars: playerVars,
-                        events: {
-                            'onReady': (e) => { console.log('YT Player Ready'); }
-                        }
+                        events: { 'onReady': (e) => { console.log('YT Player Ready'); } }
                     });
                 }
             }
+            if (window.lucide) lucide.createIcons();
+        }
 
-            lucide.createIcons();
+        async function fetch_highlights_for_part() {
+            if (!currentInsightId || !currentInsightType) return;
+
+            const startEl = document.getElementById('insight-start-analysis');
+            const loadingEl = document.getElementById('insight-loading');
+            const listEl = document.getElementById('insight-highlights');
+            const errorEl = document.getElementById('insight-error');
+
+            startEl.classList.add('hidden');
+            loadingEl.classList.remove('hidden');
+            errorEl.classList.add('hidden');
 
             try {
-                // Call backend for transcript and highlights
-                const r = await fetch(`/api/video-insight/${type}/${id}`);
+                const r = await fetch(`/api/video-insight/${currentInsightType}/${currentInsightId}`);
                 const data = await r.json();
 
                 if (data.error) throw new Error(data.error);
 
-                document.getElementById('insight-loading').classList.add('hidden');
-                const listEl = document.getElementById('insight-highlights');
+                loadingEl.classList.add('hidden');
                 listEl.classList.remove('hidden');
 
                 if (data.highlights && data.highlights.length > 0) {
                     document.getElementById('moments-count').textContent = data.highlights.length;
+                    const videoId = document.getElementById('insight-video-id').textContent;
                     listEl.innerHTML = data.highlights.map((m, i) => `
                         <div class="moment-card" onclick="seekVideo('${videoId}', ${m.seconds}, this)">
                             <div class="moment-time">${formatSeconds(m.seconds)}</div>
@@ -2441,12 +2454,12 @@
                     listEl.innerHTML = '<p class="text-[10px] text-neutral-500 text-center py-10 uppercase font-mono">No specific thematic moments detected</p>';
                     document.getElementById('moments-count').textContent = '0';
                 }
-
             } catch (e) {
-                console.error("Insight Error:", e);
-                document.getElementById('insight-loading').classList.add('hidden');
-                document.getElementById('insight-error').classList.remove('hidden');
+                console.error("Highlight Extraction Error:", e);
+                loadingEl.classList.add('hidden');
+                errorEl.classList.remove('hidden');
             }
+            if (window.lucide) lucide.createIcons();
         }
 
         async function toggleFullText() {
