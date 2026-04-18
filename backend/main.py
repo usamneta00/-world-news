@@ -1248,7 +1248,7 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
         try:
             headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
             payload = {
-            "model": "gpt-4.1",
+                "model": "gpt-4.1",
                 "messages": [
                     {"role": "system", "content": "أنت خبير محترف في تحليل الفيديوهات. يجب أن يكون الحقل start_time نسخاً حرفياً لأحد توقيتات البداية في نص SRT."},
                     {"role": "user", "content": prompt}
@@ -1332,7 +1332,7 @@ async def summarize_world_video_ai(transcript, original_url):
     try:
         headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
         payload = {
-            "model": "gpt-4o",
+            "model": "gpt-5.4",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -1414,7 +1414,7 @@ async def analyze_geopolitical_ai(text):
     try:
         headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
         payload = {
-            "model": "gpt-4o",
+            "model": "gpt-5.4",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -1453,14 +1453,14 @@ async def clean_full_transcript_ai(transcript: str) -> str:
     cleaned_chunks = []
     
     system_prompt = (
-        "أنت مساعد محترف في معالجة النصوص. مهمتك هي تنظيف النصوص المستخرجة من الفيديوهات وصياغتها بأسلوب عربي سليم.\n"
-        "1. اجعل النص متصلاً وواضحاً ومفهوماً.\n"
-        "2. قم بإزالة كلمات الحشو (مثل: امم، اه، تكرار الكلمات غير المقصود، والعبارات الفارغة التي لا معنى لها).\n"
-        "3. قم بإزالة أي جمل غير مفيدة أو خارجة عن السياق تماماً.\n"
-        "4. ممنوع منعاً باتاً استخدام العناوين (#) أو العناوين الفرعية (##).\n"
+        "أنت مساعد محترف في معالجة النصوص والترجمة. مهمتك هي تنظيف النصوص المستخرجة من الفيديوهات وترجمتها بالكامل إلى اللغة العربية وصياغتها بأسلوب سردي سليم.\n"
+        "1. يجب أن تكون النتيجة باللغة العربية دائماً، بغض النظر عن لغة النص الأصلي (ترجم من الإنجليزية للعربية).\n"
+        "2. اجعل النص متصلاً وواضحاً ومفهوماً.\n"
+        "3. قم بإزالة كلمات الحشو والعبارات التكرارية غير المفيدة.\n"
+        "4. ممنوع منعاً باتاً استخدام أي عناوين (سواء إنجليزية أو عربية) مثل (#) أو (##).\n"
         "5. ممنوع استخدام القوائم النقطية أو الترقيم.\n"
-        "6. يجب أن تكون النتيجة نصاً سردياً متصلاً فقط وبدون أي هوامش أو عناوين.\n"
-        "7. حافظ على المعنى والمحتوى الأصلي دون حذف معلومات مهمة."
+        "6. يجب أن تكون النتيجة نصاً سردياً عربياً خالصاً وبدون أي هوامش أو مقدمات مثل 'إليك الترجمة'.\n"
+        "7. حافظ على كافة المعلومات الهامة الواردة في النص الأصلي."
     )
 
     for i, chunk in enumerate(chunks):
@@ -1786,9 +1786,13 @@ async def get_video_full_text_endpoint(news_type: str, news_id: int, db: Session
     if not news_item:
         return {"error": "Item not found"}, 404
 
-    # إذا كان النص المنظف مخزن مسبقاً
+    # إذا كان النص المنظف مخزن مسبقاً (ونتأكد أنه يحتوي على لغة عربية)
     if hasattr(news_item, 'full_transcript_cleaned') and news_item.full_transcript_cleaned:
-        return {"full_text": news_item.full_transcript_cleaned}
+        # إذا كان النص لا يحتوي على حروف عربية، سنقوم بإعادة تنظيفه وترجمته
+        if not any(char in news_item.full_transcript_cleaned for char in 'أبتثجحخدذرزسشصضطظعغفقكلمنهوي'):
+            logger.info(f"Cached transcript is English, re-cleaning/translating for: {news_item.title}")
+        else:
+            return {"full_text": news_item.full_transcript_cleaned}
 
     # التأكد من وجود النص الأصلي
     transcript = news_item.full_transcript
