@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl" class="dark scroll-smooth bg-paper dark:bg-obsidian">
+<html lang="ar" dir="rtl" class="dark scroll-smooth">
 
 <head>
     <meta charset="UTF-8">
@@ -171,46 +171,6 @@
             -webkit-box-orient: vertical;
             line-clamp: 3;
             overflow: hidden;
-        }
-
-        /* Premium Frame Background */
-        .frame-background {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -1;
-            overflow: hidden;
-            pointer-events: none;
-            background: #000;
-        }
-
-        #frame-canvas {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            opacity: 1;
-            filter: brightness(1) contrast(1.05);
-            transition: opacity 1s ease;
-        }
-
-        .dark #frame-canvas {
-            filter: brightness(0.65) contrast(1.2) saturate(1.1);
-        }
-
-        .video-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(180deg, rgba(5, 5, 5, 0.4) 0%, transparent 50%, rgba(5, 5, 5, 0.4) 100%);
-            z-index: 1;
-        }
-
-        .dark .video-overlay {
-            background: linear-gradient(180deg, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.4) 50%, rgba(0, 0, 0, 0.8) 100%);
         }
 
         /* Event Timeline Styles */
@@ -1393,14 +1353,10 @@
 </head>
 
 <body
-    class="text-neutral-900 dark:text-neutral-200 antialiased selection:bg-neon-blue selection:text-black transition-colors duration-500 bg-transparent">
+    class="bg-paper dark:bg-obsidian text-neutral-900 dark:text-neutral-200 antialiased selection:bg-neon-blue selection:text-black transition-colors duration-500">
 
-    <!-- Frame Background -->
-    <div class="frame-background">
-        <canvas id="frame-canvas"></canvas>
-        <div class="video-overlay"></div>
-    </div>
-
+    <!-- 3D Background -->
+    <div id="canvas-container" class="fixed inset-0 z-0 opacity-40 dark:opacity-60"></div>
 
     <!-- Ticker Tape -->
     <div
@@ -2055,8 +2011,7 @@
 
             <div class="flex-1 overflow-hidden flex flex-col landscape:flex-row lg:flex-row bg-black">
                 <!-- Video Player Area -->
-                <div
-                    class="flex-1 lg:flex-1 bg-black flex flex-col overflow-y-auto insight-scrollbar border-b border-white/5 landscape:border-b-0 lg:border-b-0">
+                <div class="flex-1 lg:flex-1 bg-black flex flex-col overflow-y-auto insight-scrollbar border-b border-white/5 landscape:border-b-0 lg:border-b-0">
                     <div class="relative w-full aspect-video bg-neutral-900 group">
                         <iframe id="insight-player" class="w-full h-full" src="" frameborder="0"
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -2170,8 +2125,7 @@
                             <i data-lucide="brain-circuit" class="w-8 h-8 text-neon-blue"></i>
                         </div>
                         <p class="text-sm text-neutral-300 font-bold mb-2">الخريطة الذهنية للفيديو</p>
-                        <p class="text-[10px] text-neutral-500 font-mono leading-relaxed uppercase mb-6">Extract
-                            thematic
+                        <p class="text-[10px] text-neutral-500 font-mono leading-relaxed uppercase mb-6">Extract thematic
                             highlights using AI analysis</p>
                         <button onclick="fetch_highlights_for_part()"
                             class="px-6 py-2.5 bg-neon-blue text-black font-black text-xs rounded-lg hover:bg-white transition-all uppercase tracking-widest flex items-center gap-2">
@@ -2317,70 +2271,72 @@
         }
 
         // --- Three.js Background ---
-        // --- Frame Animation Logic ---
-        const frameCount = 64;
-        const frames = [];
-        const canvas = document.getElementById('frame-canvas');
-        const ctx = canvas.getContext('2d');
-        let currentFrame = 1;
-        let animationId = null;
+        let scene, camera, renderer, particles, ring;
+        const STATE = { isDark: document.documentElement.classList.contains('dark'), mouseX: 0, mouseY: 0 };
 
-        function preloadFrames() {
-            for (let i = 1; i <= frameCount; i++) {
-                const img = new Image();
-                const frameNum = String(i).padStart(4, '0');
-                img.src = `frame/frame_${frameNum}.webp`;
-                frames.push(img);
+        async function initThree() {
+            const THREE = await import('three');
+            const container = document.getElementById('canvas-container');
+            if (!container) return;
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 100;
+
+            renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            const count = 1500, radius = 40;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+            for (let i = 0; i < count; i++) {
+                const phi = Math.acos(-1 + (2 * i) / count), theta = Math.sqrt(count * Math.PI) * phi;
+                positions[i * 3] = radius * Math.cos(theta) * Math.sin(phi);
+                positions[i * 3 + 1] = radius * Math.sin(theta) * Math.sin(phi);
+                positions[i * 3 + 2] = radius * Math.cos(phi);
             }
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+            const getMat = (dark) => new THREE.PointsMaterial({
+                color: dark ? 0x3b82f6 : 0x1a1a1a,
+                size: 0.8, transparent: true, opacity: dark ? 0.6 : 0.3
+            });
+            particles = new THREE.Points(geometry, getMat(STATE.isDark));
+            scene.add(particles);
+
+            ring = new THREE.Mesh(new THREE.TorusGeometry(60, 0.2, 16, 100), new THREE.MeshBasicMaterial({
+                color: STATE.isDark ? 0x2dd4bf : 0x000000, transparent: true, opacity: 0.1, wireframe: true
+            }));
+            ring.rotation.x = Math.PI / 2;
+            scene.add(ring);
+
+            window.addEventListener('mousemove', (e) => {
+                STATE.mouseX = (e.clientX - window.innerWidth / 2) * 0.001;
+                STATE.mouseY = (e.clientY - window.innerHeight / 2) * 0.001;
+            });
+
+            const animate = () => {
+                requestAnimationFrame(animate);
+                particles.rotation.y += 0.0005 + STATE.mouseX * 0.05;
+                particles.rotation.x += 0.0001 + STATE.mouseY * 0.05;
+                ring.rotation.z -= 0.001;
+                renderer.render(scene, camera);
+            };
+            animate();
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
         }
 
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            renderFrame();
+        function updateThreeTheme() {
+            if (!particles) return;
+            const dark = document.documentElement.classList.contains('dark');
+            particles.material.color.set(dark ? 0x3b82f6 : 0x1a1a1a);
+            particles.material.opacity = dark ? 0.6 : 0.3;
+            ring.material.color.set(dark ? 0x2dd4bf : 0x000000);
         }
-
-        function renderFrame() {
-            if (frames[currentFrame - 1] && frames[currentFrame - 1].complete) {
-                const img = frames[currentFrame - 1];
-                const canvasRatio = canvas.width / canvas.height;
-                const imgRatio = img.width / img.height;
-
-                let drawWidth, drawHeight, drawX, drawY;
-
-                if (canvasRatio > imgRatio) {
-                    drawWidth = canvas.width;
-                    drawHeight = canvas.width / imgRatio;
-                    drawX = 0;
-                    drawY = (canvas.height - drawHeight) / 2;
-                } else {
-                    drawHeight = canvas.height;
-                    drawWidth = canvas.height * imgRatio;
-                    drawX = (canvas.width - drawWidth) / 2;
-                    drawY = 0;
-                }
-
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-            }
-        }
-
-        function animateFrames() {
-            renderFrame();
-            currentFrame = (currentFrame % frameCount) + 1;
-            setTimeout(() => {
-                animationId = requestAnimationFrame(animateFrames);
-            }, 40); // Approx 25fps for smooth loop
-        }
-
-        function initFrames() {
-            preloadFrames();
-            resizeCanvas();
-            window.addEventListener('resize', resizeCanvas);
-            animateFrames();
-        }
-
-
 
         // --- AI Processing Logic ---
         function getNewsActions(n, type) {
@@ -2433,7 +2389,7 @@
             // Show Modal & Reset UI
             const modal = document.getElementById('insight-modal');
             modal.classList.remove('hidden');
-
+            
             document.getElementById('insight-start-analysis').classList.remove('hidden');
             document.getElementById('insight-loading').classList.add('hidden');
             document.getElementById('insight-highlights').classList.add('hidden');
@@ -2727,6 +2683,7 @@
         function toggleDarkMode() {
             const isDark = document.documentElement.classList.toggle('dark');
             localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled');
+            updateThreeTheme();
         }
 
         function toggleSidebar() {
@@ -3918,7 +3875,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             if (localStorage.getItem('darkMode') === 'enabled') document.documentElement.classList.add('dark');
-            initFrames(); initDate(); fetchNews(1); connectWS();
+            initThree(); initDate(); fetchNews(1); connectWS();
         });
     </script>
     <script src="https://www.youtube.com/iframe_api"></script>
