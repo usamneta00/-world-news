@@ -1409,7 +1409,8 @@
 
     <!-- Video Background -->
     <div class="video-background">
-        <video id="bg-video" autoplay muted loop playsinline poster="">
+        <video id="bg-video" autoplay muted loop playsinline webkit-playsinline poster="">
+            <source src="output.mp4" type="video/mp4">
             <source src="output.webm" type="video/webm">
         </video>
         <div class="video-overlay"></div>
@@ -3877,10 +3878,16 @@
             // Force play video for mobile devices
             const bgVideo = document.getElementById('bg-video');
             if (bgVideo) {
+                bgVideo.muted = true;
                 bgVideo.play().catch(err => {
                     console.log("Autoplay prevented:", err);
-                    // Standard mobile behavior: try to play on first touch
-                    document.body.addEventListener('touchstart', () => bgVideo.play(), { once: true });
+                    const playOnInteraction = () => {
+                        bgVideo.play();
+                        document.removeEventListener('touchstart', playOnInteraction);
+                        document.removeEventListener('click', playOnInteraction);
+                    };
+                    document.addEventListener('touchstart', playOnInteraction, { once: true });
+                    document.addEventListener('click', playOnInteraction, { once: true });
                 });
             }
         });
