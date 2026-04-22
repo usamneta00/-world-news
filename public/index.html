@@ -1411,8 +1411,6 @@
         <div class="video-overlay"></div>
     </div>
 
-    <!-- 3D Background Removed to show video clearly -->
-    <div id="canvas-container" class="hidden"></div>
 
     <!-- Ticker Tape -->
     <div
@@ -2332,69 +2330,7 @@
         let scene, camera, renderer, particles, ring;
         const STATE = { isDark: document.documentElement.classList.contains('dark'), mouseX: 0, mouseY: 0 };
 
-        async function initThree() {
-            const THREE = await import('three');
-            const container = document.getElementById('canvas-container');
-            if (!container) return;
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.z = 100;
 
-            renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            container.appendChild(renderer.domElement);
-
-            const count = 1500, radius = 40;
-            const geometry = new THREE.BufferGeometry();
-            const positions = new Float32Array(count * 3);
-            for (let i = 0; i < count; i++) {
-                const phi = Math.acos(-1 + (2 * i) / count), theta = Math.sqrt(count * Math.PI) * phi;
-                positions[i * 3] = radius * Math.cos(theta) * Math.sin(phi);
-                positions[i * 3 + 1] = radius * Math.sin(theta) * Math.sin(phi);
-                positions[i * 3 + 2] = radius * Math.cos(phi);
-            }
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-            const getMat = (dark) => new THREE.PointsMaterial({
-                color: dark ? 0x3b82f6 : 0x1a1a1a,
-                size: 0.8, transparent: true, opacity: dark ? 0.6 : 0.3
-            });
-            particles = new THREE.Points(geometry, getMat(STATE.isDark));
-            scene.add(particles);
-
-            ring = new THREE.Mesh(new THREE.TorusGeometry(60, 0.2, 16, 100), new THREE.MeshBasicMaterial({
-                color: STATE.isDark ? 0x2dd4bf : 0x000000, transparent: true, opacity: 0.1, wireframe: true
-            }));
-            ring.rotation.x = Math.PI / 2;
-            scene.add(ring);
-
-            window.addEventListener('mousemove', (e) => {
-                STATE.mouseX = (e.clientX - window.innerWidth / 2) * 0.001;
-                STATE.mouseY = (e.clientY - window.innerHeight / 2) * 0.001;
-            });
-
-            const animate = () => {
-                requestAnimationFrame(animate);
-                particles.rotation.y += 0.0005 + STATE.mouseX * 0.05;
-                particles.rotation.x += 0.0001 + STATE.mouseY * 0.05;
-                ring.rotation.z -= 0.001;
-                renderer.render(scene, camera);
-            };
-            animate();
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
-        }
-
-        function updateThreeTheme() {
-            if (!particles) return;
-            const dark = document.documentElement.classList.contains('dark');
-            particles.material.color.set(dark ? 0x3b82f6 : 0x1a1a1a);
-            particles.material.opacity = dark ? 0.6 : 0.3;
-            ring.material.color.set(dark ? 0x2dd4bf : 0x000000);
-        }
 
         // --- AI Processing Logic ---
         function getNewsActions(n, type) {
@@ -2741,7 +2677,6 @@
         function toggleDarkMode() {
             const isDark = document.documentElement.classList.toggle('dark');
             localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled');
-            updateThreeTheme();
         }
 
         function toggleSidebar() {
@@ -3933,7 +3868,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             if (localStorage.getItem('darkMode') === 'enabled') document.documentElement.classList.add('dark');
-            /* initThree(); */ initDate(); fetchNews(1); connectWS();
+            initDate(); fetchNews(1); connectWS();
         });
     </script>
     <script src="https://www.youtube.com/iframe_api"></script>
