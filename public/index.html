@@ -83,13 +83,8 @@
 
     <style>
         body {
-            font-family: var(--font-main);
-            background-color: transparent;
-            color: var(--text-main);
-            line-height: 1.6;
+            margin: 0;
             overflow-x: hidden;
-            position: relative;
-            z-index: 1;
         }
 
         /* Custom Scrollbar */
@@ -178,8 +173,8 @@
             overflow: hidden;
         }
 
-        /* Premium Video Background */
-        .video-background {
+        /* Premium Frame Background */
+        .frame-background {
             position: fixed;
             top: 0;
             left: 0;
@@ -189,13 +184,9 @@
             overflow: hidden;
             pointer-events: none;
             background: #000;
-            /* Prevent any white leak */
         }
 
-        .video-background video {
-            position: absolute;
-            top: 0;
-            left: 0;
+        #frame-canvas {
             width: 100%;
             height: 100%;
             object-fit: cover;
@@ -204,15 +195,7 @@
             transition: opacity 1s ease;
         }
 
-        @media (max-width: 768px) {
-            .video-background video {
-                object-position: center;
-                /* Ensures the best part of horizontal video shows on mobile */
-            }
-        }
-
-        .dark .video-background video {
-            opacity: 1;
+        .dark #frame-canvas {
             filter: brightness(0.65) contrast(1.2) saturate(1.1);
         }
 
@@ -1412,12 +1395,9 @@
 <body
     class="text-neutral-900 dark:text-neutral-200 antialiased selection:bg-neon-blue selection:text-black transition-colors duration-500 bg-transparent">
 
-    <!-- Video Background -->
-    <div class="video-background">
-        <video id="bg-video" autoplay muted loop playsinline webkit-playsinline poster="">
-            <source src="output.mp4" type="video/mp4">
-            <source src="output.webm" type="video/webm">
-        </video>
+    <!-- Frame Background -->
+    <div class="frame-background">
+        <canvas id="frame-canvas"></canvas>
         <div class="video-overlay"></div>
     </div>
 
@@ -2337,8 +2317,68 @@
         }
 
         // --- Three.js Background ---
-        let scene, camera, renderer, particles, ring;
-        const STATE = { isDark: document.documentElement.classList.contains('dark'), mouseX: 0, mouseY: 0 };
+        // --- Frame Animation Logic ---
+        const frameCount = 64;
+        const frames = [];
+        const canvas = document.getElementById('frame-canvas');
+        const ctx = canvas.getContext('2d');
+        let currentFrame = 1;
+        let animationId = null;
+
+        function preloadFrames() {
+            for (let i = 1; i <= frameCount; i++) {
+                const img = new Image();
+                const frameNum = String(i).padStart(4, '0');
+                img.src = `frame/frame_${frameNum}.webp`;
+                frames.push(img);
+            }
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            renderFrame();
+        }
+
+        function renderFrame() {
+            if (frames[currentFrame - 1] && frames[currentFrame - 1].complete) {
+                const img = frames[currentFrame - 1];
+                const canvasRatio = canvas.width / canvas.height;
+                const imgRatio = img.width / img.height;
+
+                let drawWidth, drawHeight, drawX, drawY;
+
+                if (canvasRatio > imgRatio) {
+                    drawWidth = canvas.width;
+                    drawHeight = canvas.width / imgRatio;
+                    drawX = 0;
+                    drawY = (canvas.height - drawHeight) / 2;
+                } else {
+                    drawHeight = canvas.height;
+                    drawWidth = canvas.height * imgRatio;
+                    drawX = (canvas.width - drawWidth) / 2;
+                    drawY = 0;
+                }
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+            }
+        }
+
+        function animateFrames() {
+            renderFrame();
+            currentFrame = (currentFrame % frameCount) + 1;
+            setTimeout(() => {
+                animationId = requestAnimationFrame(animateFrames);
+            }, 40); // Approx 25fps for smooth loop
+        }
+
+        function initFrames() {
+            preloadFrames();
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            animateFrames();
+        }
 
 
 
@@ -3878,38 +3918,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             if (localStorage.getItem('darkMode') === 'enabled') document.documentElement.classList.add('dark');
-            initDate(); fetchNews(1); connectWS();
-
-            // Force play video for mobile devices with retry logic
-            const bgVideo = document.getElementById('bg-video');
-            if (bgVideo) {
-                bgVideo.muted = true;
-                bgVideo.defaultMuted = true;
-
-                const startVideo = () => {
-                    bgVideo.play().catch(err => {
-                        console.log("Autoplay blocked, waiting for interaction");
-                    });
-                };
-
-                // Try immediately
-                startVideo();
-
-                // Try after a short delay
-                setTimeout(startVideo, 1000);
-
-                // Play on any user interaction
-                const playOnInteraction = () => {
-                    bgVideo.play();
-                    ['touchstart', 'click', 'scroll', 'keydown'].forEach(ev =>
-                        document.removeEventListener(ev, playOnInteraction)
-                    );
-                };
-
-                ['touchstart', 'click', 'scroll', 'keydown'].forEach(ev =>
-                    document.addEventListener(ev, playOnInteraction, { once: true })
-                );
-            }
+            initFrames(); initDate(); fetchNews(1); connectWS();
         });
     </script>
     <script src="https://www.youtube.com/iframe_api"></script>
