@@ -6,4 +6,4 @@ world_news.db
 node_modules/
 dist/
 .DS_Store
-
+backend/world_news.db
