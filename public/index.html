@@ -83,8 +83,13 @@
 
     <style>
         body {
-            margin: 0;
+            font-family: var(--font-main);
+            background-color: transparent;
+            color: var(--text-main);
+            line-height: 1.6;
             overflow-x: hidden;
+            position: relative;
+            z-index: 1;
         }
 
         /* Custom Scrollbar */
@@ -3875,20 +3880,35 @@
             if (localStorage.getItem('darkMode') === 'enabled') document.documentElement.classList.add('dark');
             initDate(); fetchNews(1); connectWS();
 
-            // Force play video for mobile devices
+            // Force play video for mobile devices with retry logic
             const bgVideo = document.getElementById('bg-video');
             if (bgVideo) {
                 bgVideo.muted = true;
-                bgVideo.play().catch(err => {
-                    console.log("Autoplay prevented:", err);
-                    const playOnInteraction = () => {
-                        bgVideo.play();
-                        document.removeEventListener('touchstart', playOnInteraction);
-                        document.removeEventListener('click', playOnInteraction);
-                    };
-                    document.addEventListener('touchstart', playOnInteraction, { once: true });
-                    document.addEventListener('click', playOnInteraction, { once: true });
-                });
+                bgVideo.defaultMuted = true;
+
+                const startVideo = () => {
+                    bgVideo.play().catch(err => {
+                        console.log("Autoplay blocked, waiting for interaction");
+                    });
+                };
+
+                // Try immediately
+                startVideo();
+
+                // Try after a short delay
+                setTimeout(startVideo, 1000);
+
+                // Play on any user interaction
+                const playOnInteraction = () => {
+                    bgVideo.play();
+                    ['touchstart', 'click', 'scroll', 'keydown'].forEach(ev =>
+                        document.removeEventListener(ev, playOnInteraction)
+                    );
+                };
+
+                ['touchstart', 'click', 'scroll', 'keydown'].forEach(ev =>
+                    document.addEventListener(ev, playOnInteraction, { once: true })
+                );
             }
         });
     </script>
