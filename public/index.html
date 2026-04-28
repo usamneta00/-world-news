@@ -2573,6 +2573,7 @@
                             let formatted = data.evaluation
                                 .replace(/## (.*?)\n/g, '<h4 class="text-emerald-400 font-bold mt-6 mb-2 flex items-center gap-2"><i data-lucide="sparkles" class="w-4 h-4"></i>$1</h4>')
                                 .replace(/- (.*?)\n/g, '<div class="flex items-start gap-2 mb-2 pr-2 text-sm text-neutral-300"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500/40 mt-1.5"></span><span>$1</span></div>')
+                                .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-bold">$1</strong>')
                                 .replace(/👉 المعنى:/g, '<div class="mt-2 text-xs font-bold text-teal-300 bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20 inline-flex items-center gap-2"><i data-lucide="info" class="w-3.5 h-3.5"></i><span>المعنى:</span></div>')
                                 .replace(/\n/g, '<br>');
 
