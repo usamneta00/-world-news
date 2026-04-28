@@ -1525,7 +1525,7 @@ async def evaluate_video_ai(transcript: str) -> str:
         }
         
         payload = {
-            "model": "gpt-4o-mini",
+            "model": "gpt-4.1-mini",
             "messages": [
                 {"role": "system", "content": "أنت خبير في تحليل محتوى الفيديو."},
                 {"role": "user", "content": prompt}
