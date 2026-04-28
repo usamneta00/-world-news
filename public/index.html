@@ -2011,7 +2011,8 @@
 
             <div class="flex-1 overflow-hidden flex flex-col landscape:flex-row lg:flex-row bg-black">
                 <!-- Video Player Area -->
-                <div class="flex-1 lg:flex-1 bg-black flex flex-col overflow-y-auto insight-scrollbar border-b border-white/5 landscape:border-b-0 lg:border-b-0">
+                <div
+                    class="flex-1 lg:flex-1 bg-black flex flex-col overflow-y-auto insight-scrollbar border-b border-white/5 landscape:border-b-0 lg:border-b-0">
                     <div class="relative w-full aspect-video bg-neutral-900 group">
                         <iframe id="insight-player" class="w-full h-full" src="" frameborder="0"
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -2059,11 +2060,46 @@
                                         title="نسخ النص">
                                         <i data-lucide="copy" class="w-4 h-4"></i>
                                     </button>
+                                    <button id="evaluate-video" onclick="evaluateVideo()"
+                                        class="px-5 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-[11px] font-bold text-emerald-400 transition-all uppercase tracking-wider flex items-center gap-2"
+                                        title="تقييم الفيديو بالذكاء الاصطناعي">
+                                        <i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i>
+                                        <span>تقييم الفيديو</span>
+                                    </button>
                                     <button id="toggle-full-text" onclick="toggleFullText()"
                                         class="px-5 py-2 bg-neon-blue/10 hover:bg-neon-blue/20 border border-neon-blue/30 rounded-xl text-[11px] font-bold text-neon-blue transition-all uppercase tracking-wider flex items-center gap-2">
                                         <i data-lucide="eye" class="w-3.5 h-3.5"></i>
                                         <span>عرض النص</span>
                                     </button>
+                                </div>
+                            </div>
+
+                            <div id="insight-evaluation-container"
+                                class="hidden mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
+                                <div class="relative group">
+                                    <div
+                                        class="absolute -inset-0.5 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 rounded-2xl blur opacity-30 group-hover:opacity-50 transition duration-1000">
+                                    </div>
+                                    <div
+                                        class="relative bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl p-8 md:p-10 text-right">
+                                        <div id="insight-evaluation-loading" class="hidden py-8 text-center">
+                                            <div class="relative w-10 h-10 mx-auto mb-4">
+                                                <div
+                                                    class="absolute inset-0 border-2 border-emerald-500/20 rounded-full">
+                                                </div>
+                                                <div
+                                                    class="absolute inset-0 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin">
+                                                </div>
+                                            </div>
+                                            <p
+                                                class="text-[10px] text-neutral-400 font-mono uppercase tracking-[0.2em] animate-pulse">
+                                                Analyzing Content Depth</p>
+                                        </div>
+                                        <div id="insight-evaluation-content"
+                                            class="text-sm md:text-base text-neutral-200 leading-[1.8] space-y-4">
+                                            <!-- Evaluation injected here -->
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -2125,7 +2161,8 @@
                             <i data-lucide="brain-circuit" class="w-8 h-8 text-neon-blue"></i>
                         </div>
                         <p class="text-sm text-neutral-300 font-bold mb-2">الخريطة الذهنية للفيديو</p>
-                        <p class="text-[10px] text-neutral-500 font-mono leading-relaxed uppercase mb-6">Extract thematic
+                        <p class="text-[10px] text-neutral-500 font-mono leading-relaxed uppercase mb-6">Extract
+                            thematic
                             highlights using AI analysis</p>
                         <button onclick="fetch_highlights_for_part()"
                             class="px-6 py-2.5 bg-neon-blue text-black font-black text-xs rounded-lg hover:bg-white transition-all uppercase tracking-widest flex items-center gap-2">
@@ -2389,7 +2426,7 @@
             // Show Modal & Reset UI
             const modal = document.getElementById('insight-modal');
             modal.classList.remove('hidden');
-            
+
             document.getElementById('insight-start-analysis').classList.remove('hidden');
             document.getElementById('insight-loading').classList.add('hidden');
             document.getElementById('insight-highlights').classList.add('hidden');
@@ -2513,6 +2550,50 @@
             }
         }
 
+        async function evaluateVideo() {
+            const container = document.getElementById('insight-evaluation-container');
+            const contentEl = document.getElementById('insight-evaluation-content');
+            const loadingEl = document.getElementById('insight-evaluation-loading');
+            const btn = document.getElementById('evaluate-video');
+
+            if (container.classList.contains('hidden')) {
+                container.classList.remove('hidden');
+                btn.classList.add('bg-emerald-500/30');
+
+                if (!contentEl.textContent.trim()) {
+                    loadingEl.classList.remove('hidden');
+                    contentEl.classList.add('hidden');
+
+                    try {
+                        const r = await fetch(`/api/evaluate-video/${currentInsightType}/${currentInsightId}`);
+                        const data = await r.json();
+
+                        if (data.evaluation) {
+                            // Basic markdown-like formatting for the evaluation result
+                            let formatted = data.evaluation
+                                .replace(/## (.*?)\n/g, '<h4 class="text-emerald-400 font-bold mt-6 mb-2 flex items-center gap-2"><i data-lucide="sparkles" class="w-4 h-4"></i>$1</h4>')
+                                .replace(/- (.*?)\n/g, '<div class="flex items-start gap-2 mb-2 pr-2 text-sm text-neutral-300"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500/40 mt-1.5"></span><span>$1</span></div>')
+                                .replace(/👉 المعنى:/g, '<div class="mt-2 text-xs font-bold text-teal-300 bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20 inline-flex items-center gap-2"><i data-lucide="info" class="w-3.5 h-3.5"></i><span>المعنى:</span></div>')
+                                .replace(/\n/g, '<br>');
+
+                            contentEl.innerHTML = formatted;
+                            if (window.lucide) lucide.createIcons();
+                        } else if (data.error) {
+                            contentEl.innerHTML = `<div class="text-red-400 text-center py-6 font-mono text-xs uppercase">Evaluation Link Error: ${data.error}</div>`;
+                        }
+                    } catch (e) {
+                        contentEl.innerHTML = `<div class="text-red-400 text-center py-6 font-mono text-xs uppercase">Nexus Connection Interrupted</div>`;
+                    } finally {
+                        loadingEl.classList.add('hidden');
+                        contentEl.classList.remove('hidden');
+                    }
+                }
+            } else {
+                container.classList.add('hidden');
+                btn.classList.remove('bg-emerald-500/30');
+            }
+        }
+
         function copyFullText() {
             const contentEl = document.getElementById('insight-full-text-content');
             let text = contentEl.innerText;
@@ -2548,7 +2629,12 @@
             // Reset Full Text container
             document.getElementById('insight-full-text-container').classList.add('hidden');
             document.getElementById('insight-full-text-content').innerHTML = '';
-            document.getElementById('toggle-full-text').textContent = 'Show Text';
+            document.getElementById('toggle-full-text').innerHTML = '<i data-lucide="eye" class="w-3.5 h-3.5"></i><span>عرض النص</span>';
+
+            // Reset Evaluation container
+            document.getElementById('insight-evaluation-container').classList.add('hidden');
+            document.getElementById('insight-evaluation-content').innerHTML = '';
+            document.getElementById('evaluate-video').classList.remove('bg-emerald-500/30');
             if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
                 ytPlayer.stopVideo();
             } else {

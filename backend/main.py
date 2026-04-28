@@ -1432,6 +1432,127 @@ async def analyze_geopolitical_ai(text):
     except Exception as e:
         return None, str(e)
 
+async def evaluate_video_ai(transcript: str) -> str:
+    """Evaluate video content based on transcript using the provided prompt."""
+    if not OPENAI_API_KEY:
+        return "OpenAI API Key is missing"
+    
+    prompt = f"""أنت خبير في تحليل محتوى الفيديو، لكن مهمتك ليست إخراج JSON.
+
+مهمتك هي تحويل نتائج التحليل إلى شرح مبسط، واضح، وجذاب للمستخدم العادي.
+
+⚠️ مهم جدًا:
+- لا تستخدم JSON
+- لا تستخدم تنسيق تقني
+- اكتب بأسلوب بشري بسيط
+- استخدم الإيموجي بشكل ذكي
+- اجعل الشرح سهل الفهم وكأنه شرح صديق
+
+---
+
+اعتمادًا على تحليل الفيديو التالي، اكتب شرحًا منظمًا بهذا الشكل:
+
+## 🧲 هل الفيديو Clickbait؟
+- اذكر النتيجة (نعم / لا)
+- اذكر مستوى الثقة
+- اشرح السبب بشكل بسيط
+- ثم أضف سطر "👉 المعنى:" واشرح ماذا يعني هذا للمستخدم
+
+---
+
+## 📊 جودة المحتوى
+- التقييم من 10
+- هل هو عميق أو سطحي
+- السبب
+- ثم "👉 المعنى:" (هل الفيديو مفيد؟)
+
+---
+
+## 🎭 مستوى التفاعل
+- هل هو ممل / محايد / شيق
+- السبب
+- ثم "👉 المعنى:" (هل يناسبك أو لا)
+
+---
+
+## ⏱️ هل يستحق المشاهدة؟
+- نعم أو لا
+- تقييم من 10
+- السبب
+- ثم "👉 المعنى:" (متى تشاهده ومتى لا)
+
+---
+
+## 🧾 الملخص
+- اكتب 2 إلى 3 نقاط توضح محتوى الفيديو
+
+---
+
+## 🏷️ المواضيع
+- اذكر أهم المواضيع في نقاط
+
+---
+
+## 🔥 الخلاصة السريعة
+- لخص النتيجة في 4 نقاط فقط (مثل:)
+  - هل هو clickbait
+  - جودة المحتوى
+  - التفاعل
+  - هل يستحق
+
+---
+
+## 💡 (اختياري - مهم للمشاريع)
+اكتب كيف يمكن استخدام هذا التقييم في فلترة الفيديوهات (مثال: عرض الأفضل فقط)
+
+---
+
+🎯 القواعد:
+- لا تخمن خارج النص
+- كن مختصر لكن واضح
+- اجعل الشرح ممتع وسهل القراءة
+- استخدم أسلوب عربي بسيط (ليس رسمي جدًا)
+
+---
+
+النص:
+{transcript}"""
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": "أنت خبير في تحليل محتوى الفيديو."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 2000
+        }
+        
+        response = await asyncio.to_thread(
+            lambda: requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=60
+            )
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result['choices'][0]['message']['content']
+        else:
+            logger.error(f"OpenAI evaluation error: {response.status_code} - {response.text}")
+            return f"خطأ في الاتصال بالذكاء الاصطناعي: {response.status_code}"
+    except Exception as e:
+        logger.error(f"Error in evaluate_video_ai: {e}")
+        return f"حدث خطأ أثناء التقييم: {str(e)}"
+
 async def clean_full_transcript_ai(transcript: str) -> str:
     """تنظيف النص بالكامل وإزالة الحشو والعناوين باستخدام AI."""
     if not OPENAI_API_KEY or not transcript:
@@ -1815,6 +1936,36 @@ async def get_video_full_text_endpoint(news_type: str, news_id: int, db: Session
         db.commit()
 
     return {"full_text": cleaned_text}
+
+@app.get("/api/evaluate-video/{news_type}/{news_id}")
+async def evaluate_video_endpoint(news_type: str, news_id: int, db: Session = Depends(get_db)):
+    """تقييم الفيديو بناءً على النص."""
+    news_item = None
+    if news_type == 'world':
+        news_item = db.query(NewsItem).filter(NewsItem.id == news_id).first()
+    elif news_type == 'yemen':
+        news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == news_id).first()
+    elif news_type == 'dubbed':
+        news_item = db.query(DubbedNewsItem).filter(DubbedNewsItem.id == news_id).first()
+        
+    if not news_item:
+        return {"error": "Item not found"}, 404
+
+    # نستخدم النص المنظف إذا وجد، وإلا النص الأصلي
+    transcript = news_item.full_transcript_cleaned or news_item.full_transcript
+    
+    if not transcript:
+        # محاولة جلب النص إذا لم يكن موجوداً
+        logger.info(f"Transcript missing for evaluation, fetching via DownSub: {news_item.link}")
+        res = await asyncio.to_thread(fetch_youtube_subs_downsub, news_item.link, formats=['txt'])
+        transcript = res.get("txt")
+        if not transcript:
+            return {"error": "لا يوجد نص متاح لتقييمه لهذا الفيديو"}, 404
+        news_item.full_transcript = transcript
+        db.commit()
+
+    evaluation = await evaluate_video_ai(transcript)
+    return {"evaluation": evaluation}
 
 # ============================================
 # News Clustering - Embedding & Clustering Logic
