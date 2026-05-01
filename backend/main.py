@@ -99,6 +99,7 @@ class NewsItem(Base):
     full_transcript = Column(String, nullable=True) # TXT transcript from DownSub
     full_transcript_cleaned = Column(String, nullable=True) # Cleaned transcript for UI
     highlights = Column(String, nullable=True) # JSON string of highlights (moments)
+    first_principles = Column(String, nullable=True) # JSON string of first principles
 
 class ChannelLastVideo(Base):
     __tablename__ = "channel_last_video"
@@ -126,6 +127,7 @@ class YemenNewsItem(Base):
     full_transcript = Column(String, nullable=True)
     full_transcript_cleaned = Column(String, nullable=True)
     highlights = Column(String, nullable=True)
+    first_principles = Column(String, nullable=True)
 
 class YemenChannelLastVideo(Base):
     __tablename__ = "yemen_channel_last_video"
@@ -153,6 +155,7 @@ class DubbedNewsItem(Base):
     full_transcript = Column(String, nullable=True)
     full_transcript_cleaned = Column(String, nullable=True)
     highlights = Column(String, nullable=True)
+    first_principles = Column(String, nullable=True)
 
 class DubbedChannelLastVideo(Base):
     __tablename__ = "dubbed_channel_last_video"
@@ -247,6 +250,22 @@ def migrate_database():
                 conn.execute(text("ALTER TABLE news ADD COLUMN video_id VARCHAR"))
                 try: conn.commit() 
                 except: pass 
+
+            if 'first_principles' not in columns:
+                logger.info("Adding first_principles column to news table...")
+                conn.execute(text("ALTER TABLE news ADD COLUMN first_principles VARCHAR"))
+                try: conn.commit() 
+                except: pass
+
+            # Also check other tables
+            for table in ['yemen_news', 'dubbed_news']:
+                result = conn.execute(text(f"PRAGMA table_info({table})"))
+                cols = [row[1] for row in result]
+                if 'first_principles' not in cols:
+                    logger.info(f"Adding first_principles column to {table} table...")
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN first_principles VARCHAR"))
+                    try: conn.commit() 
+                    except: pass
             
             if 'created_at' not in columns:
                 logger.info("Adding created_at column to news table...")
@@ -1196,8 +1215,8 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
 
 # No more wrappers here
 
-async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title: str = ""):
-    """استخراج اللحظات الهامة من ملف SRT مع ضمان دقة التوقيتات وعدم تجاوز مدة الفيديو (منطق mosalslat المطور)."""
+async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title: str = "", mode: str = "highlights"):
+    """استخراج اللحظات الهامة أو المبادئ الأولى من ملف SRT (منطق mosalslat المطور)."""
     if not OPENAI_API_KEY or not srt_content:
         return []
 
@@ -1214,19 +1233,28 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
     num_parts = len(time_windows)
     
     all_highlights: List[dict] = []
-    logger.info(f"🧠 [Highlights] تقسيم SRT إلى {num_parts} أجزاء زمنية للتحليل الكامل...")
+    logger.info(f"🧠 [AI Analysis] mode={mode}, تقسيم SRT إلى {num_parts} أجزاء...")
 
-    async def fetch_highlights_for_part(part_index: int, part_cues: List[Dict[str, Any]]):
+    async def fetch_moments_for_part(part_index: int, part_cues: List[Dict[str, Any]]):
         part_srt = cues_to_srt_string(part_cues)
         t0 = part_cues[0]["start_str"]
         t1 = part_cues[-1]["end_str"]
+
+        if mode == "first_principles":
+            task_desc = """Identify the "First Principles" and "Core Solid Facts" in THIS segment. 
+            Ignore all noise, filler words, emotional language, or rhetorical flourishes. 
+            Focus ONLY on the foundational truths and objective realities mentioned."""
+            system_msg = "أنت محلل استراتيجي خبير في التفكير بالمبادئ الأولى (First Principles Thinking). مهمتك استخراج الحقائق الصلبة والجواهر المعرفية فقط وتجاهل الحشو والعواطف."
+        else:
+            task_desc = 'Identify the all most "Powerful" and "High-Impact" moments in THIS segment.'
+            system_msg = "أنت خبير محترف في تحليل الفيديوهات. يجب أن يكون الحقل start_time نسخاً حرفياً لأحد توقيتات البداية في نص SRT."
 
         prompt = f"""
         Below is a segment (Part {part_index + 1} of {num_parts}) of a video transcript in SRT format. 
         VIDEO TITLE: {title}
         TIME RANGE: {t0} to {t1}
         
-        TASK: Identify the all most "Powerful" and "High-Impact" moments in THIS segment.
+        TASK: {task_desc}
         
         CONSTRAINTS:
         1. EVERYTHING (title and reason) must be in ARABIC.
@@ -1239,7 +1267,7 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
         - title: Catchy Arabic title (max 5 words).
         - start_time: EXACT STRING copied from the SRT below.
         - seconds: Exact integer timestamp from beginning of this segment.
-        - reason_ar: High-quality Arabic explanation of why this moment matters, with no ambiguity.
+        - reason_ar: High-quality Arabic explanation of why this moment matters or the core truth it represents.
         
         SRT SEGMENT:
         {part_srt}
@@ -1248,9 +1276,9 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
         try:
             headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
             payload = {
-                "model": "gpt-4.1-mini",
+                "model": "gpt-4o-mini",
                 "messages": [
-                    {"role": "system", "content": "أنت خبير محترف في تحليل الفيديوهات. يجب أن يكون الحقل start_time نسخاً حرفياً لأحد توقيتات البداية في نص SRT."},
+                    {"role": "system", "content": system_msg},
                     {"role": "user", "content": prompt}
                 ],
                 "temperature": 0.1
@@ -1267,16 +1295,15 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
                     return json.loads(match.group(0))
             return []
         except Exception as e:
-            logger.error(f"Error in highlights AI part {part_index}: {e}")
+            logger.error(f"Error in moments AI part {part_index}: {e}")
             return []
 
-    # معالجة الأجزاء (يمكن القيام بذلك بالتوازي إذا لزم الأمر، ولكن هنا نلتزم بالترتيب لضمان الاستقرار)
+    # معالجة الأجزاء
     for i, part_cues in enumerate(time_windows):
-        chunk_highlights = await fetch_highlights_for_part(i, part_cues)
+        chunk_highlights = await fetch_moments_for_part(i, part_cues)
         if chunk_highlights:
             for h in chunk_highlights:
                 if not isinstance(h, dict): continue
-                # تحويل النص المنسوخ إلى ثوانٍ مطلقة بدقة
                 h["seconds"] = resolve_highlight_seconds(h, part_cues, i, duration_cap)
             all_highlights.extend(chunk_highlights)
 
@@ -1831,8 +1858,8 @@ async def telegram_publish_by_id_endpoint(
         db.close()
 
 @app.get("/api/video-insight/{news_type}/{news_id}")
-async def get_video_insight_endpoint(news_type: str, news_id: int, db: Session = Depends(get_db)):
-    """جلب أو استخراج 'اللحظات الهامة' للفيديو."""
+async def get_video_insight_endpoint(news_type: str, news_id: int, mode: str = "highlights", db: Session = Depends(get_db)):
+    """جلب أو استخراج 'اللحظات الهامة' أو 'المبادئ الأولى' للفيديو."""
     news_item = None
     if news_type == 'world':
         news_item = db.query(NewsItem).filter(NewsItem.id == news_id).first()
@@ -1844,20 +1871,24 @@ async def get_video_insight_endpoint(news_type: str, news_id: int, db: Session =
     if not news_item:
         return {"error": "Item not found"}, 404
 
+    # تحديد أي حقل نستخدم بناءً على المود
+    existing_data = news_item.first_principles if mode == "first_principles" else news_item.highlights
+
     # إذا كانت النتائج مخزنة مسبقاً
-    if news_item.highlights and news_item.srt_transcript:
+    if existing_data and news_item.srt_transcript:
         try:
             return {
                 "id": news_item.id,
                 "video_id": news_item.video_id,
                 "title": news_item.title,
-                "highlights": json.loads(news_item.highlights),
+                "highlights": json.loads(existing_data),
+                "mode": mode,
                 "has_transcript": True
             }
         except: pass
 
     # استخراج جديد
-    logger.info(f"🔍 Extracting insights for: {news_item.link}")
+    logger.info(f"🔍 Extracting insights ({mode}) for: {news_item.link}")
     res = await asyncio.to_thread(fetch_youtube_subs_downsub, news_item.link, formats=['txt', 'srt'])
     
     if res["error"]:
@@ -1876,20 +1907,24 @@ async def get_video_insight_endpoint(news_type: str, news_id: int, db: Session =
             duration = meta.get("duration") or 0
     except: pass
 
-    highlights = await analyze_video_highlights_ai(srt, duration, news_item.title or "")
+    results = await analyze_video_highlights_ai(srt, duration, news_item.title or "", mode=mode)
     
-    if highlights:
+    if results:
         # حفظ في قاعدة البيانات
         news_item.srt_transcript = srt
         news_item.full_transcript = res.get("txt")
-        news_item.highlights = json.dumps(highlights)
+        if mode == "first_principles":
+            news_item.first_principles = json.dumps(results)
+        else:
+            news_item.highlights = json.dumps(results)
         db.commit()
 
     return {
         "id": news_item.id,
         "video_id": news_item.video_id,
         "title": news_item.title,
-        "highlights": highlights,
+        "highlights": results,
+        "mode": mode,
         "has_transcript": bool(srt)
     }
 

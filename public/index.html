@@ -2164,11 +2164,18 @@
                         <p class="text-[10px] text-neutral-500 font-mono leading-relaxed uppercase mb-6">Extract
                             thematic
                             highlights using AI analysis</p>
-                        <button onclick="fetch_highlights_for_part()"
-                            class="px-6 py-2.5 bg-neon-blue text-black font-black text-xs rounded-lg hover:bg-white transition-all uppercase tracking-widest flex items-center gap-2">
-                            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
-                            <span>بدء استخراج اللحظات</span>
-                        </button>
+                        <div class="flex flex-col gap-3 w-full">
+                            <button onclick="fetch_highlights_for_part('highlights')"
+                                class="w-full px-6 py-2.5 bg-neon-blue text-black font-black text-xs rounded-lg hover:bg-white transition-all uppercase tracking-widest flex items-center justify-center gap-2 group">
+                                <i data-lucide="sparkles" class="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
+                                <span>استخراج اللحظات القوية</span>
+                            </button>
+                            <button onclick="fetch_highlights_for_part('first_principles')"
+                                class="w-full px-6 py-2.5 bg-amber-500 text-black font-black text-xs rounded-lg hover:bg-white transition-all uppercase tracking-widest flex items-center justify-center gap-2 group">
+                                <i data-lucide="gem" class="w-3.5 h-3.5 group-hover:scale-110 transition-transform"></i>
+                                <span>استخراج المبادئ الأولى</span>
+                            </button>
+                        </div>
                     </div>
 
                     <div id="insight-loading"
@@ -2456,20 +2463,27 @@
             if (window.lucide) lucide.createIcons();
         }
 
-        async function fetch_highlights_for_part() {
+        async function fetch_highlights_for_part(mode = 'highlights') {
             if (!currentInsightId || !currentInsightType) return;
 
             const startEl = document.getElementById('insight-start-analysis');
             const loadingEl = document.getElementById('insight-loading');
             const listEl = document.getElementById('insight-highlights');
             const errorEl = document.getElementById('insight-error');
+            const loadingText = loadingEl.querySelector('p:nth-of-type(1)');
+
+            if (mode === 'first_principles') {
+                loadingText.textContent = 'جاري استخراج المبادئ الأولى...';
+            } else {
+                loadingText.textContent = 'جاري استخراج الخريطة الذهنية...';
+            }
 
             startEl.classList.add('hidden');
             loadingEl.classList.remove('hidden');
             errorEl.classList.add('hidden');
 
             try {
-                const r = await fetch(`/api/video-insight/${currentInsightType}/${currentInsightId}`);
+                const r = await fetch(`/api/video-insight/${currentInsightType}/${currentInsightId}?mode=${mode}`);
                 const data = await r.json();
 
                 if (data.error) throw new Error(data.error);
@@ -2477,18 +2491,31 @@
                 loadingEl.classList.add('hidden');
                 listEl.classList.remove('hidden');
 
+                // Update section title icon/text based on mode
+                const titleIcon = document.querySelector('h4 i[data-lucide="zap"], h4 i[data-lucide="gem"]');
+                const titleText = titleIcon.nextSibling;
+                if (mode === 'first_principles') {
+                    titleIcon.setAttribute('data-lucide', 'gem');
+                    titleIcon.className = 'w-3.5 h-3.5 text-amber-400';
+                    titleText.textContent = ' المبادئ الأولى';
+                } else {
+                    titleIcon.setAttribute('data-lucide', 'zap');
+                    titleIcon.className = 'w-3.5 h-3.5 text-amber-400';
+                    titleText.textContent = ' خريطة اللحظات';
+                }
+
                 if (data.highlights && data.highlights.length > 0) {
                     document.getElementById('moments-count').textContent = data.highlights.length;
                     const videoId = document.getElementById('insight-video-id').textContent;
                     listEl.innerHTML = data.highlights.map((m, i) => `
-                        <div class="moment-card" onclick="seekVideo('${videoId}', ${m.seconds}, this)">
-                            <div class="moment-time">${formatSeconds(m.seconds)}</div>
-                            <div class="moment-title">${m.title}</div>
+                        <div class="moment-card ${mode === 'first_principles' ? 'border-amber-500/30' : ''}" onclick="seekVideo('${videoId}', ${m.seconds}, this)">
+                            <div class="moment-time ${mode === 'first_principles' ? 'bg-amber-500 text-black' : ''}">${formatSeconds(m.seconds)}</div>
+                            <div class="moment-title ${mode === 'first_principles' ? 'text-amber-400' : ''}">${m.title}</div>
                             <div class="moment-reason">${m.reason_ar || m.reason || ''}</div>
                         </div>
                     `).join('');
                 } else {
-                    listEl.innerHTML = '<p class="text-[10px] text-neutral-500 text-center py-10 uppercase font-mono">No specific thematic moments detected</p>';
+                    listEl.innerHTML = `<p class="text-[10px] text-neutral-500 text-center py-10 uppercase font-mono">No ${mode} detected</p>`;
                     document.getElementById('moments-count').textContent = '0';
                 }
             } catch (e) {
