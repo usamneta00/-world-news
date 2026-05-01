@@ -1274,7 +1274,7 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
         - title: Catchy Arabic title (max 5 words).
         - start_time: EXACT STRING copied from the SRT below.
         - seconds: Exact integer timestamp from beginning of this segment.
-        - reason_ar: High-quality Arabic explanation of why this moment matters or the core truth it represents, without any personal analysis, moral judgments.
+        - reason_ar: High-quality Arabic explanation of why this moment matters or the core truth it represents, without any personal analysis, moral judgments, or political conclusions.
         
         SRT SEGMENT:
         {part_srt}
