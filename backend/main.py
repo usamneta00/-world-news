@@ -1910,14 +1910,19 @@ async def get_video_insight_endpoint(news_type: str, news_id: int, mode: str = "
     results = await analyze_video_highlights_ai(srt, duration, news_item.title or "", mode=mode)
     
     if results:
-        # حفظ في قاعدة البيانات
-        news_item.srt_transcript = srt
-        news_item.full_transcript = res.get("txt")
-        if mode == "first_principles":
-            news_item.first_principles = json.dumps(results)
-        else:
-            news_item.highlights = json.dumps(results)
-        db.commit()
+        try:
+            # حفظ في قاعدة البيانات
+            news_item.srt_transcript = srt
+            news_item.full_transcript = res.get("txt")
+            if mode == "first_principles":
+                news_item.first_principles = json.dumps(results)
+            else:
+                news_item.highlights = json.dumps(results)
+            db.commit()
+            logger.info(f"✅ تم حفظ نتائج ({mode}) في قاعدة البيانات.")
+        except Exception as db_err:
+            logger.error(f"❌ فشل حفظ النتائج في قاعدة البيانات: {db_err}")
+            db.rollback()
 
     return {
         "id": news_item.id,

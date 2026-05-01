@@ -2148,7 +2148,8 @@
                     <div class="p-4 border-b border-white/10 flex items-center justify-between">
                         <h4
                             class="text-xs font-black text-neutral-300 uppercase tracking-widest flex items-center gap-2">
-                            <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-400"></i> خريطة اللحظات
+                            <i id="insight-icon" data-lucide="zap" class="w-3.5 h-3.5 text-amber-400"></i>
+                            <span id="insight-section-title">خريطة اللحظات</span>
                         </h4>
                         <span id="moments-count"
                             class="text-[10px] bg-white/5 px-2 py-0.5 rounded border border-white/10 text-neutral-500">0</span>
@@ -2492,16 +2493,19 @@
                 listEl.classList.remove('hidden');
 
                 // Update section title icon/text based on mode
-                const titleIcon = document.querySelector('h4 i[data-lucide="zap"], h4 i[data-lucide="gem"]');
-                const titleText = titleIcon.nextSibling;
-                if (mode === 'first_principles') {
-                    titleIcon.setAttribute('data-lucide', 'gem');
-                    titleIcon.className = 'w-3.5 h-3.5 text-amber-400';
-                    titleText.textContent = ' المبادئ الأولى';
-                } else {
-                    titleIcon.setAttribute('data-lucide', 'zap');
-                    titleIcon.className = 'w-3.5 h-3.5 text-amber-400';
-                    titleText.textContent = ' خريطة اللحظات';
+                const titleIcon = document.getElementById('insight-icon');
+                const titleText = document.getElementById('insight-section-title');
+                
+                if (titleIcon && titleText) {
+                    if (mode === 'first_principles') {
+                        titleIcon.setAttribute('data-lucide', 'gem');
+                        titleIcon.className = 'w-3.5 h-3.5 text-amber-400';
+                        titleText.textContent = ' المبادئ الأولى';
+                    } else {
+                        titleIcon.setAttribute('data-lucide', 'zap');
+                        titleIcon.className = 'w-3.5 h-3.5 text-amber-400';
+                        titleText.textContent = ' خريطة اللحظات';
+                    }
                 }
 
                 if (data.highlights && data.highlights.length > 0) {
