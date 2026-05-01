@@ -1251,10 +1251,10 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
             4. If the speaker is using rhetoric, ignore the words and extract the "Strategic Intent"."""
             system_msg = "أنت محلل جيوسياسي وفيلسوف استراتيجي. مهمتك ليست تلخيص الأخبار، بل تفكيكها إلى 'مبادئها الأولى'. استخرج القوانين والحقائق الصلبة التي تحرك الأحداث، وتخلص من أي لغة عاطفية أو صحفية."
         else:
-            task_desc = '''Identify the "First Principles" and "Core Solid Facts" in THIS segment. 
-            Ignore all noise, filler words, emotional language, or rhetorical flourishes. 
-            Focus ONLY on the foundational truths and objective realities mentioned.'''
-            system_msg = "أنت محلل استراتيجي خبير في التفكير بالمبادئ الأولى (First Principles Thinking). مهمتك استخراج الحقائق الصلبة والجواهر المعرفية فقط وتجاهل الحشو والعواطف."
+            task_desc = """Identify the most 'Powerful', 'High-Impact', and 'Defining' moments in THIS segment. 
+            A high-impact moment is one that contains a strong revelation, an emotional peak, or a critical piece of information.
+            Focus on the 'Golden Nuggets' that would make a viewer stop and pay attention."""
+            system_msg = "أنت محلل محتوى خبير وصانع أفلام. مهمتك استخراج اللحظات الأكثر تأثيراً وجاذبية. يجب أن يكون الشرح (reason_ar) وافياً، بليغاً، ويوضح بدقة القيمة الحقيقية لكل لحظة بلغة عربية احترافية وسلسة. تأكد من أن start_time مطابق تماماً للـ SRT."
 
         prompt = f"""
         Below is a segment (Part {part_index + 1} of {num_parts}) of a video transcript in SRT format. 
