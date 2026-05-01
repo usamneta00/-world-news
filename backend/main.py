@@ -1241,13 +1241,20 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
         t1 = part_cues[-1]["end_str"]
 
         if mode == "first_principles":
-            task_desc = """Identify the "First Principles" and "Core Solid Facts" in THIS segment. 
-            Ignore all noise, filler words, emotional language, or rhetorical flourishes. 
-            Focus ONLY on the foundational truths and objective realities mentioned."""
-            system_msg = "أنت محلل استراتيجي خبير في التفكير بالمبادئ الأولى (First Principles Thinking). مهمتك استخراج الحقائق الصلبة والجواهر المعرفية فقط وتجاهل الحشو والعواطف."
+            task_desc = """STRIP AWAY all journalism, emotions, and narrative. Identify the "First Principles" (Foundational Truths) in this segment.
+            A First Principle is an underlying reality or a structural cause that remains true even if you remove the names and places.
+            
+            RULES for First Principles Mode:
+            1. DO NOT summarize what happened. Identify WHY it is happening at a structural level.
+            2. Titles must be "Core Realities" (e.g., "Conflict of Interests", "Resource Scarcity", "Power Shift") not news headlines.
+            3. Reasons must explain the "Undeniable Logic" behind the moment.
+            4. If the speaker is using rhetoric, ignore the words and extract the "Strategic Intent"."""
+            system_msg = "أنت محلل جيوسياسي وفيلسوف استراتيجي. مهمتك ليست تلخيص الأخبار، بل تفكيكها إلى 'مبادئها الأولى'. استخرج القوانين والحقائق الصلبة التي تحرك الأحداث، وتخلص من أي لغة عاطفية أو صحفية."
         else:
-            task_desc = 'Identify the all most "Powerful" and "High-Impact" moments in THIS segment.'
-            system_msg = "أنت خبير محترف في تحليل الفيديوهات. يجب أن يكون الحقل start_time نسخاً حرفياً لأحد توقيتات البداية في نص SRT."
+            task_desc = '''Identify the "First Principles" and "Core Solid Facts" in THIS segment. 
+            Ignore all noise, filler words, emotional language, or rhetorical flourishes. 
+            Focus ONLY on the foundational truths and objective realities mentioned.'''
+            system_msg = "أنت محلل استراتيجي خبير في التفكير بالمبادئ الأولى (First Principles Thinking). مهمتك استخراج الحقائق الصلبة والجواهر المعرفية فقط وتجاهل الحشو والعواطف."
 
         prompt = f"""
         Below is a segment (Part {part_index + 1} of {num_parts}) of a video transcript in SRT format. 
