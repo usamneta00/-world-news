@@ -1252,9 +1252,9 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
             system_msg = "أنت محلل جيوسياسي وفيلسوف استراتيجي. مهمتك ليست تلخيص الأخبار، بل تفكيكها إلى 'مبادئها الأولى'. استخرج القوانين والحقائق الصلبة التي تحرك الأحداث، وتخلص من أي لغة عاطفية أو صحفية."
         else:
             task_desc = """Identify the most 'Powerful', 'High-Impact', and 'Defining' moments in THIS segment. 
-            Focus on key events, major statements, and critical information that describe WHAT happened.
+            A high-impact moment is one that contains a strong revelation, an emotional peak, or a critical piece of information.
             Focus on the 'Golden Nuggets' that would make a viewer stop and pay attention."""
-            system_msg = "أنت صانع محتوى إخباري ومحلل بيانات. مهمتك استخراج اللحظات الأكثر تأثيراً. يجب أن يكون الشرح (reason_ar) وصفياً ومباشراً لما قيل أو حدث في اللحظة. تجنب تماماً أي تحليل شخصي، أو استنتاج تناقضات سياسية، أو إصدار أحكام أخلاقية (مثل: 'يعكس عدم الأمانة' أو 'يبرز أهمية الشفافية'). صف الواقعة كما هي بلغة عربية احترافية وسلسة."
+            system_msg = "أنت محلل محتوى خبير وصانع أفلام. مهمتك استخراج اللحظات الأكثر تأثيراً وجاذبية. يجب أن يكون الشرح (reason_ar) وافياً، بليغاً، ويوضح بدقة القيمة الحقيقية لكل لحظة بلغة عربية احترافية وسلسة. تأكد من أن start_time مطابق تماماً للـ SRT."
 
         prompt = f"""
         Below is a segment (Part {part_index + 1} of {num_parts}) of a video transcript in SRT format. 
@@ -1274,7 +1274,7 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
         - title: Catchy Arabic title (max 5 words).
         - start_time: EXACT STRING copied from the SRT below.
         - seconds: Exact integer timestamp from beginning of this segment.
-        - reason_ar: A descriptive Arabic summary of what actually happened or what was said in this moment, without any personal analysis, moral judgments, or political conclusions.
+        - reason_ar: High-quality Arabic explanation of why this moment matters or the core truth it represents, without any personal analysis, moral judgments.
         
         SRT SEGMENT:
         {part_srt}
