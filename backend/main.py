@@ -1882,7 +1882,7 @@ async def get_video_insight_endpoint(news_type: str, news_id: int, mode: str = "
     existing_data = news_item.first_principles if mode == "first_principles" else news_item.highlights
 
     # إذا كانت النتائج مخزنة مسبقاً
-    if existing_data and news_item.srt_transcript:
+    if existing_data:
         try:
             return {
                 "id": news_item.id,
@@ -1894,14 +1894,32 @@ async def get_video_insight_endpoint(news_type: str, news_id: int, mode: str = "
             }
         except: pass
 
-    # استخراج جديد
-    logger.info(f"🔍 Extracting insights ({mode}) for: {news_item.link}")
-    res = await asyncio.to_thread(fetch_youtube_subs_downsub, news_item.link, formats=['txt', 'srt'])
+    # استخراج جديد أو تحليل للنص الموجود
+    logger.info(f"🔍 Analyzing insights ({mode}) for: {news_item.link}")
     
-    if res["error"]:
-        return {"error": f"Extraction failed: {res['error']}"}, 500
+    # محاولة استخدام النص المخزن في قاعدة البيانات لتجنب استدعاء DownSub مرتين
+    srt = news_item.srt_transcript
+    txt = news_item.full_transcript
+    
+    if not srt:
+        logger.info(f"⏳ Transcript missing locally, fetching via DownSub...")
+        res = await asyncio.to_thread(fetch_youtube_subs_downsub, news_item.link, formats=['txt', 'srt'])
         
-    srt = res["srt"]
+        if res["error"]:
+            return {"error": f"Extraction failed: {res['error']}"}, 500
+            
+        srt = res["srt"]
+        txt = res["txt"]
+        
+        # حفظ النص المجلوب في قاعدة البيانات فوراً لتجنب جلبة مرة أخرى
+        if srt:
+            news_item.srt_transcript = srt
+            news_item.full_transcript = txt
+            db.commit()
+            logger.info("💾 Transcript saved to database.")
+    else:
+        logger.info(f"♻️ Using cached transcript from database.")
+
     if not srt:
         return {"error": "لم يتم العثور على ترجمة SRT لهذا الفيديو"}, 500
 
@@ -1918,9 +1936,7 @@ async def get_video_insight_endpoint(news_type: str, news_id: int, mode: str = "
     
     if results:
         try:
-            # حفظ في قاعدة البيانات
-            news_item.srt_transcript = srt
-            news_item.full_transcript = res.get("txt")
+            # حفظ النتائج في قاعدة البيانات
             if mode == "first_principles":
                 news_item.first_principles = json.dumps(results)
             else:
