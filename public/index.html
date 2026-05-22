@@ -2500,17 +2500,22 @@
             openInsight(id, type, btn);
         }
 
-        async function openInsight(id, type, btn) {
-            // Find news item
+        function findNewsItemByIdAndType(id, type) {
             const allPossibleNews = [...allNews, ...yemenNews, ...newspaperNews, ...dubbedNews, ...(recommendedNews || [])];
-            const item = allPossibleNews.find(n => n.id === id);
+            return allPossibleNews.find(n => n.id === id && (!type || (n.type || activeTab) === type))
+                || allPossibleNews.find(n => n.id === id);
+        }
+
+        async function openInsight(id, type, btn, itemOverride = null) {
+            // Find news item from current lists, or use provided one (deep search result)
+            const item = itemOverride || findNewsItemByIdAndType(id, type);
             if (!item) {
                 console.error("News item not found for insight:", id);
                 return;
             }
 
-            currentInsightId = id;
-            currentInsightType = type;
+            currentInsightId = item.id ?? id;
+            currentInsightType = item.type || type;
             currentInsightBtn = btn;
 
             // Extract YouTube ID
@@ -2552,6 +2557,31 @@
                 }
             }
             if (window.lucide) lucide.createIcons();
+        }
+
+        function openDeepSearchResult(resultIndex) {
+            const item = deepSearchLastResults[resultIndex];
+            if (!item) {
+                showToast('تعذر فتح النتيجة');
+                return;
+            }
+            const isYouTube = !!item.link?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/);
+
+            // Only YouTube videos should open Video Intelligence Analysis.
+            if (!item.is_video || !isYouTube) {
+                window.open(item.link || '#', '_blank');
+                return;
+            }
+
+            if (!item.id || !item.type) {
+                // Fallback in case result lacks required identity for analysis APIs.
+                window.open(item.link || '#', '_blank');
+                showToast('لا تتوفر بيانات كافية لفتح شاشة التحليل');
+                return;
+            }
+
+            closeDeepSearchModal();
+            openInsight(item.id, item.type, null, item);
         }
 
         async function fetch_highlights_for_part(mode = 'highlights') {
@@ -2959,10 +2989,11 @@
                 return;
             }
 
-            container.innerHTML = results.map((item) => {
+            container.innerHTML = results.map((item, index) => {
                 const published = item.published ? new Date(item.published).toLocaleString('ar-EG') : 'غير متوفر';
                 const createdAt = item.created_at ? new Date(item.created_at).toLocaleString('ar-EG') : 'غير متوفر';
-                const actionLabel = item.is_video ? 'مشاهدة' : 'قراءة';
+                const isYouTube = !!item.link?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/);
+                const actionLabel = isYouTube ? 'مشاهدة' : 'الذهاب للمصدر';
                 const safeLink = item.link || '#';
                 return `
                     <div class="deep-search-result-card">
@@ -2981,7 +3012,10 @@
                             <span>تاريخ الإضافة: ${createdAt}</span>
                         </div>
                         <div class="flex items-center gap-2">
-                            <a href="${safeLink}" target="_blank" class="px-3 py-1.5 bg-neon-blue text-black rounded-lg text-xs font-bold hover:bg-white transition-colors">${actionLabel}</a>
+                            ${item.is_video && isYouTube
+                        ? `<button onclick="openDeepSearchResult(${index})" class="px-3 py-1.5 bg-neon-blue text-black rounded-lg text-xs font-bold hover:bg-white transition-colors">مشاهدة</button>`
+                        : `<a href="${safeLink}" target="_blank" class="px-3 py-1.5 bg-neon-blue text-black rounded-lg text-xs font-bold hover:bg-white transition-colors">${actionLabel}</a>`
+                    }
                             <span class="text-[11px] text-neutral-500">${item.type}</span>
                         </div>
                     </div>
