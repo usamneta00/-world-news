@@ -1349,6 +1349,46 @@
         .insight-scrollbar::-webkit-scrollbar-thumb:hover {
             background: #2dd4bf !important;
         }
+
+        .deep-search-panel {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: linear-gradient(120deg, rgba(20, 20, 20, 0.7), rgba(15, 23, 42, 0.65));
+            border-radius: 16px;
+            padding: 1rem;
+            backdrop-filter: blur(12px);
+        }
+
+        .deep-search-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #fff;
+            border-radius: 12px;
+            padding: 0.8rem 0.95rem;
+            font-size: 0.9rem;
+            outline: none;
+        }
+
+        .deep-search-input:focus {
+            border-color: rgba(45, 212, 191, 0.7);
+            box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.12);
+        }
+
+        .deep-search-result-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 0.85rem;
+        }
+
+        .deep-search-pill {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #cbd5e1;
+            background: rgba(255, 255, 255, 0.05);
+        }
     </style>
 </head>
 
@@ -1600,6 +1640,24 @@
                 <i data-lucide="refresh-cw"
                     class="w-4 h-4 text-neutral-400 group-hover:text-neon-blue group-hover:rotate-180 transition-all duration-500"></i>
             </div>
+
+            <section class="max-w-7xl mx-auto mb-10">
+                <div class="deep-search-panel">
+                    <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h3 class="text-base md:text-lg font-bold text-white">البحث الماسح الاستراتيجي العميق</h3>
+                            <p class="text-xs text-neutral-400 mt-1">ابحث في كل الأقسام: العالمية، اليمنية، الصحف، والقنوات المدبلجة مع توليد عنوان عربي وإنجليزي.</p>
+                        </div>
+                        <form id="deep-search-form" class="w-full md:w-auto flex-1 flex gap-2">
+                            <input id="deep-search-query" class="deep-search-input" type="text" placeholder="اكتب الموضوع المراد البحث عنه..." />
+                            <button id="deep-search-btn" type="submit" class="px-4 py-2 bg-neon-blue text-black font-bold rounded-xl hover:bg-white transition-all whitespace-nowrap">
+                                بحث عميق
+                            </button>
+                        </form>
+                    </div>
+                    <p id="deep-search-inline-status" class="text-xs text-neutral-400 mt-3"></p>
+                </div>
+            </section>
 
             <!-- Hero Section -->
             <section class="max-w-7xl mx-auto mb-24">
@@ -1989,6 +2047,37 @@
         </div>
     </div>
 
+    <!-- Deep Search Modal -->
+    <div id="deep-search-modal" class="hidden fixed inset-0 z-[115] bg-black/80 backdrop-blur-sm p-4 md:p-8 overflow-y-auto">
+        <div class="max-w-5xl mx-auto glass-panel border border-white/10 rounded-2xl overflow-hidden">
+            <div class="p-4 md:p-5 border-b border-white/10 flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-bold text-white">نتائج البحث العميق</h3>
+                    <p id="deep-search-modal-meta" class="text-xs text-neutral-400 mt-1"></p>
+                </div>
+                <button id="deep-search-close-btn" class="p-2 rounded-full hover:bg-white/10 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5 text-neutral-400"></i>
+                </button>
+            </div>
+            <div class="p-4 md:p-5 border-b border-white/10 bg-black/20">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <div class="deep-search-result-card">
+                        <div class="text-neutral-400 mb-1">العنوان العربي المولد</div>
+                        <div id="deep-search-ar-title" class="text-white font-semibold"></div>
+                    </div>
+                    <div class="deep-search-result-card">
+                        <div class="text-neutral-400 mb-1">English Generated Title</div>
+                        <div id="deep-search-en-title" class="text-white font-semibold"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 md:p-5">
+                <div id="deep-search-loading" class="hidden py-6 text-center text-neutral-400 text-sm">جاري البحث في الأخبار المحملة...</div>
+                <div id="deep-search-results" class="space-y-3"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Video Insight Modal -->
     <div id="insight-modal"
         class="hidden fixed inset-0 z-[110] bg-obsidian/80 backdrop-blur-md flex items-center justify-center p-0 md:p-4 xl:p-0">
@@ -2239,6 +2328,7 @@
         let currentTimelineLinks = []; // Store timeline links for copying
         let currentReaderNewsId = null;
         let currentReaderNewsType = null;
+        let deepSearchLastResults = [];
         let toastTimer = null;
 
         function getImportanceChip(item, compact = false) {
@@ -2834,6 +2924,116 @@
         }
 
         function timeAgo(d) { return new Date(d).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }); }
+
+        function getSearchTypeBadge(type, isVideo) {
+            if (type === 'world') return '<span class="deep-search-pill">عالمي</span>';
+            if (type === 'yemen') return '<span class="deep-search-pill">يمني</span>';
+            if (type === 'newspaper') return '<span class="deep-search-pill">صحف</span>';
+            if (type === 'dubbed') return '<span class="deep-search-pill">مدبلج</span>';
+            return `<span class="deep-search-pill">${isVideo ? 'فيديو' : 'خبر'}</span>`;
+        }
+
+        function openDeepSearchModal() {
+            const modal = document.getElementById('deep-search-modal');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function closeDeepSearchModal() {
+            const modal = document.getElementById('deep-search-modal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            if (!document.getElementById('quick-reader')?.classList.contains('hidden') || !document.getElementById('insight-modal')?.classList.contains('hidden')) {
+                return;
+            }
+            document.body.style.overflow = 'auto';
+        }
+
+        function renderDeepSearchResults(results) {
+            const container = document.getElementById('deep-search-results');
+            if (!container) return;
+            if (!results || results.length === 0) {
+                container.innerHTML = `<div class="text-center text-sm text-neutral-400 py-8">لا توجد نتائج مطابقة حالياً.</div>`;
+                return;
+            }
+
+            container.innerHTML = results.map((item) => {
+                const published = item.published ? new Date(item.published).toLocaleString('ar-EG') : 'غير متوفر';
+                const createdAt = item.created_at ? new Date(item.created_at).toLocaleString('ar-EG') : 'غير متوفر';
+                const actionLabel = item.is_video ? 'مشاهدة' : 'قراءة';
+                const safeLink = item.link || '#';
+                return `
+                    <div class="deep-search-result-card">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                            <div class="flex items-center gap-2">
+                                ${getSearchTypeBadge(item.type, item.is_video)}
+                                <span class="text-[11px] text-neutral-400">${item.source || 'غير معروف'}</span>
+                            </div>
+                            <span class="text-[11px] text-neutral-500">Score: ${item.score || 0}</span>
+                        </div>
+                        <h4 class="text-white font-semibold leading-relaxed mb-2">${item.title || 'بدون عنوان'}</h4>
+                        <p class="text-xs text-neutral-400 line-clamp-2 mb-3">${item.summary || ''}</p>
+                        <div class="flex flex-wrap gap-2 text-[11px] text-neutral-400 mb-3">
+                            <span>تاريخ النشر: ${published}</span>
+                            <span>|</span>
+                            <span>تاريخ الإضافة: ${createdAt}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <a href="${safeLink}" target="_blank" class="px-3 py-1.5 bg-neon-blue text-black rounded-lg text-xs font-bold hover:bg-white transition-colors">${actionLabel}</a>
+                            <span class="text-[11px] text-neutral-500">${item.type}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function runDeepSearch() {
+            const queryInput = document.getElementById('deep-search-query');
+            const btn = document.getElementById('deep-search-btn');
+            const inlineStatus = document.getElementById('deep-search-inline-status');
+            const loadingEl = document.getElementById('deep-search-loading');
+            const modalMeta = document.getElementById('deep-search-modal-meta');
+            const arTitleEl = document.getElementById('deep-search-ar-title');
+            const enTitleEl = document.getElementById('deep-search-en-title');
+            if (!queryInput || !btn) return;
+
+            const q = queryInput.value.trim();
+            if (!q) {
+                if (inlineStatus) inlineStatus.textContent = 'اكتب موضوعاً أولاً.';
+                return;
+            }
+
+            btn.disabled = true;
+            const oldText = btn.textContent;
+            btn.textContent = '...جاري البحث';
+            if (inlineStatus) inlineStatus.textContent = 'يتم الآن فحص كل الأقسام...';
+            if (loadingEl) loadingEl.classList.remove('hidden');
+            openDeepSearchModal();
+
+            try {
+                const response = await fetch(`${API_URL}/deep-search?query=${encodeURIComponent(q)}&limit=120`);
+                const data = await response.json();
+                deepSearchLastResults = Array.isArray(data.results) ? data.results : [];
+                renderDeepSearchResults(deepSearchLastResults);
+
+                if (modalMeta) {
+                    modalMeta.textContent = `الموضوع: ${data.query || q} | عدد النتائج: ${data.total || 0}`;
+                }
+                if (arTitleEl) arTitleEl.textContent = data.arabic_title || q;
+                if (enTitleEl) enTitleEl.textContent = data.english_title || q;
+                if (inlineStatus) inlineStatus.textContent = `تم العثور على ${data.total || 0} نتيجة.`;
+            } catch (e) {
+                console.error('Deep search error:', e);
+                renderDeepSearchResults([]);
+                if (inlineStatus) inlineStatus.textContent = 'حدث خطأ أثناء البحث.';
+            } finally {
+                if (loadingEl) loadingEl.classList.add('hidden');
+                btn.disabled = false;
+                btn.textContent = oldText || 'بحث عميق';
+            }
+        }
 
         function switchTab(tab) {
             activeTab = tab;
@@ -3994,6 +4194,28 @@
         document.addEventListener('DOMContentLoaded', () => {
             if (localStorage.getItem('darkMode') === 'enabled') document.documentElement.classList.add('dark');
             initThree(); initDate(); fetchNews(1); connectWS();
+
+            const deepSearchForm = document.getElementById('deep-search-form');
+            if (deepSearchForm) {
+                deepSearchForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    await runDeepSearch();
+                });
+            }
+
+            const deepSearchCloseBtn = document.getElementById('deep-search-close-btn');
+            if (deepSearchCloseBtn) deepSearchCloseBtn.addEventListener('click', closeDeepSearchModal);
+
+            const deepSearchModal = document.getElementById('deep-search-modal');
+            if (deepSearchModal) {
+                deepSearchModal.addEventListener('click', (e) => {
+                    if (e.target === deepSearchModal) closeDeepSearchModal();
+                });
+            }
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closeDeepSearchModal();
+            });
         });
     </script>
     <script src="https://www.youtube.com/iframe_api"></script>

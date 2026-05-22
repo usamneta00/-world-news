@@ -3702,6 +3702,189 @@ async def startup_event():
     asyncio.create_task(fetch_newspaper_feeds())
     asyncio.create_task(fetch_dubbed_youtube_feeds())
 
+
+def _normalize_search_text(text: str) -> str:
+    if not text:
+        return ""
+    text = text.lower().strip()
+    text = re.sub(r"[^\w\u0600-\u06FF\s]", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def _safe_iso(dt_value) -> str:
+    if isinstance(dt_value, datetime):
+        return dt_value.isoformat()
+    if dt_value is None:
+        return ""
+    return str(dt_value)
+
+
+async def _generate_bilingual_search_titles(topic: str) -> Dict[str, str]:
+    """Generate Arabic and English search titles from a user topic."""
+    topic = (topic or "").strip()
+    if not topic:
+        return {"arabic_title": "", "english_title": ""}
+
+    default_ar = translate_to_arabic(topic)
+    default_en = topic
+
+    if not OPENAI_API_KEY:
+        return {"arabic_title": default_ar, "english_title": default_en}
+
+    prompt = f"""
+حوّل الموضوع التالي إلى عنوانين للبحث الإخباري:
+- عنوان عربي واضح ومباشر
+- عنوان إنجليزي واضح ومباشر
+
+الموضوع:
+{topic}
+
+أعد النتيجة بصيغة JSON فقط:
+{{
+  "arabic_title": "...",
+  "english_title": "..."
+}}
+""".strip()
+
+    try:
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": "You generate concise news search titles in Arabic and English. Return JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.2,
+            "max_tokens": 200
+        }
+        response = await asyncio.to_thread(
+            lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=20)
+        )
+        if response.status_code != 200:
+            return {"arabic_title": default_ar, "english_title": default_en}
+
+        content = response.json()["choices"][0]["message"]["content"].strip()
+        if content.startswith("```"):
+            parts = content.split("```")
+            if len(parts) >= 2:
+                content = parts[1]
+            content = content.replace("json", "", 1).strip()
+        parsed = json.loads(content)
+        ar_title = (parsed.get("arabic_title") or default_ar).strip()
+        en_title = (parsed.get("english_title") or default_en).strip()
+        return {"arabic_title": ar_title, "english_title": en_title}
+    except Exception as e:
+        logger.warning(f"Failed generating bilingual search titles: {e}")
+        return {"arabic_title": default_ar, "english_title": default_en}
+
+
+def _collect_search_items(db: Session, per_section: int = 250) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+
+    world_items = db.query(NewsItem).order_by(desc(NewsItem.created_at), desc(NewsItem.id)).limit(per_section).all()
+    yemen_items = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at), desc(YemenNewsItem.id)).limit(per_section).all()
+    newspaper_items = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at), desc(NewspaperNewsItem.id)).limit(per_section).all()
+    dubbed_items = db.query(DubbedNewsItem).order_by(desc(DubbedNewsItem.created_at), desc(DubbedNewsItem.id)).limit(per_section).all()
+
+    def append_item(n, news_type: str, is_video: bool):
+        items.append({
+            "id": n.id,
+            "type": news_type,
+            "title": n.title or "",
+            "summary": n.summary or "",
+            "link": n.link or "",
+            "source": n.source or "",
+            "image_url": n.image_url or "",
+            "video_id": getattr(n, "video_id", None),
+            "published": _safe_iso(getattr(n, "published", None)),
+            "created_at": _safe_iso(getattr(n, "created_at", None)),
+            "is_video": is_video,
+        })
+
+    for n in world_items:
+        append_item(n, "world", True)
+    for n in yemen_items:
+        append_item(n, "yemen", True)
+    for n in newspaper_items:
+        append_item(n, "newspaper", False)
+    for n in dubbed_items:
+        append_item(n, "dubbed", True)
+
+    return items
+
+
+def _score_search_item(item: Dict[str, Any], terms: List[str], topic_tokens: List[str]) -> int:
+    title_text = _normalize_search_text(item.get("title", ""))
+    summary_text = _normalize_search_text(item.get("summary", ""))
+    source_text = _normalize_search_text(item.get("source", ""))
+    combined = f"{title_text} {summary_text} {source_text}".strip()
+    score = 0
+
+    for term in terms:
+        t = _normalize_search_text(term)
+        if not t:
+            continue
+        if t in title_text:
+            score += 8
+        if t in summary_text:
+            score += 4
+        if t in source_text:
+            score += 2
+
+    for token in topic_tokens:
+        if len(token) < 3:
+            continue
+        if token in combined:
+            score += 1
+
+    return score
+
+
+@app.get("/api/deep-search")
+async def deep_search(query: str = Query(..., min_length=2), limit: int = Query(80, ge=1, le=200)):
+    """
+    Deep local search across world, yemen, newspaper, and dubbed sections.
+    Returns bilingual generated titles and matched results sorted by relevance then newest date.
+    """
+    db = SessionLocal()
+    try:
+        normalized_query = (query or "").strip()
+        if not normalized_query:
+            return {"query": query, "arabic_title": "", "english_title": "", "total": 0, "results": []}
+
+        titles = await _generate_bilingual_search_titles(normalized_query)
+        search_items = _collect_search_items(db, per_section=300)
+
+        term_candidates = [normalized_query, titles.get("arabic_title", ""), titles.get("english_title", "")]
+        terms = [t for t in term_candidates if t and t.strip()]
+
+        topic_tokens = []
+        for term in terms:
+            topic_tokens.extend(_normalize_search_text(term).split())
+        topic_tokens = list(dict.fromkeys(topic_tokens))
+
+        scored: List[Dict[str, Any]] = []
+        for item in search_items:
+            score = _score_search_item(item, terms, topic_tokens)
+            if score <= 0:
+                continue
+            item["score"] = score
+            scored.append(item)
+
+        scored.sort(key=lambda x: (x.get("score", 0), x.get("published", ""), x.get("created_at", "")), reverse=True)
+        top_results = scored[:limit]
+
+        return {
+            "query": normalized_query,
+            "arabic_title": titles.get("arabic_title", normalized_query),
+            "english_title": titles.get("english_title", normalized_query),
+            "total": len(scored),
+            "results": top_results
+        }
+    finally:
+        db.close()
+
 @app.get("/api/news")
 async def get_news(page: int = 1, limit: int = 20):
     db = SessionLocal()
