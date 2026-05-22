@@ -2565,10 +2565,8 @@
                 showToast('تعذر فتح النتيجة');
                 return;
             }
-            const isYouTube = !!item.link?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/);
 
-            // Only YouTube videos should open Video Intelligence Analysis.
-            if (!item.is_video || !isYouTube) {
+            if (!item.is_video) {
                 window.open(item.link || '#', '_blank');
                 return;
             }
@@ -2992,8 +2990,7 @@
             container.innerHTML = results.map((item, index) => {
                 const published = item.published ? new Date(item.published).toLocaleString('ar-EG') : 'غير متوفر';
                 const createdAt = item.created_at ? new Date(item.created_at).toLocaleString('ar-EG') : 'غير متوفر';
-                const isYouTube = !!item.link?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/);
-                const actionLabel = isYouTube ? 'مشاهدة' : 'الذهاب للمصدر';
+                const actionLabel = item.is_video ? 'مشاهدة' : 'قراءة';
                 const safeLink = item.link || '#';
                 return `
                     <div class="deep-search-result-card">
@@ -3012,7 +3009,7 @@
                             <span>تاريخ الإضافة: ${createdAt}</span>
                         </div>
                         <div class="flex items-center gap-2">
-                            ${item.is_video && isYouTube
+                            ${item.is_video
                         ? `<button onclick="openDeepSearchResult(${index})" class="px-3 py-1.5 bg-neon-blue text-black rounded-lg text-xs font-bold hover:bg-white transition-colors">مشاهدة</button>`
                         : `<a href="${safeLink}" target="_blank" class="px-3 py-1.5 bg-neon-blue text-black rounded-lg text-xs font-bold hover:bg-white transition-colors">${actionLabel}</a>`
                     }
