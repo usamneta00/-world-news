@@ -2329,6 +2329,7 @@
         let currentReaderNewsId = null;
         let currentReaderNewsType = null;
         let deepSearchLastResults = [];
+        let insightOpenedFromDeepSearch = false;
         let toastTimer = null;
 
         function getImportanceChip(item, compact = false) {
@@ -2580,7 +2581,8 @@
                 return;
             }
 
-            closeDeepSearchModal();
+            insightOpenedFromDeepSearch = true;
+            hideDeepSearchModalOnly();
             openInsight(item.id, item.type, null, item);
         }
 
@@ -2777,6 +2779,9 @@
         }
 
         function closeInsight() {
+            const returnToDeepSearch = insightOpenedFromDeepSearch;
+            insightOpenedFromDeepSearch = false;
+
             document.getElementById('insight-modal').classList.add('hidden');
             // Reset Full Text container
             document.getElementById('insight-full-text-container').classList.add('hidden');
@@ -2792,7 +2797,13 @@
             } else {
                 document.getElementById('insight-player').src = '';
             }
-            document.body.style.overflow = 'auto';
+
+            if (returnToDeepSearch) {
+                openDeepSearchModal();
+            } else {
+                document.body.style.overflow = 'auto';
+            }
+
             currentInsightId = null;
             currentInsightType = null;
             currentInsightBtn = null;
@@ -2963,6 +2974,12 @@
             return `<span class="deep-search-pill">${isVideo ? 'فيديو' : 'خبر'}</span>`;
         }
 
+        function hideDeepSearchModalOnly() {
+            const modal = document.getElementById('deep-search-modal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+        }
+
         function openDeepSearchModal() {
             const modal = document.getElementById('deep-search-modal');
             if (!modal) return;
@@ -2972,9 +2989,8 @@
         }
 
         function closeDeepSearchModal() {
-            const modal = document.getElementById('deep-search-modal');
-            if (!modal) return;
-            modal.classList.add('hidden');
+            insightOpenedFromDeepSearch = false;
+            hideDeepSearchModalOnly();
             if (!document.getElementById('quick-reader')?.classList.contains('hidden') || !document.getElementById('insight-modal')?.classList.contains('hidden')) {
                 return;
             }
@@ -4248,7 +4264,13 @@
             }
 
             document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') closeDeepSearchModal();
+                if (e.key !== 'Escape') return;
+                const insightModal = document.getElementById('insight-modal');
+                if (insightModal && !insightModal.classList.contains('hidden')) {
+                    closeInsight();
+                    return;
+                }
+                closeDeepSearchModal();
             });
         });
     </script>
