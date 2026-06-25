@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Set, Any
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, desc
 from sqlalchemy.ext.declarative import declarative_base
@@ -12,7 +12,7 @@ import re
 import time
 import threading
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 import os
 import yt_dlp
 import requests
@@ -232,6 +232,23 @@ class NewsClusterMember(Base):
     news_id = Column(Integer, index=True)
     news_type = Column(String)
     added_at = Column(DateTime, default=datetime.now)
+
+class VideoSummaryUpdate(Base):
+    __tablename__ = "video_summary_updates"
+    id = Column(Integer, primary_key=True, index=True)
+    news_id = Column(Integer, index=True)
+    news_type = Column(String, index=True)
+    title = Column(String)
+    link = Column(String, unique=True)
+    summary = Column(String)
+    source = Column(String)
+    image_url = Column(String, nullable=True)
+    video_id = Column(String, nullable=True)
+    published = Column(DateTime)
+    status = Column(String, default="pending")
+    error = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now)
 
 Base.metadata.create_all(bind=engine)
 
@@ -1385,6 +1402,166 @@ async def summarize_world_video_ai(transcript, original_url):
         return None, f"AI Error: {response.status_code}"
     except Exception as e:
         return None, str(e)
+
+def get_video_news_item(db: Session, news_type: str, news_id: int):
+    if news_type == "world":
+        return db.query(NewsItem).filter(NewsItem.id == news_id).first()
+    if news_type == "yemen":
+        return db.query(YemenNewsItem).filter(YemenNewsItem.id == news_id).first()
+    if news_type == "dubbed":
+        return db.query(DubbedNewsItem).filter(DubbedNewsItem.id == news_id).first()
+    return None
+
+def video_update_payload(update: VideoSummaryUpdate) -> dict:
+    return {
+        "id": update.id,
+        "news_id": update.news_id,
+        "news_type": update.news_type,
+        "title": update.title,
+        "link": update.link,
+        "summary": update.summary or "",
+        "source": update.source,
+        "image_url": update.image_url,
+        "video_id": update.video_id,
+        "published": str(update.published) if update.published else "",
+        "status": update.status,
+        "error": update.error,
+        "created_at": str(update.created_at) if update.created_at else "",
+        "updated_at": str(update.updated_at) if update.updated_at else "",
+    }
+
+VIDEO_SUMMARY_CONCURRENCY = int(os.environ.get("VIDEO_SUMMARY_CONCURRENCY", "1"))
+video_summary_semaphore = asyncio.Semaphore(max(1, VIDEO_SUMMARY_CONCURRENCY))
+
+async def summarize_video_for_updates(news_type: str, news_id: int):
+    async with video_summary_semaphore:
+        video_url = ""
+        try:
+            db = SessionLocal()
+            try:
+                news_item = get_video_news_item(db, news_type, news_id)
+                if not news_item or not getattr(news_item, "link", None):
+                    return
+
+                video_url = news_item.link
+                update = db.query(VideoSummaryUpdate).filter(VideoSummaryUpdate.link == video_url).first()
+                if update and update.status == "ready" and update.summary:
+                    return
+                if not update:
+                    update = VideoSummaryUpdate(
+                        news_id=news_item.id,
+                        news_type=news_type,
+                        title=news_item.title,
+                        link=video_url,
+                        summary="",
+                        source=news_item.source,
+                        image_url=news_item.image_url,
+                        video_id=getattr(news_item, "video_id", None),
+                        published=news_item.published,
+                        status="pending",
+                    )
+                    db.add(update)
+                    db.commit()
+                    db.refresh(update)
+                    await manager.broadcast(json.dumps({"type": "video_summary_pending", "data": video_update_payload(update)}))
+
+                update.status = "processing"
+                update.error = None
+                update.updated_at = datetime.now()
+                db.commit()
+                db.refresh(update)
+                payload = video_update_payload(update)
+
+                cached_transcript = getattr(news_item, "full_transcript", None)
+                fallback_summary = (news_item.summary or "").strip()
+            finally:
+                db.close()
+
+            await manager.broadcast(json.dumps({"type": "video_summary_processing", "data": payload}))
+
+            transcript = cached_transcript
+            if not transcript:
+                res = await asyncio.to_thread(fetch_youtube_subs_downsub, video_url, formats=["txt"])
+                transcript = res.get("txt")
+                if transcript:
+                    db = SessionLocal()
+                    try:
+                        news_item = get_video_news_item(db, news_type, news_id)
+                        if news_item:
+                            news_item.full_transcript = transcript
+                            db.commit()
+                    finally:
+                        db.close()
+
+            if transcript and len(transcript.strip()) >= 10:
+                summary, error = await summarize_world_video_ai(transcript, video_url)
+            else:
+                summary, error = None, "تعذر جلب نص الفيديو من DownSub"
+
+            if not summary and fallback_summary:
+                summary = fallback_summary
+                error = None
+
+            db = SessionLocal()
+            try:
+                update = db.query(VideoSummaryUpdate).filter(VideoSummaryUpdate.link == video_url).first()
+                if not update:
+                    return
+                update.summary = summary or ""
+                update.status = "ready" if summary else "failed"
+                update.error = error if not summary else None
+                update.updated_at = datetime.now()
+                db.commit()
+                db.refresh(update)
+
+                ws_type = "video_summary_ready" if update.status == "ready" else "video_summary_failed"
+                await manager.broadcast(json.dumps({"type": ws_type, "data": video_update_payload(update)}))
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"[VideoUpdates] failed to summarize {news_type}:{news_id}: {e}")
+            if video_url:
+                db = SessionLocal()
+                try:
+                    update = db.query(VideoSummaryUpdate).filter(VideoSummaryUpdate.link == video_url).first()
+                    if update:
+                        update.status = "failed"
+                        update.error = str(e)
+                        update.updated_at = datetime.now()
+                        db.commit()
+                        db.refresh(update)
+                        await manager.broadcast(json.dumps({"type": "video_summary_failed", "data": video_update_payload(update)}))
+                finally:
+                    db.close()
+
+def schedule_video_summary_update(news_type: str, news_id: int):
+    try:
+        asyncio.get_running_loop().create_task(summarize_video_for_updates(news_type, news_id))
+    except RuntimeError:
+        logger.warning(f"[VideoUpdates] no running loop to schedule {news_type}:{news_id}")
+
+async def enqueue_recent_video_summary_updates():
+    await asyncio.sleep(5)
+    db = SessionLocal()
+    jobs = []
+    try:
+        stale = db.query(VideoSummaryUpdate).filter(VideoSummaryUpdate.status.in_(["pending", "processing", "failed"])).order_by(
+            desc(VideoSummaryUpdate.created_at), desc(VideoSummaryUpdate.id)
+        ).limit(50).all()
+        for update in stale:
+            jobs.append((update.news_type, update.news_id))
+    finally:
+        db.close()
+
+    seen = set()
+    for news_type, news_id in jobs:
+        key = (news_type, news_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        schedule_video_summary_update(news_type, news_id)
+    if jobs:
+        logger.info(f"[VideoUpdates] queued {len(seen)} recent/stale video summary jobs")
 
 async def analyze_geopolitical_ai(text):
     """تحليل جيوسياسي استراتيجي للنص بناءً على برومبت المستخدم."""
@@ -3331,6 +3508,8 @@ async def fetch_youtube_feeds():
                         "importance_reason": getattr(new_item, 'importance_reason', None)
                     }
                     new_items_found.append(item_dict)
+                    if not first_run:
+                        schedule_video_summary_update("world", new_item.id)
                     logger.info(f"✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
                     
                     # Process event timeline only for updates (no longer automatic to save costs)
@@ -3472,6 +3651,8 @@ async def fetch_yemen_youtube_feeds():
                         "importance_reason": getattr(new_item, 'importance_reason', None)
                     }
                     new_items_found.append(item_dict)
+                    if not first_run:
+                        schedule_video_summary_update("yemen", new_item.id)
                     logger.info(f"[Yemen] ✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
                     
                     # Process event timeline only for updates (no longer automatic to save costs)
@@ -3634,6 +3815,8 @@ async def fetch_dubbed_youtube_feeds():
                         "importance_reason": getattr(new_item, 'importance_reason', None)
                     }
                     new_items_found.append(item_dict)
+                    if not first_run:
+                        schedule_video_summary_update("dubbed", new_item.id)
                     logger.info(f"[Dubbed] ✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
                 except Exception as e:
                     db.rollback()
@@ -3701,6 +3884,7 @@ async def startup_event():
     asyncio.create_task(fetch_yemen_youtube_feeds())
     asyncio.create_task(fetch_newspaper_feeds())
     asyncio.create_task(fetch_dubbed_youtube_feeds())
+    asyncio.create_task(enqueue_recent_video_summary_updates())
 
 
 def _normalize_search_text(text: str) -> str:
@@ -3928,6 +4112,45 @@ async def get_dubbed_news(page: int = 1, limit: int = 20):
         "page": page,
         "limit": limit
     }
+
+@app.get("/api/video-summary-updates")
+async def get_video_summary_updates(limit: int = 50, status: str = "all"):
+    db = SessionLocal()
+    try:
+        query = db.query(VideoSummaryUpdate)
+        if status != "all":
+            query = query.filter(VideoSummaryUpdate.status == status)
+        rows = query.order_by(desc(VideoSummaryUpdate.created_at), desc(VideoSummaryUpdate.id)).limit(limit).all()
+        return {"items": [video_update_payload(row) for row in rows], "total": len(rows)}
+    finally:
+        db.close()
+
+@app.post("/api/arabic-tts")
+async def arabic_tts(payload: dict):
+    text = (payload.get("text") or payload.get("summary") or "").strip()
+    title = (payload.get("title") or "").strip()
+    speech_text = "\n\n".join(part for part in [title, text] if part).strip()
+    if not speech_text:
+        raise HTTPException(status_code=400, detail="text is required")
+
+    try:
+        import edge_tts
+    except ImportError:
+        raise HTTPException(status_code=500, detail="edge-tts is not installed")
+
+    voice = os.environ.get("ARABIC_TTS_VOICE", "ar-SA-ZariyahNeural")
+    audio = bytearray()
+    try:
+        communicate = edge_tts.Communicate(speech_text[:4000], voice, rate="+0%", volume="+0%")
+        async for chunk in communicate.stream():
+            if chunk.get("type") == "audio":
+                audio.extend(chunk.get("data", b""))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Arabic TTS failed: {e}")
+
+    if not audio:
+        raise HTTPException(status_code=502, detail="Arabic TTS returned empty audio")
+    return Response(content=bytes(audio), media_type="audio/mpeg")
 
 @app.post("/api/process-news-ai/{news_type}/{news_id}")
 async def process_news_ai(news_type: str, news_id: int):

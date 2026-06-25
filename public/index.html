@@ -1431,6 +1431,10 @@
                     title="الأخبار العالمية">
                     <i data-lucide="globe" class="w-4 h-4"></i>
                 </button>
+                <button id="tab-video-updates" onclick="switchTab('video-updates')"
+                    class="p-2 hover:text-neon-blue transition-colors text-neutral-500" title="تحديثات ملخصات الفيديو">
+                    <i data-lucide="radio" class="w-4 h-4"></i>
+                </button>
                 <button id="tab-yemen" onclick="switchTab('yemen')"
                     class="p-2 hover:text-neon-blue transition-colors text-neutral-500" title="أخبار اليمن">
                     <i data-lucide="map-pin" class="w-4 h-4"></i>
@@ -1713,6 +1717,32 @@
 
             <!-- Secondary Layout for leftovers or sidebar - Integrated into trending/bento usually -->
             <div id="trending-list" class="hidden"></div>
+        </div>
+
+        <!-- Video Summary Updates View -->
+        <div id="video-updates-view" class="hidden">
+            <section class="max-w-6xl mx-auto">
+                <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-8 border-b border-neutral-200 dark:border-neutral-800 pb-5">
+                    <div>
+                        <h2 class="font-serif text-3xl md:text-4xl text-white mb-2">تحديثات ملخصات الفيديو المباشرة</h2>
+                        <p class="text-sm text-neutral-400">كل فيديو جديد من المصادر يتم تلخيصه هنا تلقائيا فور وصوله.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-3">
+                        <button id="instant-listen-btn" onclick="toggleInstantVideoListening()"
+                            class="px-5 py-2.5 bg-neon-blue text-black font-black rounded-xl hover:bg-white transition-all flex items-center gap-2 text-sm">
+                            <i data-lucide="volume-2" class="w-4 h-4"></i>
+                            <span>الاستماع الفوري</span>
+                        </button>
+                        <button onclick="fetchVideoSummaryUpdates()"
+                            class="px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all flex items-center gap-2 text-sm text-neutral-200">
+                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                            <span>تحديث</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="video-updates-status" class="mb-5 text-xs font-mono text-neutral-500">READY</div>
+                <div id="video-updates-list" class="space-y-4"></div>
+            </section>
         </div>
 
         <!-- Heatmap View -->
@@ -2331,6 +2361,9 @@
         let deepSearchLastResults = [];
         let insightOpenedFromDeepSearch = false;
         let toastTimer = null;
+        let videoSummaryUpdates = [];
+        let instantVideoListening = false;
+        let currentSummaryAudio = null;
 
         function getImportanceChip(item, compact = false) {
             if (!item || !item.is_important) return '';
@@ -3085,9 +3118,136 @@
             }
         }
 
+        function updateVideoUpdatesStatus(text) {
+            const el = document.getElementById('video-updates-status');
+            if (el) el.textContent = text;
+        }
+
+        function upsertVideoSummaryUpdate(update) {
+            if (!update || !update.link) return;
+            const index = videoSummaryUpdates.findIndex(item => item.link === update.link);
+            if (index >= 0) videoSummaryUpdates[index] = { ...videoSummaryUpdates[index], ...update };
+            else videoSummaryUpdates.unshift(update);
+            videoSummaryUpdates.sort((a, b) => String(b.created_at || b.published || '').localeCompare(String(a.created_at || a.published || '')));
+            renderVideoSummaryUpdates();
+        }
+
+        function renderVideoSummaryUpdates() {
+            const list = document.getElementById('video-updates-list');
+            if (!list) return;
+            if (!videoSummaryUpdates.length) {
+                list.innerHTML = `<div class="glass-panel rounded-xl p-8 text-center text-neutral-400 border border-white/10">لا توجد ملخصات فيديو حتى الآن.</div>`;
+                return;
+            }
+
+            list.innerHTML = videoSummaryUpdates.map(item => {
+                const ready = item.status === 'ready';
+                const processing = item.status === 'pending' || item.status === 'processing';
+                const badgeClass = ready ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' : (processing ? 'text-amber-300 border-amber-500/30 bg-amber-500/10' : 'text-red-300 border-red-500/30 bg-red-500/10');
+                const badgeText = ready ? 'جاهز' : (processing ? 'قيد التلخيص' : 'فشل');
+                return `
+                    <article class="glass-panel rounded-xl overflow-hidden border border-white/10">
+                        <div class="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-0">
+                            <a href="${item.link}" target="_blank" rel="noreferrer" class="block aspect-video md:aspect-auto bg-black">
+                                <img src="${item.image_url || getThumbnailUrl(item.link)}" class="w-full h-full object-cover" alt="">
+                            </a>
+                            <div class="p-5 text-right">
+                                <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                    <span class="px-2.5 py-1 rounded-lg border text-[11px] font-bold ${badgeClass}">${badgeText}</span>
+                                    <div class="flex items-center gap-2 text-xs text-neutral-400">
+                                        <span>${item.source || ''}</span>
+                                        <span>${timeAgo(item.published || item.created_at)}</span>
+                                    </div>
+                                </div>
+                                <h3 class="font-serif text-xl text-white leading-snug mb-3">${item.title || ''}</h3>
+                                <p class="text-sm leading-8 text-neutral-300">${item.summary || item.error || 'جاري تجهيز الملخص...'}</p>
+                                <div class="mt-5 flex flex-wrap justify-end gap-2">
+                                    <button onclick='speakVideoSummaryByLink(${JSON.stringify(item.link)})' ${ready ? '' : 'disabled'}
+                                        class="px-4 py-2 rounded-lg bg-neon-blue text-black text-xs font-black disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2">
+                                        <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>
+                                        <span>استماع</span>
+                                    </button>
+                                    <button onclick="openInsight(${item.news_id}, '${item.news_type}', null)"
+                                        class="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-neutral-200 hover:text-neon-blue flex items-center gap-2">
+                                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                                        <span>تحليل الفيديو</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </article>`;
+            }).join('');
+            if (window.lucide) lucide.createIcons();
+        }
+
+        async function fetchVideoSummaryUpdates() {
+            updateVideoUpdatesStatus('جاري تحميل تحديثات الفيديو...');
+            try {
+                const r = await fetch(`${API_URL}/video-summary-updates?limit=80`);
+                const d = await r.json();
+                videoSummaryUpdates = Array.isArray(d.items) ? d.items : [];
+                renderVideoSummaryUpdates();
+                updateVideoUpdatesStatus(`${videoSummaryUpdates.length} تحديث فيديو`);
+            } catch (e) {
+                console.error(e);
+                updateVideoUpdatesStatus('تعذر تحميل تحديثات الفيديو');
+            }
+        }
+
+        async function speakVideoSummary(update) {
+            if (!update || !update.summary) return;
+            try {
+                if (currentSummaryAudio) currentSummaryAudio.pause();
+                const r = await fetch(`${API_URL}/arabic-tts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: update.title || '', text: update.summary || '' })
+                });
+                if (!r.ok) throw new Error('tts failed');
+                const blob = await r.blob();
+                const url = URL.createObjectURL(blob);
+                currentSummaryAudio = new Audio(url);
+                currentSummaryAudio.onended = () => URL.revokeObjectURL(url);
+                await currentSummaryAudio.play();
+            } catch (e) {
+                if (!('speechSynthesis' in window)) return;
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(`${update.title || ''}. ${update.summary || ''}`);
+                utterance.lang = 'ar-SA';
+                utterance.rate = 0.9;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        function speakVideoSummaryByLink(link) {
+            const update = videoSummaryUpdates.find(item => item.link === link);
+            speakVideoSummary(update);
+        }
+
+        function toggleInstantVideoListening() {
+            instantVideoListening = !instantVideoListening;
+            const btn = document.getElementById('instant-listen-btn');
+            if (btn) {
+                btn.classList.toggle('bg-emerald-500', instantVideoListening);
+                btn.classList.toggle('bg-neon-blue', !instantVideoListening);
+                btn.innerHTML = instantVideoListening
+                    ? '<i data-lucide="volume-x" class="w-4 h-4"></i><span>إيقاف الاستماع الفوري</span>'
+                    : '<i data-lucide="volume-2" class="w-4 h-4"></i><span>الاستماع الفوري</span>';
+                if (window.lucide) lucide.createIcons();
+            }
+            updateVideoUpdatesStatus(instantVideoListening ? 'الاستماع الفوري مفعل' : 'الاستماع الفوري متوقف');
+            if (instantVideoListening) {
+                const latestReady = videoSummaryUpdates.find(item => item.status === 'ready' && item.summary);
+                if (latestReady) speakVideoSummary(latestReady);
+            } else {
+                if (currentSummaryAudio) currentSummaryAudio.pause();
+                if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+            }
+        }
+
         function switchTab(tab) {
             activeTab = tab;
-            const tabs = ['world', 'yemen', 'newspaper', 'dubbed', 'recommended', 'clusters', 'heatmap'];
+            const tabs = ['world', 'video-updates', 'yemen', 'newspaper', 'dubbed', 'recommended', 'clusters', 'heatmap'];
             tabs.forEach(t => {
                 const el = document.getElementById(`tab-${t}`);
                 if (el) {
@@ -3104,12 +3264,14 @@
             const newsContent = document.getElementById('news-content');
             const heatmapView = document.getElementById('heatmap-view');
             const clustersView = document.getElementById('clusters-view');
+            const videoUpdatesView = document.getElementById('video-updates-view');
             const loader = document.getElementById('loading-state');
 
             if (tab === 'heatmap') {
                 if (newsContent) newsContent.classList.add('hidden');
                 if (heatmapView) heatmapView.classList.remove('hidden');
                 if (clustersView) clustersView.classList.add('hidden');
+                if (videoUpdatesView) videoUpdatesView.classList.add('hidden');
                 if (loader) loader.classList.add('hidden');
                 initHeatmap();
                 return;
@@ -3119,6 +3281,7 @@
                 if (newsContent) newsContent.classList.add('hidden');
                 if (heatmapView) heatmapView.classList.add('hidden');
                 if (clustersView) clustersView.classList.remove('hidden');
+                if (videoUpdatesView) videoUpdatesView.classList.add('hidden');
                 if (loader) loader.classList.add('hidden');
                 fetchClusters();
                 if (pendingClusterUpdates.length > 0) {
@@ -3127,11 +3290,24 @@
                 return;
             }
 
+            if (tab === 'video-updates') {
+                hideClusterBanner();
+                if (newsContent) newsContent.classList.add('hidden');
+                if (heatmapView) heatmapView.classList.add('hidden');
+                if (clustersView) clustersView.classList.add('hidden');
+                if (videoUpdatesView) videoUpdatesView.classList.remove('hidden');
+                if (loader) loader.classList.add('hidden');
+                fetchVideoSummaryUpdates();
+                return;
+            }
+
             hideClusterBanner();
 
             // For news tabs: show news content, hide others
             if (heatmapView) heatmapView.classList.add('hidden');
             if (clustersView) clustersView.classList.add('hidden');
+            if (videoUpdatesView) videoUpdatesView.classList.add('hidden');
+            if (newsContent) newsContent.classList.remove('hidden');
 
             const labels = {
                 world: ['Trending Intelligence'],
@@ -3163,7 +3339,7 @@
             const loader = document.getElementById('loading-state');
             const content = document.getElementById('news-content');
             if (loader) loader.classList.toggle('hidden', !l);
-            if (activeTab !== 'heatmap' && activeTab !== 'clusters') {
+            if (activeTab !== 'heatmap' && activeTab !== 'clusters' && activeTab !== 'video-updates') {
                 if (content) content.classList.toggle('hidden', l);
             }
             if (!l) lucide.createIcons();
@@ -4109,6 +4285,14 @@
                         syncRecommendedBadgesFromServer();
                         refreshActiveViewAfterImportanceUpdate();
                         showToast('تم تحديث اقتراحات المشاهدة للمجموعة');
+                        return;
+                    }
+                    if (msg.type === 'video_summary_pending' || msg.type === 'video_summary_processing' || msg.type === 'video_summary_ready' || msg.type === 'video_summary_failed') {
+                        upsertVideoSummaryUpdate(msg.data);
+                        if (msg.type === 'video_summary_ready') {
+                            showToast('وصل ملخص فيديو جديد');
+                            if (instantVideoListening) speakVideoSummary(msg.data);
+                        }
                         return;
                     }
 
