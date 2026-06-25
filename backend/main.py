@@ -3508,8 +3508,6 @@ async def fetch_youtube_feeds():
                         "importance_reason": getattr(new_item, 'importance_reason', None)
                     }
                     new_items_found.append(item_dict)
-                    if not first_run:
-                        schedule_video_summary_update("world", new_item.id)
                     logger.info(f"✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
                     
                     # Process event timeline only for updates (no longer automatic to save costs)
@@ -3651,8 +3649,6 @@ async def fetch_yemen_youtube_feeds():
                         "importance_reason": getattr(new_item, 'importance_reason', None)
                     }
                     new_items_found.append(item_dict)
-                    if not first_run:
-                        schedule_video_summary_update("yemen", new_item.id)
                     logger.info(f"[Yemen] ✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
                     
                     # Process event timeline only for updates (no longer automatic to save costs)
@@ -3815,8 +3811,6 @@ async def fetch_dubbed_youtube_feeds():
                         "importance_reason": getattr(new_item, 'importance_reason', None)
                     }
                     new_items_found.append(item_dict)
-                    if not first_run:
-                        schedule_video_summary_update("dubbed", new_item.id)
                     logger.info(f"[Dubbed] ✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
                 except Exception as e:
                     db.rollback()
@@ -3884,7 +3878,6 @@ async def startup_event():
     asyncio.create_task(fetch_yemen_youtube_feeds())
     asyncio.create_task(fetch_newspaper_feeds())
     asyncio.create_task(fetch_dubbed_youtube_feeds())
-    asyncio.create_task(enqueue_recent_video_summary_updates())
 
 
 def _normalize_search_text(text: str) -> str:
@@ -4124,6 +4117,32 @@ async def get_video_summary_updates(limit: int = 50, status: str = "all"):
         return {"items": [video_update_payload(row) for row in rows], "total": len(rows)}
     finally:
         db.close()
+
+@app.post("/api/video-summary-updates/start")
+async def start_video_summary_update(payload: dict):
+    news_type = (payload.get("news_type") or payload.get("type") or "").strip()
+    try:
+        news_id = int(payload.get("news_id") or payload.get("id"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="news_id is required")
+
+    if news_type not in {"world", "yemen", "dubbed"}:
+        raise HTTPException(status_code=400, detail="news_type must be world, yemen, or dubbed")
+
+    db = SessionLocal()
+    try:
+        news_item = get_video_news_item(db, news_type, news_id)
+        if not news_item or not getattr(news_item, "link", None):
+            raise HTTPException(status_code=404, detail="video news item not found")
+
+        update = db.query(VideoSummaryUpdate).filter(VideoSummaryUpdate.link == news_item.link).first()
+        if update and update.status in {"pending", "processing", "ready"}:
+            return {"status": update.status, "item": video_update_payload(update)}
+    finally:
+        db.close()
+
+    schedule_video_summary_update(news_type, news_id)
+    return {"status": "queued", "news_type": news_type, "news_id": news_id}
 
 @app.post("/api/arabic-tts")
 async def arabic_tts(payload: dict):

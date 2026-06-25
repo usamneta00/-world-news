@@ -2364,6 +2364,7 @@
         let videoSummaryUpdates = [];
         let instantVideoListening = false;
         let currentSummaryAudio = null;
+        let summaryAudioToken = 0;
 
         function getImportanceChip(item, compact = false) {
             if (!item || !item.is_important) return '';
@@ -3194,10 +3195,36 @@
             }
         }
 
+        async function startVideoSummaryFromLiveItem(item, newsType) {
+            if (activeTab !== 'video-updates' || !item || !item.id) return;
+            try {
+                await fetch(`${API_URL}/video-summary-updates/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ news_type: newsType, news_id: item.id })
+                });
+            } catch (e) {
+                console.error('Failed to start video summary update:', e);
+            }
+        }
+
+        function stopSummaryAudio() {
+            summaryAudioToken += 1;
+            if (currentSummaryAudio) {
+                currentSummaryAudio.pause();
+                try {
+                    if (currentSummaryAudio.src) URL.revokeObjectURL(currentSummaryAudio.src);
+                } catch (e) {}
+                currentSummaryAudio = null;
+            }
+            if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        }
+
         async function speakVideoSummary(update) {
             if (!update || !update.summary) return;
+            stopSummaryAudio();
+            const token = summaryAudioToken;
             try {
-                if (currentSummaryAudio) currentSummaryAudio.pause();
                 const r = await fetch(`${API_URL}/arabic-tts`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -3205,11 +3232,16 @@
                 });
                 if (!r.ok) throw new Error('tts failed');
                 const blob = await r.blob();
+                if (token !== summaryAudioToken) return;
                 const url = URL.createObjectURL(blob);
                 currentSummaryAudio = new Audio(url);
-                currentSummaryAudio.onended = () => URL.revokeObjectURL(url);
+                currentSummaryAudio.onended = () => {
+                    URL.revokeObjectURL(url);
+                    if (token === summaryAudioToken) currentSummaryAudio = null;
+                };
                 await currentSummaryAudio.play();
             } catch (e) {
+                if (token !== summaryAudioToken) return;
                 if (!('speechSynthesis' in window)) return;
                 window.speechSynthesis.cancel();
                 const utterance = new SpeechSynthesisUtterance(`${update.title || ''}. ${update.summary || ''}`);
@@ -3240,13 +3272,16 @@
                 const latestReady = videoSummaryUpdates.find(item => item.status === 'ready' && item.summary);
                 if (latestReady) speakVideoSummary(latestReady);
             } else {
-                if (currentSummaryAudio) currentSummaryAudio.pause();
-                if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+                stopSummaryAudio();
             }
         }
 
         function switchTab(tab) {
             activeTab = tab;
+            if (tab !== 'video-updates' && instantVideoListening) {
+                instantVideoListening = false;
+                stopSummaryAudio();
+            }
             const tabs = ['world', 'video-updates', 'yemen', 'newspaper', 'dubbed', 'recommended', 'clusters', 'heatmap'];
             tabs.forEach(t => {
                 const el = document.getElementById(`tab-${t}`);
@@ -4291,8 +4326,15 @@
                         upsertVideoSummaryUpdate(msg.data);
                         if (msg.type === 'video_summary_ready') {
                             showToast('وصل ملخص فيديو جديد');
-                            if (instantVideoListening) speakVideoSummary(msg.data);
+                            if (activeTab === 'video-updates' && instantVideoListening) speakVideoSummary(msg.data);
                         }
+                        return;
+                    }
+
+                    if (activeTab === 'video-updates') {
+                        if (msg.type === 'new_news') startVideoSummaryFromLiveItem(msg.data, 'world');
+                        else if (msg.type === 'new_yemen_news') startVideoSummaryFromLiveItem(msg.data, 'yemen');
+                        else if (msg.type === 'new_dubbed_news') startVideoSummaryFromLiveItem(msg.data, 'dubbed');
                         return;
                     }
 
