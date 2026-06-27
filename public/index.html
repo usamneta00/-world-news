@@ -4391,12 +4391,6 @@
                         return;
                     }
 
-                    if (activeTab === 'video-updates') {
-                        if (msg.type === 'new_news') startVideoSummaryFromLiveItem(msg.data, 'world');
-                        else if (msg.type === 'new_yemen_news') startVideoSummaryFromLiveItem(msg.data, 'yemen');
-                        else if (msg.type === 'new_dubbed_news') startVideoSummaryFromLiveItem(msg.data, 'dubbed');
-                        return;
-                    }
 
                     let pending = activeTab === 'world' ? pendingNews : (activeTab === 'yemen' ? yemenPendingNews : (activeTab === 'newspaper' ? newspaperPendingNews : dubbedPendingNews));
                     if ((msg.type === 'new_news' && activeTab === 'world') || (msg.type === 'new_yemen_news' && activeTab === 'yemen') || (msg.type === 'new_newspaper_news' && activeTab === 'newspaper') || (msg.type === 'new_dubbed_news' && activeTab === 'dubbed')) {
