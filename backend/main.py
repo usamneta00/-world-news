@@ -1436,6 +1436,21 @@ video_summary_semaphore = asyncio.Semaphore(max(1, VIDEO_SUMMARY_CONCURRENCY))
 # Global flag: controls whether automatic video summarization is enabled
 # Default = True (auto summarize new videos on every run AFTER the first run)
 _auto_summary_enabled: bool = True
+_skip_next_auto_summary_batch_for_types = set()
+_auto_summary_suppressed_items = set()
+
+def should_auto_summarize_batch(news_type: str, first_run: bool, items: list) -> bool:
+    """Return whether this discovered batch should be auto-summarized."""
+    if first_run or not _auto_summary_enabled or not items:
+        return False
+    if news_type in _skip_next_auto_summary_batch_for_types:
+        _skip_next_auto_summary_batch_for_types.discard(news_type)
+        for item in items:
+            if item.get("id"):
+                _auto_summary_suppressed_items.add((news_type, int(item["id"])))
+        logger.info(f"[AutoSummary] skipped first {news_type} batch after clear-all: {len(items)} videos")
+        return False
+    return True
 
 async def summarize_video_for_updates(news_type: str, news_id: int):
     async with video_summary_semaphore:
@@ -3587,11 +3602,12 @@ async def fetch_youtube_feeds():
         
         # Broadcast new items (always broadcast if there are new items)
         if new_items_found:
+            auto_summarize_batch = should_auto_summarize_batch("world", first_run, new_items_found)
             logger.info(f"Broadcasting {len(new_items_found)} new videos")
             for item in new_items_found:
                 await manager.broadcast(json.dumps({"type": "new_news", "data": item}))
-            # Auto-summarize only on subsequent runs (not first run) and when enabled
-            if not first_run and _auto_summary_enabled:
+            # Auto-summarize only on subsequent runs and skip the first reseed after clear-all.
+            if auto_summarize_batch:
                 for item in new_items_found:
                     schedule_video_summary_update("world", item["id"])
         
@@ -3722,11 +3738,12 @@ async def fetch_yemen_youtube_feeds():
         
         # Broadcast new Yemen items
         if new_items_found:
+            auto_summarize_batch = should_auto_summarize_batch("yemen", first_run, new_items_found)
             logger.info(f"[Yemen] Broadcasting {len(new_items_found)} new Yemen videos")
             for item in new_items_found:
                 await manager.broadcast(json.dumps({"type": "new_yemen_news", "data": item}))
-            # Auto-summarize only on subsequent runs (not first run) and when enabled
-            if not first_run and _auto_summary_enabled:
+            # Auto-summarize only on subsequent runs and skip the first reseed after clear-all.
+            if auto_summarize_batch:
                 for item in new_items_found:
                     schedule_video_summary_update("yemen", item["id"])
         
@@ -3873,11 +3890,12 @@ async def fetch_dubbed_youtube_feeds():
             logger.error(f"[Dubbed] Error in fetch_dubbed_youtube_feeds: {e}")
         
         if new_items_found:
+            auto_summarize_batch = should_auto_summarize_batch("dubbed", first_run, new_items_found)
             logger.info(f"[Dubbed] Broadcasting {len(new_items_found)} new Dubbed videos")
             for item in new_items_found:
                 await manager.broadcast(json.dumps({"type": "new_dubbed_news", "data": item}))
-            # Auto-summarize only on subsequent runs (not first run) and when enabled
-            if not first_run and _auto_summary_enabled:
+            # Auto-summarize only on subsequent runs and skip the first reseed after clear-all.
+            if auto_summarize_batch:
                 for item in new_items_found:
                     schedule_video_summary_update("dubbed", item["id"])
         
@@ -4136,6 +4154,7 @@ async def get_video_summary_updates(limit: int = 50, status: str = "all"):
 @app.post("/api/video-summary-updates/start")
 async def start_video_summary_update(payload: dict):
     news_type = (payload.get("news_type") or payload.get("type") or "").strip()
+    force = bool(payload.get("force"))
     try:
         news_id = int(payload.get("news_id") or payload.get("id"))
     except (TypeError, ValueError):
@@ -4143,6 +4162,9 @@ async def start_video_summary_update(payload: dict):
 
     if news_type not in {"world", "yemen", "dubbed"}:
         raise HTTPException(status_code=400, detail="news_type must be world, yemen, or dubbed")
+
+    if not force and (news_type, news_id) in _auto_summary_suppressed_items:
+        return {"status": "skipped", "message": "تم تخطي التلخيص لهذه الدفعة الأولى بعد حذف الكل"}
 
     db = SessionLocal()
     try:
@@ -4802,6 +4824,8 @@ async def clear_all_news():
         db.query(NewsCluster).delete()
         db.query(VideoSummaryUpdate).delete()
         db.commit()
+        _skip_next_auto_summary_batch_for_types.update({"world", "yemen", "dubbed"})
+        _auto_summary_suppressed_items.clear()
         _cluster_cache["data"] = None
         _cluster_cache["timestamp"] = None
         logger.info("Manual database clear performed. All news, video summaries, and tracking data deleted.")
