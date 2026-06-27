@@ -1728,6 +1728,12 @@
                         <p class="text-sm text-neutral-400">كل فيديو جديد من المصادر يتم تلخيصه هنا تلقائيا فور وصوله.</p>
                     </div>
                     <div class="flex flex-wrap gap-3">
+                        <button id="auto-summary-btn" onclick="toggleAutoSummary()"
+                            class="px-5 py-2.5 bg-emerald-500 text-black font-black rounded-xl hover:bg-emerald-400 transition-all flex items-center gap-2 text-sm"
+                            title="تحكم في التلخيص التلقائي للفيديوهات الجديدة">
+                            <i data-lucide="zap" class="w-4 h-4"></i>
+                            <span>التلخيص التلقائي: مفعّل</span>
+                        </button>
                         <button id="instant-listen-btn" onclick="toggleInstantVideoListening()"
                             class="px-5 py-2.5 bg-neon-blue text-black font-black rounded-xl hover:bg-white transition-all flex items-center gap-2 text-sm">
                             <i data-lucide="volume-2" class="w-4 h-4"></i>
@@ -2362,6 +2368,7 @@
         let insightOpenedFromDeepSearch = false;
         let toastTimer = null;
         let videoSummaryUpdates = [];
+        let autoSummaryEnabled = true;
         let instantVideoListening = false;
         let currentSummaryAudio = null;
         let summaryAudioToken = 0;
@@ -3124,6 +3131,59 @@
             if (el) el.textContent = text;
         }
 
+        function renderAutoSummaryButton() {
+            const btn = document.getElementById('auto-summary-btn');
+            if (!btn) return;
+            const icon = btn.querySelector('i');
+            const label = btn.querySelector('span');
+            btn.classList.toggle('bg-emerald-500', autoSummaryEnabled);
+            btn.classList.toggle('hover:bg-emerald-400', autoSummaryEnabled);
+            btn.classList.toggle('bg-red-500', !autoSummaryEnabled);
+            btn.classList.toggle('hover:bg-red-400', !autoSummaryEnabled);
+            btn.title = autoSummaryEnabled
+                ? 'إيقاف التلخيص التلقائي للفيديوهات الجديدة'
+                : 'تشغيل التلخيص التلقائي للفيديوهات الجديدة';
+            if (icon) icon.setAttribute('data-lucide', autoSummaryEnabled ? 'zap' : 'zap-off');
+            if (label) label.textContent = `التلخيص التلقائي: ${autoSummaryEnabled ? 'مفعّل' : 'موقوف'}`;
+            if (window.lucide) lucide.createIcons();
+        }
+
+        async function loadAutoSummaryStatus() {
+            try {
+                const r = await fetch(`${API_URL}/auto-summary/status`);
+                if (!r.ok) throw new Error('auto summary status failed');
+                const d = await r.json();
+                autoSummaryEnabled = d.enabled !== false;
+            } catch (e) {
+                console.error('Failed to load auto-summary status:', e);
+            } finally {
+                renderAutoSummaryButton();
+            }
+        }
+
+        async function toggleAutoSummary() {
+            const btn = document.getElementById('auto-summary-btn');
+            const nextValue = !autoSummaryEnabled;
+            if (btn) btn.disabled = true;
+            try {
+                const r = await fetch(`${API_URL}/auto-summary/toggle`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: nextValue })
+                });
+                if (!r.ok) throw new Error('auto summary toggle failed');
+                const d = await r.json();
+                autoSummaryEnabled = d.enabled !== false;
+                showToast(d.message || `التلخيص التلقائي ${autoSummaryEnabled ? 'مفعّل' : 'موقوف'}`);
+            } catch (e) {
+                console.error('Failed to toggle auto-summary:', e);
+                showToast('تعذر تغيير حالة التلخيص التلقائي');
+            } finally {
+                renderAutoSummaryButton();
+                if (btn) btn.disabled = false;
+            }
+        }
+
         function upsertVideoSummaryUpdate(update) {
             if (!update || !update.link) return;
             const index = videoSummaryUpdates.findIndex(item => item.link === update.link);
@@ -3196,7 +3256,7 @@
         }
 
         async function startVideoSummaryFromLiveItem(item, newsType) {
-            if (activeTab !== 'video-updates' || !item || !item.id) return;
+            if (!autoSummaryEnabled || activeTab !== 'video-updates' || !item || !item.id) return;
             try {
                 await fetch(`${API_URL}/video-summary-updates/start`, {
                     method: 'POST',
@@ -4469,7 +4529,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             if (localStorage.getItem('darkMode') === 'enabled') document.documentElement.classList.add('dark');
-            initThree(); initDate(); fetchNews(1); connectWS();
+            initThree(); initDate(); fetchNews(1); loadAutoSummaryStatus(); connectWS();
 
             const deepSearchForm = document.getElementById('deep-search-form');
             if (deepSearchForm) {

@@ -1433,6 +1433,10 @@ def video_update_payload(update: VideoSummaryUpdate) -> dict:
 VIDEO_SUMMARY_CONCURRENCY = int(os.environ.get("VIDEO_SUMMARY_CONCURRENCY", "1"))
 video_summary_semaphore = asyncio.Semaphore(max(1, VIDEO_SUMMARY_CONCURRENCY))
 
+# Global flag: controls whether automatic video summarization is enabled
+# Default = True (auto summarize new videos on every run AFTER the first run)
+_auto_summary_enabled: bool = True
+
 async def summarize_video_for_updates(news_type: str, news_id: int):
     async with video_summary_semaphore:
         video_url = ""
@@ -3380,7 +3384,6 @@ async def fetch_all_youtube_channels(db) -> List[dict]:
         last_video_record = db.query(ChannelLastVideo).filter(ChannelLastVideo.channel_name == channel['name']).first()
         if last_video_record and last_video_record.last_video_ids:
             try:
-                # Parse JSON array of last 5 video IDs
                 channel_last_videos[channel['name']] = json.loads(last_video_record.last_video_ids)
             except:
                 channel_last_videos[channel['name']] = None
@@ -3390,7 +3393,7 @@ async def fetch_all_youtube_channels(db) -> List[dict]:
     semaphore = asyncio.Semaphore(3)
     async def fetch_with_semaphore(channel):
         async with semaphore:
-            await pause_background_tasks.wait() # الانتظار إذا كان هناك نشر جاري
+            await pause_background_tasks.wait()
             last_video_ids = channel_last_videos.get(channel['name'])
             is_playlist = channel.get('type') == 'playlist'
             return await asyncio.to_thread(fetch_youtube_channel_videos, channel['url'], channel['name'], last_video_ids, is_playlist)
@@ -3587,6 +3590,10 @@ async def fetch_youtube_feeds():
             logger.info(f"Broadcasting {len(new_items_found)} new videos")
             for item in new_items_found:
                 await manager.broadcast(json.dumps({"type": "new_news", "data": item}))
+            # Auto-summarize only on subsequent runs (not first run) and when enabled
+            if not first_run and _auto_summary_enabled:
+                for item in new_items_found:
+                    schedule_video_summary_update("world", item["id"])
         
         db.close()
         first_run = False
@@ -3718,6 +3725,10 @@ async def fetch_yemen_youtube_feeds():
             logger.info(f"[Yemen] Broadcasting {len(new_items_found)} new Yemen videos")
             for item in new_items_found:
                 await manager.broadcast(json.dumps({"type": "new_yemen_news", "data": item}))
+            # Auto-summarize only on subsequent runs (not first run) and when enabled
+            if not first_run and _auto_summary_enabled:
+                for item in new_items_found:
+                    schedule_video_summary_update("yemen", item["id"])
         
         db.close()
         first_run = False
@@ -3865,6 +3876,10 @@ async def fetch_dubbed_youtube_feeds():
             logger.info(f"[Dubbed] Broadcasting {len(new_items_found)} new Dubbed videos")
             for item in new_items_found:
                 await manager.broadcast(json.dumps({"type": "new_dubbed_news", "data": item}))
+            # Auto-summarize only on subsequent runs (not first run) and when enabled
+            if not first_run and _auto_summary_enabled:
+                for item in new_items_found:
+                    schedule_video_summary_update("dubbed", item["id"])
         
         db.close()
         first_run = False
@@ -4785,17 +4800,39 @@ async def clear_all_news():
         db.query(NewsEmbeddingCache).delete()
         db.query(NewsClusterMember).delete()
         db.query(NewsCluster).delete()
+        db.query(VideoSummaryUpdate).delete()
         db.commit()
         _cluster_cache["data"] = None
         _cluster_cache["timestamp"] = None
-        logger.info("Manual database clear performed. All news and tracking data deleted.")
-        return {"message": "All news and tracking data have been cleared successfully."}
+        logger.info("Manual database clear performed. All news, video summaries, and tracking data deleted.")
+        return {"message": "All news, video summaries, and tracking data have been cleared successfully."}
     except Exception as e:
         db.rollback()
         logger.error(f"Error clearing database: {e}")
         return {"error": str(e)}, 500
     finally:
         db.close()
+
+@app.get("/api/auto-summary/status")
+async def get_auto_summary_status():
+    """Get the current auto-summary enabled/disabled status"""
+    return {"enabled": _auto_summary_enabled}
+
+
+@app.post("/api/auto-summary/toggle")
+async def toggle_auto_summary(payload: dict = None):
+    """Enable or disable automatic video summarization for new videos.
+    Body: {"enabled": true/false} - omit to toggle current state.
+    """
+    global _auto_summary_enabled
+    if payload and "enabled" in payload:
+        _auto_summary_enabled = bool(payload["enabled"])
+    else:
+        _auto_summary_enabled = not _auto_summary_enabled
+    state = "مفعّل" if _auto_summary_enabled else "موقوف"
+    logger.info(f"[AutoSummary] Auto-summary toggled: {state}")
+    return {"enabled": _auto_summary_enabled, "message": f"التلخيص التلقائي {state}"}
+
 
 _cluster_classify_tasks: Dict[int, asyncio.Task] = {}
 AUTO_CLASSIFY_DEBOUNCE_SECONDS = 4
