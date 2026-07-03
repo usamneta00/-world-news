@@ -2860,9 +2860,13 @@
                     if (window.lucide) lucide.createIcons();
                 }, 2000);
             }).catch(err => {
+                alert("فشل أثناء نسخ النص: " + err.message);
                 console.error('Failed to copy text:', err);
                 showToast('فشل نسخ النص');
             });
+            } catch (error) {
+                alert("خطأ عام في دالة النسخ: " + error.message);
+            }
         }
 
         function closeInsight() {
@@ -3247,7 +3251,7 @@
                 return;
             }
 
-            list.innerHTML = videoSummaryUpdates.map(item => {
+            list.innerHTML = videoSummaryUpdates.map((item, idx) => {
                 const ready = item.status === 'ready';
                 const processing = item.status === 'pending' || item.status === 'processing';
                 const badgeClass = ready ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' : (processing ? 'text-amber-300 border-amber-500/30 bg-amber-500/10' : 'text-red-300 border-red-500/30 bg-red-500/10');
@@ -3276,17 +3280,17 @@
                                     <div class="border-t border-white/5 pt-3">
                                         <p class="text-[10px] text-neutral-500 font-mono mb-2 uppercase tracking-wider">البرومات الاستراتيجية (نسخ مع الملخص)</p>
                                         <div class="grid grid-cols-3 gap-2">
-                                            <button onclick="copyPromptWithSummary(1, ${JSON.stringify(item.summary)}, this)"
+                                            <button onclick="copyPromptWithSummary(1, ${idx}, this)"
                                                 class="px-2 py-1.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 text-[10px] font-bold flex items-center justify-center gap-1 transition-all">
                                                 <i data-lucide="copy" class="w-3 h-3"></i>
                                                 <span>البروم الأول</span>
                                             </button>
-                                            <button onclick="copyPromptWithSummary(2, ${JSON.stringify(item.summary)}, this)"
+                                            <button onclick="copyPromptWithSummary(2, ${idx}, this)"
                                                 class="px-2 py-1.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 text-[10px] font-bold flex items-center justify-center gap-1 transition-all">
                                                 <i data-lucide="copy" class="w-3 h-3"></i>
                                                 <span>البروم الثاني</span>
                                             </button>
-                                            <button onclick="copyPromptWithSummary(3, ${JSON.stringify(item.summary)}, this)"
+                                            <button onclick="copyPromptWithSummary(3, ${idx}, this)"
                                                 class="px-2 py-1.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 text-[10px] font-bold flex items-center justify-center gap-1 transition-all">
                                                 <i data-lucide="copy" class="w-3 h-3"></i>
                                                 <span>البروم الثالث</span>
@@ -3314,7 +3318,15 @@
             if (window.lucide) lucide.createIcons();
         }
 
-        function copyPromptWithSummary(promptNumber, summaryText, buttonEl) {
+        function copyPromptWithSummary(promptNumber, itemIndex, buttonEl) {
+            console.log("copyPromptWithSummary clicked. promptNumber:", promptNumber, "itemIndex:", itemIndex);
+            try {
+                const item = videoSummaryUpdates[itemIndex];
+                if (!item) {
+                    alert("خطأ: لم يتم العثور على الفيديو المحدد في القائمة. الترتيب: " + itemIndex);
+                    return;
+                }
+                const summaryText = item.summary || '';
             const prompts = {
                 1: `ابحث في YouTube باستخدام اتصالك بالإنترنت عن فيديوهات عربية قوية تتناول نفس موضوع النص أو المقال أو الفيديو الذي سأرسله لك.
 
@@ -3520,9 +3532,13 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                     if (window.lucide) lucide.createIcons();
                 }, 2000);
             }).catch(err => {
+                alert("فشل أثناء نسخ النص: " + err.message);
                 console.error('Failed to copy text:', err);
                 showToast('فشل نسخ النص');
             });
+            } catch (error) {
+                alert("خطأ عام في دالة النسخ: " + error.message);
+            }
         }
 
         async function fetchVideoSummaryUpdates() {
