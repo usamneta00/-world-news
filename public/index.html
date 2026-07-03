@@ -2860,13 +2860,9 @@
                     if (window.lucide) lucide.createIcons();
                 }, 2000);
             }).catch(err => {
-                alert("فشل أثناء نسخ النص: " + err.message);
                 console.error('Failed to copy text:', err);
                 showToast('فشل نسخ النص');
             });
-            } catch (error) {
-                alert("خطأ عام في دالة النسخ: " + error.message);
-            }
         }
 
         function closeInsight() {
@@ -3319,14 +3315,9 @@
         }
 
         function copyPromptWithSummary(promptNumber, itemIndex, buttonEl) {
-            console.log("copyPromptWithSummary clicked. promptNumber:", promptNumber, "itemIndex:", itemIndex);
-            try {
-                const item = videoSummaryUpdates[itemIndex];
-                if (!item) {
-                    alert("خطأ: لم يتم العثور على الفيديو المحدد في القائمة. الترتيب: " + itemIndex);
-                    return;
-                }
-                const summaryText = item.summary || '';
+            const item = videoSummaryUpdates[itemIndex];
+            if (!item) return;
+            const summaryText = item.summary || '';
             const prompts = {
                 1: `ابحث في YouTube باستخدام اتصالك بالإنترنت عن فيديوهات عربية قوية تتناول نفس موضوع النص أو المقال أو الفيديو الذي سأرسله لك.
 
@@ -3509,13 +3500,13 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             };
 
             const fullTextToCopy = summaryText + "\n\n" + prompts[promptNumber];
-            
+
             copyTextToClipboard(fullTextToCopy).then(() => {
                 const originalHTML = buttonEl.innerHTML;
                 buttonEl.innerHTML = '<i data-lucide="check" class="w-3 h-3 text-emerald-400"></i><span>تم النسخ!</span>';
                 buttonEl.classList.remove('bg-emerald-500/10', 'border-emerald-500/20', 'text-emerald-400', 'bg-blue-500/10', 'border-blue-500/20', 'text-blue-400', 'bg-amber-500/10', 'border-amber-500/20', 'text-amber-400');
                 buttonEl.classList.add('bg-green-500/20', 'border-green-500/50', 'text-green-400');
-                
+
                 if (window.lucide) lucide.createIcons();
                 showToast('تم نسخ البروم مع الملخص للحافظة');
 
@@ -3532,16 +3523,12 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                     if (window.lucide) lucide.createIcons();
                 }, 2000);
             }).catch(err => {
-                alert("فشل أثناء نسخ النص: " + err.message);
                 console.error('Failed to copy text:', err);
                 showToast('فشل نسخ النص');
             });
-            } catch (error) {
-                alert("خطأ عام في دالة النسخ: " + error.message);
-            }
         }
 
-        async function fetchVideoSummaryUpdates() {
+                async function fetchVideoSummaryUpdates() {
             updateVideoUpdatesStatus('جاري تحميل تحديثات الفيديو...');
             try {
                 const r = await fetch(`${API_URL}/video-summary-updates?limit=80`);
