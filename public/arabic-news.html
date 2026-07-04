@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="dark scroll-smooth">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الأخبار العربية | NEXUS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans Arabic"', '"Inter"', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace']
+                    },
+                    colors: {
+                        obsidian: '#050505',
+                        neon: { blue: '#2dd4bf', accent: '#f59e0b' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background: #050505; }
+        .glass-panel {
+            background: rgba(12, 12, 12, 0.76);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        .news-scroll, .summary-scroll { scrollbar-color: rgba(45, 212, 191, .45) rgba(255,255,255,.05); scrollbar-width: thin; }
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    </style>
+</head>
+
+<body class="min-h-screen text-neutral-200 font-sans selection:bg-neon-blue/30 selection:text-white">
+    <div class="fixed inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_right,rgba(45,212,191,.12),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,.08),transparent_30%)]"></div>
+
+    <header class="sticky top-0 z-40 glass-panel border-x-0 border-t-0">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-4">
+            <a href="/" class="flex items-center gap-3">
+                <span class="font-black text-2xl tracking-tight text-white">NEXUS</span>
+                <span class="hidden sm:block h-5 w-px bg-white/10"></span>
+                <span class="hidden sm:block text-sm text-neutral-400">الأخبار العربية</span>
+            </a>
+            <div class="flex items-center gap-2">
+                <button onclick="loadArabicNews(true)" class="p-2 rounded-xl border border-white/10 hover:bg-white/5 text-neutral-300" title="تحديث الأخبار">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                </button>
+                <a href="/" class="px-4 py-2 rounded-xl bg-white text-black text-xs font-black hover:bg-neon-blue transition-colors flex items-center gap-2">
+                    <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                    <span>الرئيسية</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        <section class="mb-8">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neon-blue/10 border border-neon-blue/20 text-xs text-neon-blue mb-4">
+                <span class="w-2 h-2 rounded-full bg-neon-blue animate-pulse"></span>
+                <span>بث مباشر من قنوات يوتيوب العربية</span>
+            </div>
+            <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
+                <div>
+                    <h1 class="text-3xl md:text-5xl font-black text-white mb-3">مركز الأخبار العربية</h1>
+                    <p class="text-neutral-400 max-w-2xl leading-8">تابع أحدث الفيديوهات العربية، شغّل التلخيص اليدوي لأي خبر، وراقب نتائج التحليل الصوتي والنصي في اللوحة المقابلة.</p>
+                </div>
+                <form id="manual-form" class="glass-panel rounded-2xl p-3 flex flex-col sm:flex-row gap-2 w-full lg:w-[520px]">
+                    <input id="manual-url" type="url" class="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-neon-blue" placeholder="ألصق رابط YouTube للتلخيص اليدوي">
+                    <button class="px-5 py-3 rounded-xl bg-neon-blue text-black font-black text-sm hover:bg-white transition-colors flex items-center justify-center gap-2">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i>
+                        <span>تلخيص الرابط</span>
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+            <div class="glass-panel rounded-2xl overflow-hidden">
+                <div class="p-5 border-b border-white/10 flex items-center justify-between">
+                    <div>
+                        <h2 class="text-xl font-black text-white">آخر الأخبار</h2>
+                        <p id="news-status" class="text-xs text-neutral-500 mt-1 font-mono">READY</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button id="prev-page" onclick="changePage(-1)" class="p-2 rounded-lg border border-white/10 hover:bg-white/5 disabled:opacity-30" title="السابق">
+                            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                        </button>
+                        <span id="page-info" class="text-xs font-mono text-neutral-500 min-w-16 text-center">1 / 1</span>
+                        <button id="next-page" onclick="changePage(1)" class="p-2 rounded-lg border border-white/10 hover:bg-white/5 disabled:opacity-30" title="التالي">
+                            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="arabic-news-list" class="news-scroll max-h-[calc(100vh-260px)] overflow-y-auto p-4 space-y-4"></div>
+            </div>
+
+            <div class="glass-panel rounded-2xl overflow-hidden">
+                <div class="p-5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                        <h2 class="text-xl font-black text-white">تحديثات التلخيص</h2>
+                        <p id="summary-status" class="text-xs text-neutral-500 mt-1 font-mono">READY</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="fetchSummaryUpdates()" class="px-4 py-2 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold flex items-center gap-2">
+                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                            <span>تحديث</span>
+                        </button>
+                        <button onclick="stopAudio()" class="px-4 py-2 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold flex items-center gap-2">
+                            <i data-lucide="volume-x" class="w-4 h-4"></i>
+                            <span>إيقاف الصوت</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="summary-list" class="summary-scroll max-h-[calc(100vh-260px)] overflow-y-auto p-4 space-y-4"></div>
+            </div>
+        </section>
+    </main>
+
+    <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 hidden px-4 py-3 rounded-xl bg-white text-black text-sm font-bold shadow-2xl"></div>
+
+    <script>
+        const API_URL = '';
+        const state = { page: 1, limit: 20, total: 0, news: [], summaries: [], audio: null };
+
+        const prompts = {
+            1: 'ابحث في YouTube عن 5 إلى 10 فيديوهات عربية قوية تتناول نفس موضوع الملخص، ورتبها كسلسلة نقاش مترابطة مع الروابط وسبب الاختيار.',
+            2: 'أريد بحثا عميقا عن أفضل الفيديوهات العربية أو المدبلجة حول هذا الموضوع، مع تقييم قوة المصدر وحداثة الفيديو وعمق التحليل.',
+            3: 'ابحث عن مقابلات وتصريحات حديثة مرتبطة بهذا الموضوع، وخصوصا تصريحات القادة والمسؤولين والخبراء، ثم اربطها بالملخص.',
+            4: 'حوّل هذا الملخص إلى خطة حلقة نقاش عربية طويلة: مقدمة، محاور، أسئلة، زوايا خلاف، ومقاطع يوتيوب داعمة.'
+        };
+
+        function escapeHtml(value) {
+            return String(value || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function timeAgo(value) {
+            if (!value) return '';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '';
+            const diff = Math.max(1, Math.floor((Date.now() - date.getTime()) / 1000));
+            if (diff < 60) return 'الآن';
+            if (diff < 3600) return `منذ ${Math.floor(diff / 60)} دقيقة`;
+            if (diff < 86400) return `منذ ${Math.floor(diff / 3600)} ساعة`;
+            return `منذ ${Math.floor(diff / 86400)} يوم`;
+        }
+
+        function thumbnail(link, fallback) {
+            if (fallback) return fallback;
+            const match = String(link || '').match(/(?:v=|youtu\.be\/|shorts\/)([A-Za-z0-9_-]{11})/);
+            return match ? `https://img.youtube.com/vi/${match[1]}/hqdefault.jpg` : '';
+        }
+
+        function showToast(message) {
+            const el = document.getElementById('toast');
+            el.textContent = message;
+            el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('hidden'), 2200);
+        }
+
+        async function copyText(text) {
+            await navigator.clipboard.writeText(text);
+            showToast('تم النسخ');
+        }
+
+        async function loadArabicNews(reset = false) {
+            if (reset) state.page = 1;
+            document.getElementById('news-status').textContent = 'LOADING';
+            try {
+                const res = await fetch(`${API_URL}/api/arabic-news?page=${state.page}&limit=${state.limit}`);
+                if (!res.ok) throw new Error('failed to load arabic news');
+                const data = await res.json();
+                state.news = Array.isArray(data.items) ? data.items : [];
+                state.total = data.total || 0;
+                renderArabicNews();
+                document.getElementById('news-status').textContent = `${state.total} خبر`;
+            } catch (error) {
+                document.getElementById('arabic-news-list').innerHTML = emptyState('تعذر تحميل الأخبار العربية.');
+                document.getElementById('news-status').textContent = 'ERROR';
+            }
+        }
+
+        function renderArabicNews() {
+            const list = document.getElementById('arabic-news-list');
+            const pages = Math.max(1, Math.ceil(state.total / state.limit));
+            document.getElementById('page-info').textContent = `${state.page} / ${pages}`;
+            document.getElementById('prev-page').disabled = state.page <= 1;
+            document.getElementById('next-page').disabled = state.page >= pages;
+
+            if (!state.news.length) {
+                list.innerHTML = emptyState('لا توجد أخبار عربية حتى الآن.');
+                return;
+            }
+
+            list.innerHTML = state.news.map(item => {
+                const img = thumbnail(item.link, item.image_url);
+                return `
+                    <article class="rounded-xl border border-white/10 bg-white/[.03] overflow-hidden">
+                        ${img ? `<a href="${escapeHtml(item.link)}" target="_blank" rel="noreferrer"><img src="${escapeHtml(img)}" class="w-full aspect-video object-cover bg-black" alt=""></a>` : ''}
+                        <div class="p-4">
+                            <div class="flex items-center justify-between gap-3 text-xs text-neutral-500 mb-2">
+                                <span>${escapeHtml(item.source || 'مصدر عربي')}</span>
+                                <span>${timeAgo(item.published || item.created_at)}</span>
+                            </div>
+                            <h3 class="text-lg font-black text-white leading-8 mb-2">${escapeHtml(item.title)}</h3>
+                            <p class="text-sm text-neutral-400 leading-7 line-clamp-3 mb-4">${escapeHtml(item.summary || item.description || '')}</p>
+                            <div class="flex flex-wrap gap-2">
+                                <button onclick="startSummary(${Number(item.id)})" class="px-4 py-2 rounded-lg bg-neon-blue text-black text-xs font-black hover:bg-white flex items-center gap-2">
+                                    <i data-lucide="sparkles" class="w-4 h-4"></i>
+                                    <span>تلخيص الذكاء الاصطناعي</span>
+                                </button>
+                                <a href="${escapeHtml(item.link)}" target="_blank" rel="noreferrer" class="px-4 py-2 rounded-lg border border-white/10 text-xs text-neutral-300 hover:bg-white/5 flex items-center gap-2">
+                                    <i data-lucide="external-link" class="w-4 h-4"></i>
+                                    <span>فتح الفيديو</span>
+                                </a>
+                            </div>
+                        </div>
+                    </article>`;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function emptyState(text) {
+            return `<div class="rounded-xl border border-white/10 p-8 text-center text-neutral-500">${escapeHtml(text)}</div>`;
+        }
+
+        function changePage(delta) {
+            state.page = Math.max(1, state.page + delta);
+            loadArabicNews();
+        }
+
+        async function startSummary(newsId) {
+            try {
+                const res = await fetch(`${API_URL}/api/video-summary-updates/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ news_type: 'arabic', news_id: newsId, force: true })
+                });
+                if (!res.ok) throw new Error('summary start failed');
+                showToast('تم إرسال الفيديو للتلخيص');
+                await fetchSummaryUpdates();
+            } catch (error) {
+                showToast('تعذر بدء التلخيص');
+            }
+        }
+
+        async function fetchSummaryUpdates() {
+            document.getElementById('summary-status').textContent = 'LOADING';
+            try {
+                const res = await fetch(`${API_URL}/api/video-summary-updates?limit=80`);
+                const data = await res.json();
+                state.summaries = (Array.isArray(data.items) ? data.items : []).filter(item => item.news_type === 'arabic' || state.news.some(n => n.link === item.link));
+                renderSummaries();
+                document.getElementById('summary-status').textContent = `${state.summaries.length} ملخص`;
+            } catch (error) {
+                document.getElementById('summary-list').innerHTML = emptyState('تعذر تحميل تحديثات التلخيص.');
+                document.getElementById('summary-status').textContent = 'ERROR';
+            }
+        }
+
+        function upsertSummary(update) {
+            if (!update || !update.link) return;
+            if (update.news_type !== 'arabic' && !state.news.some(n => n.link === update.link)) return;
+            const index = state.summaries.findIndex(item => item.link === update.link);
+            if (index >= 0) state.summaries[index] = { ...state.summaries[index], ...update };
+            else state.summaries.unshift(update);
+            renderSummaries();
+        }
+
+        function renderSummaries() {
+            const list = document.getElementById('summary-list');
+            if (!state.summaries.length) {
+                list.innerHTML = emptyState('لا توجد ملخصات فيديو حتى الآن.');
+                return;
+            }
+            list.innerHTML = state.summaries.map((item, index) => {
+                const ready = item.status === 'ready';
+                const badge = ready ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : item.status === 'failed' ? 'bg-red-500/10 text-red-300 border-red-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30';
+                const text = ready ? 'جاهز' : item.status === 'failed' ? 'فشل' : 'قيد التلخيص';
+                return `
+                    <article class="rounded-xl border border-white/10 bg-white/[.03] p-4">
+                        <div class="flex items-center justify-between gap-3 mb-3">
+                            <span class="px-2.5 py-1 rounded-lg border text-[11px] font-bold ${badge}">${text}</span>
+                            <span class="text-xs text-neutral-500">${timeAgo(item.created_at || item.published)}</span>
+                        </div>
+                        <h3 class="text-lg font-black text-white leading-8 mb-3">${escapeHtml(item.title)}</h3>
+                        <p class="text-sm leading-8 text-neutral-300 mb-4">${escapeHtml(item.summary || item.error || 'جاري تجهيز الملخص...')}</p>
+                        ${ready && item.summary ? `
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+                                ${[1,2,3,4].map(n => `<button onclick="copyPrompt(${n}, ${index})" class="px-3 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-[11px] font-bold">البروم ${n}</button>`).join('')}
+                            </div>
+                        ` : ''}
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="speakSummary(${index})" ${ready ? '' : 'disabled'} class="px-4 py-2 rounded-lg bg-white text-black text-xs font-black disabled:opacity-40 flex items-center gap-2">
+                                <i data-lucide="volume-2" class="w-4 h-4"></i>
+                                <span>استماع</span>
+                            </button>
+                            <button onclick="copyText(state.summaries[${index}].summary || '')" ${ready ? '' : 'disabled'} class="px-4 py-2 rounded-lg border border-white/10 text-xs text-neutral-300 disabled:opacity-40 hover:bg-white/5 flex items-center gap-2">
+                                <i data-lucide="copy" class="w-4 h-4"></i>
+                                <span>نسخ الملخص</span>
+                            </button>
+                        </div>
+                    </article>`;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function copyPrompt(number, index) {
+            const item = state.summaries[index];
+            if (!item) return;
+            copyText(`${item.summary || ''}\n\n${prompts[number] || ''}\n\n@Youtube`);
+        }
+
+        function stopAudio() {
+            if (state.audio) {
+                state.audio.pause();
+                state.audio = null;
+            }
+            if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        }
+
+        async function speakSummary(index) {
+            const item = state.summaries[index];
+            if (!item || !item.summary) return;
+            stopAudio();
+            try {
+                const res = await fetch(`${API_URL}/api/arabic-tts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: item.title || '', text: item.summary || '' })
+                });
+                if (!res.ok) throw new Error('tts failed');
+                const blob = await res.blob();
+                state.audio = new Audio(URL.createObjectURL(blob));
+                await state.audio.play();
+            } catch (error) {
+                if (!('speechSynthesis' in window)) return;
+                const utterance = new SpeechSynthesisUtterance(`${item.title || ''}. ${item.summary || ''}`);
+                utterance.lang = 'ar-SA';
+                utterance.rate = 0.9;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        document.getElementById('manual-form').addEventListener('submit', async event => {
+            event.preventDefault();
+            const url = document.getElementById('manual-url').value.trim();
+            if (!url) return;
+            const existing = state.news.find(item => item.link === url);
+            if (existing) {
+                startSummary(existing.id);
+                return;
+            }
+            try {
+                const res = await fetch(`${API_URL}/api/arabic-news/manual`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                if (!res.ok) throw new Error('manual url failed');
+                const data = await res.json();
+                if (data.item) {
+                    state.news.unshift(data.item);
+                    state.total += 1;
+                    renderArabicNews();
+                }
+                document.getElementById('manual-url').value = '';
+                showToast('تم إرسال الرابط اليدوي للتلخيص');
+                await fetchSummaryUpdates();
+            } catch (error) {
+                showToast('تعذر تلخيص الرابط اليدوي');
+            }
+        });
+
+        function connectWebSocket() {
+            const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+            const ws = new WebSocket(`${protocol}://${location.host}/ws`);
+            ws.onmessage = event => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'new_arabic_news') {
+                        state.news.unshift(msg.data);
+                        state.total += 1;
+                        renderArabicNews();
+                        showToast('وصل خبر عربي جديد');
+                    }
+                    if (['video_summary_pending', 'video_summary_processing', 'video_summary_ready', 'video_summary_failed'].includes(msg.type)) {
+                        upsertSummary(msg.data);
+                    }
+                } catch (error) {}
+            };
+            ws.onclose = () => setTimeout(connectWebSocket, 3000);
+        }
+
+        lucide.createIcons();
+        loadArabicNews();
+        fetchSummaryUpdates();
+        connectWebSocket();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="dark scroll-smooth">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تلخيص أخبار RT الروسية | NEXUS</title>
+
+    <!-- Fonts & Tailwind -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        serif: ['"Playfair Display"', 'serif'],
+                        sans: ['"Inter"', '"Noto Sans Arabic"', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                    },
+                    colors: {
+                        obsidian: '#050505',
+                        paper: '#f0f0f0',
+                        neon: {
+                            blue: '#2dd4bf',
+                            accent: '#f59e0b',
+                            red: '#ef4444'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        .glass-panel {
+            background: rgba(10, 10, 10, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .glow-red {
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.15);
+        }
+
+        .bg-noise {
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.02'/%3E%3C/svg%3E");
+        }
+
+        .loading-ring {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-left-color: currentColor;
+            animation: spin 0.8s linear infinite;
+            display: none;
+        }
+
+        .loading .loading-ring {
+            display: inline-block;
+        }
+
+        .loading span {
+            display: none;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+
+<body class="bg-obsidian text-neutral-200 font-sans min-h-screen relative overflow-x-hidden selection:bg-neon-red/30 selection:text-white">
+    <div class="bg-noise absolute inset-0 pointer-events-none z-0"></div>
+
+    <!-- Glowing Background blobs -->
+    <div class="absolute -top-40 -right-40 w-96 h-96 bg-red-600/10 rounded-full blur-[120px] pointer-events-none z-0"></div>
+    <div class="absolute top-1/3 -left-40 w-96 h-96 bg-amber-600/5 rounded-full blur-[120px] pointer-events-none z-0"></div>
+
+    <!-- Main Wrapper -->
+    <div class="max-w-6xl mx-auto px-6 py-10 relative z-10">
+        
+        <!-- Header -->
+        <header class="flex items-center justify-between mb-12 pb-6 border-b border-white/5">
+            <div class="flex items-center gap-4">
+                <a href="/" class="flex items-center gap-2 group">
+                    <span class="font-serif text-2xl font-bold tracking-tight text-white group-hover:text-neon-blue transition-colors">NEXUS</span>
+                </a>
+                <span class="text-neutral-500 text-sm hidden sm:inline">|</span>
+                <span class="text-neutral-400 text-sm font-medium hidden sm:inline">الأخبار الروسية (RT)</span>
+            </div>
+            
+            <a href="/" class="flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 hover:bg-white/5 text-xs text-neutral-300 transition-all font-medium">
+                <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+                <span>العودة للمنصة الرئيسية</span>
+            </a>
+        </header>
+
+        <!-- Page Intro -->
+        <section class="mb-12">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-xs text-red-400 mb-4">
+                <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                <span>تغطية مباشرة - وكالة RT</span>
+            </div>
+            <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-3">
+                تلخيص وتشريح المقالات الروسية
+            </h1>
+            <p class="text-neutral-400 text-sm sm:text-base max-w-2xl leading-relaxed">
+                استخرج أحدث المقالات الجيوسياسية والعالمية مباشرة من الصفحة الرئيسية لموقع <span class="text-red-500 font-semibold">RT.com</span> وقم بتلخيصها بالذكاء الاصطناعي مع إمكانية تصديرها كملخصات استماع أو برومات جاهزة للبحث والتعليق.
+            </p>
+        </section>
+
+        <!-- Main Workspace -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-12">
+            
+            <!-- Left Panel (Controls) -->
+            <div class="lg:col-span-4 space-y-6">
+                
+                <!-- Auto Extract Tool -->
+                <div class="glass-panel p-6 rounded-2xl glow-red">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center text-red-500">
+                            <i data-lucide="download" class="w-4 h-4"></i>
+                        </div>
+                        <h3 class="font-bold text-white text-base">استخراج تلقائي</h3>
+                    </div>
+                    
+                    <p class="text-xs text-neutral-400 mb-5 leading-relaxed">
+                        يقوم النظام بالاتصال بموقع RT وجلب أحدث المقالات المنشورة في الصفحة الرئيسية الآن.
+                    </p>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label for="limit-select" class="block text-xs text-neutral-400 mb-2 font-medium">عدد المقالات المطلوب جلبها:</label>
+                            <select id="limit-select" class="w-full bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500">
+                                <option value="3">3 مقالات</option>
+                                <option value="5" selected>5 مقالات</option>
+                                <option value="10">10 مقالات</option>
+                                <option value="15">15 مقالة</option>
+                                <option value="20">20 مقالة</option>
+                                <option value="30">30 مقالة</option>
+                                <option value="50">50 مقالة</option>
+                            </select>
+                        </div>
+
+                        <button id="btn-auto-extract" class="w-full bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2">
+                            <span>استخراج وتلخيص</span>
+                            <div class="loading-ring"></div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Manual Input Tool -->
+                <div class="glass-panel p-6 rounded-2xl">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500">
+                            <i data-lucide="link" class="w-4 h-4"></i>
+                        </div>
+                        <h3 class="font-bold text-white text-base">إدخال يدوي</h3>
+                    </div>
+
+                    <p class="text-xs text-neutral-400 mb-4 leading-relaxed">
+                        ألصق روابط مقالات RT هنا (رابط واحد في كل سطر).
+                    </p>
+
+                    <div class="space-y-4">
+                        <textarea id="manual-urls" placeholder="https://www.rt.com/news/..." rows="3" class="w-full bg-neutral-900 border border-white/10 rounded-xl p-3 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-amber-500 font-mono"></textarea>
+                        
+                        <button id="btn-manual-extract" class="w-full bg-neutral-800 hover:bg-neutral-700 border border-white/10 text-white text-xs font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2">
+                            <span>تلخيص الروابط</span>
+                            <div class="loading-ring"></div>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Panel (Status & Results) -->
+            <div class="lg:col-span-8 space-y-6">
+                
+                <!-- Status Message Banner -->
+                <div id="status-card" class="glass-panel px-6 py-4 rounded-2xl flex items-center justify-between hidden">
+                    <div class="flex items-center gap-3">
+                        <div id="status-spinner" class="w-4 h-4 border-2 border-red-500/20 border-l-red-500 rounded-full animate-spin"></div>
+                        <span id="status-text" class="text-xs text-neutral-300 font-medium">جاري معالجة الروابط...</span>
+                    </div>
+                </div>
+
+                <!-- Global Playback / Actions Bar -->
+                <div id="global-actions" class="glass-panel px-6 py-4 rounded-2xl flex items-center justify-between gap-4 hidden">
+                    <button id="btn-listen-all" class="flex items-center gap-2 bg-white text-black px-4 py-2.5 rounded-full text-xs font-bold hover:bg-neutral-200 transition-all">
+                        <i data-lucide="play" class="w-3.5 h-3.5 fill-black"></i>
+                        <span>استماع لكل الملخصات</span>
+                    </button>
+
+                    <button id="btn-copy-all" class="flex items-center gap-2 border border-white/10 hover:bg-white/5 px-4 py-2.5 rounded-full text-xs text-neutral-300 transition-all font-medium">
+                        <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                        <span>نسخ جميع الملخصات</span>
+                    </button>
+                </div>
+
+                <!-- Results Grid -->
+                <div id="results-grid" class="space-y-6">
+                    <!-- Cards will be dynamically inserted here -->
+                    <div id="empty-state" class="glass-panel p-12 rounded-2xl text-center">
+                        <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4 text-neutral-500">
+                            <i data-lucide="newspaper" class="w-6 h-6"></i>
+                        </div>
+                        <h4 class="text-sm font-bold text-neutral-300 mb-1">لا توجد ملخصات حالياً</h4>
+                        <p class="text-xs text-neutral-500 max-w-sm mx-auto leading-relaxed">
+                            اختر "استخراج تلقائي" لبدء جلب أحدث المقالات وتلخيصها فوراً.
+                        </p>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Core App Logic -->
+    <script>
+        // Global variables & prompts
+        const PROMPT_1_SEQUENTIAL = `\n\nابحث في YouTube باستخدام اتصالك بالإنترنت عن فيديوهات عربية قوية تتناول نفس موضوع النص أو المقال أو الفيديو الذي سأرسله لك.
+المطلوب الأساسي: أريد من 5 إلى 10 فيديوهات عربية أو مدبلجة إلى العربية، منشورة خلال آخر أسبوع أولاً. ركّز على التحليل السياسي أو العسكري أو الاقتصادي العميق. @Youtube`;
+
+        const PROMPT_2_DEEP = `\n\nأريد بحثاً عميقاً في YouTube عن أفضل الفيديوهات العربية أو المدبلجة إلى العربية حول الموضوع الذي سأرسله لك. وضح القنوات والتفاصيل الجيوسياسية. @Youtube`;
+
+        const PROMPT_3_LEADERS = `\n\nابحث في YouTube باستخدام اتصالك بالإنترنت عن أفضل الفيديوهات العربية أو المدبلجة إلى العربية حول الموضوع الذي سأرسله لك. ركّز بشكل خاص على تصريحات فلاديمير بوتين ودونالد ترامب وتأثيراتها. @Youtube`;
+
+        const state = {
+            processing: false,
+            summaries: [],
+            audioPlaylist: [],
+            currentAudio: null,
+            playlistIndex: -1,
+            listeningAll: false
+        };
+
+        // DOM elements
+        const btnAutoExtract = document.getElementById('btn-auto-extract');
+        const btnManualExtract = document.getElementById('btn-manual-extract');
+        const limitSelect = document.getElementById('limit-select');
+        const manualUrls = document.getElementById('manual-urls');
+        const statusCard = document.getElementById('status-card');
+        const statusSpinner = document.getElementById('status-spinner');
+        const statusText = document.getElementById('status-text');
+        const globalActions = document.getElementById('global-actions');
+        const btnListenAll = document.getElementById('btn-listen-all');
+        const btnCopyAll = document.getElementById('btn-copy-all');
+        const resultsGrid = document.getElementById('results-grid');
+        const emptyState = document.getElementById('empty-state');
+
+        // Initial setup
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+        });
+
+        // Auto extraction trigger
+        btnAutoExtract.addEventListener('click', async () => {
+            if (state.processing) return;
+            setProcessing(true, btnAutoExtract);
+            updateStatus(true, 'جاري الاتصال بموقع RT وجلب الروابط...');
+            
+            try {
+                const response = await fetch(`/api/russian-news/extract?limit=${limitSelect.value}`);
+                const data = await response.json();
+                
+                if (!data.links || data.links.length === 0) {
+                    updateStatus(false, 'لم يتم العثور على أي روابط في الصفحة الرئيسية.');
+                    setProcessing(false, btnAutoExtract);
+                    return;
+                }
+                
+                await processUrls(data.links);
+            } catch (error) {
+                console.error(error);
+                updateStatus(false, 'حدث خطأ أثناء استخراج الروابط: ' + error.message);
+                setProcessing(false, btnAutoExtract);
+            }
+        });
+
+        // Manual extraction trigger
+        btnManualExtract.addEventListener('click', async () => {
+            if (state.processing) return;
+            const urls = manualUrls.value.split('\n').map(u => u.trim()).filter(u => u.length > 0);
+            if (urls.length === 0) {
+                alert('يرجى إدخال رابط واحد على الأقل.');
+                return;
+            }
+            
+            setProcessing(true, btnManualExtract);
+            await processUrls(urls);
+        });
+
+        // Update status UI
+        function updateStatus(show, text, showSpinner = true) {
+            if (show) {
+                statusCard.classList.remove('hidden');
+                statusText.textContent = text;
+                if (showSpinner) {
+                    statusSpinner.classList.remove('hidden');
+                } else {
+                    statusSpinner.classList.add('hidden');
+                }
+            } else {
+                statusCard.classList.add('hidden');
+            }
+        }
+
+        // Set processing state
+        function setProcessing(isProcessing, button) {
+            state.processing = isProcessing;
+            if (isProcessing) {
+                button.classList.add('loading');
+                button.disabled = true;
+                emptyState.classList.add('hidden');
+                stopAllAudio();
+            } else {
+                btnAutoExtract.classList.remove('loading');
+                btnAutoExtract.disabled = false;
+                btnManualExtract.classList.remove('loading');
+                btnManualExtract.disabled = false;
+            }
+        }
+
+        // Sequential processing of URLs
+        async function processUrls(urls) {
+            state.summaries = [];
+            resultsGrid.querySelectorAll('.article-card').forEach(c => c.remove());
+            
+            let count = 0;
+            const total = urls.length;
+            
+            for (const url of urls) {
+                count++;
+                updateStatus(true, `جاري تلخيص المقال ${count} من ${total}...`);
+                
+                // Create temporary card holding placeholder state
+                const cardId = 'rt-' + Math.random().toString(36).substr(2, 9);
+                const tempCard = createCardPlaceholder(url, cardId, count);
+                
+                try {
+                    const formData = new FormData();
+                    formData.append('url', url);
+                    
+                    const res = await fetch('/api/russian-news/summarize-one', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const item = await res.json();
+                    
+                    if (item.error) {
+                        renderErrorCard(tempCard, item);
+                    } else {
+                        state.summaries.push(item);
+                        renderSuccessCard(tempCard, item);
+                    }
+                } catch (err) {
+                    renderErrorCard(tempCard, {
+                        title: 'خطأ في الاتصال بالخادم',
+                        summary: 'تعذر إرسال المقالة للتلخيص. تفاصيل: ' + err.message,
+                        article_url: url
+                    });
+                }
+            }
+            
+            updateStatus(true, `اكتملت العملية بنجاح! تم معالجة ${state.summaries.length} مقالات.`, false);
+            setProcessing(false);
+            
+            if (state.summaries.length > 0) {
+                globalActions.classList.remove('hidden');
+            }
+        }
+
+        // Placeholder card layout
+        function createCardPlaceholder(url, cardId, index) {
+            const card = document.createElement('div');
+            card.id = cardId;
+            card.className = 'article-card glass-panel p-5 sm:p-6 rounded-2xl relative overflow-hidden transition-all duration-300';
+            
+            card.innerHTML = `
+                <div class="flex flex-col md:flex-row gap-6">
+                    <div class="flex-1 space-y-3">
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 rounded bg-white/5 text-[10px] text-neutral-400 font-medium">مقال ${index}</span>
+                            <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                            <span class="text-[10px] text-neutral-500 font-mono">جاري المعالجة...</span>
+                        </div>
+                        <h2 class="text-base sm:text-lg font-bold text-white leading-snug">
+                            <a href="${url}" target="_blank" class="hover:underline flex items-center gap-1.5">
+                                <span>جاري استيراد العنوان...</span>
+                                <i data-lucide="external-link" class="w-3.5 h-3.5 text-neutral-500"></i>
+                            </a>
+                        </h2>
+                        <div class="h-16 w-full bg-neutral-900 animate-pulse rounded-lg"></div>
+                    </div>
+                </div>
+            `;
+            
+            resultsGrid.appendChild(card);
+            lucide.createIcons();
+            return card;
+        }
+
+        // Successful summary card replacement
+        function renderSuccessCard(cardElement, data) {
+            const imgHtml = data.image_url 
+                ? `<div class="w-full md:w-40 h-32 rounded-xl overflow-hidden relative group shrink-0 border border-white/5 bg-neutral-950">
+                     <img src="${data.image_url}" alt="RT Thumbnail" class="w-full h-full object-cover group-hover:scale-105 transition-all duration-500">
+                   </div>`
+                : '';
+
+            cardElement.innerHTML = `
+                <div class="flex flex-col md:flex-row gap-6">
+                    ${imgHtml}
+                    <div class="flex-1 space-y-3">
+                        <div class="flex items-center justify-between gap-4">
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-0.5 rounded bg-red-500/10 text-[10px] text-red-400 font-semibold">${data.category || 'أخبار روسيا'}</span>
+                                <span class="text-[10px] text-neutral-500 font-mono">RT.com</span>
+                            </div>
+                            
+                            <!-- TTS Voice Play Button -->
+                            <button class="btn-play-card flex items-center gap-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">
+                                <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>
+                                <span class="btn-play-text">استماع</span>
+                            </button>
+                        </div>
+                        
+                        <h2 class="text-base sm:text-lg font-bold text-white leading-snug">
+                            <a href="${data.article_url}" target="_blank" class="hover:text-red-500 transition-colors flex items-center gap-1.5">
+                                <span>${data.title}</span>
+                                <i data-lucide="external-link" class="w-3.5 h-3.5 text-neutral-500 shrink-0"></i>
+                            </a>
+                        </h2>
+                        
+                        <p class="summary-content text-neutral-300 text-xs sm:text-sm leading-relaxed text-justify">
+                            ${data.summary}
+                        </p>
+
+                        <!-- Export / Custom YouTube Prompts -->
+                        <div class="pt-3 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <span class="text-[11px] text-neutral-500 font-medium flex items-center gap-1">
+                                <i data-lucide="target" class="w-3.5 h-3.5 text-red-500"></i>
+                                <span>نسخ الملخص مع بروم يوتيوب:</span>
+                            </span>
+                            
+                            <div class="flex flex-wrap gap-1.5">
+                                <button class="btn-prompt px-2.5 py-1.5 rounded bg-neutral-900 hover:bg-neutral-800 text-[10px] text-neutral-400 hover:text-white transition-all flex items-center gap-1 border border-white/5" data-prompt="1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                    <span>بحث متسلسل</span>
+                                </button>
+                                <button class="btn-prompt px-2.5 py-1.5 rounded bg-neutral-900 hover:bg-neutral-800 text-[10px] text-neutral-400 hover:text-white transition-all flex items-center gap-1 border border-white/5" data-prompt="2">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                    <span>بحث عميق</span>
+                                </button>
+                                <button class="btn-prompt px-2.5 py-1.5 rounded bg-neutral-900 hover:bg-neutral-800 text-[10px] text-neutral-400 hover:text-white transition-all flex items-center gap-1 border border-white/5" data-prompt="3">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                    <span>لقاءات القادة</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Set up card actions
+            const btnPlay = cardElement.querySelector('.btn-play-card');
+            btnPlay.addEventListener('click', () => {
+                playSingleCard(data, btnPlay);
+            });
+
+            cardElement.querySelectorAll('.btn-prompt').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const promptType = btn.getAttribute('data-prompt');
+                    let promptSuffix = PROMPT_1_SEQUENTIAL;
+                    if (promptType === '2') promptSuffix = PROMPT_2_DEEP;
+                    if (promptType === '3') promptSuffix = PROMPT_3_LEADERS;
+                    
+                    copyToClipboard(data.summary + promptSuffix, btn);
+                });
+            });
+
+            lucide.createIcons();
+        }
+
+        // Render error card
+        function renderErrorCard(cardElement, data) {
+            cardElement.innerHTML = `
+                <div class="flex items-start gap-4 p-2 bg-red-500/5 rounded-xl border border-red-500/10">
+                    <div class="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 shrink-0">
+                        <i data-lucide="alert-circle" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-red-400">${data.title}</h4>
+                        <p class="text-[11px] text-neutral-400 mt-1 leading-relaxed">${data.summary}</p>
+                        <a href="${data.article_url}" target="_blank" class="text-[10px] text-neutral-500 hover:underline mt-2 inline-block">الرابط الأصلي للمقالة</a>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        // Copy to clipboard helper
+        function copyToClipboard(text, button) {
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = button.querySelector('span:last-child').textContent;
+                button.querySelector('span:last-child').textContent = 'تم النسخ ✓';
+                button.classList.add('bg-white/10');
+                
+                setTimeout(() => {
+                    button.querySelector('span:last-child').textContent = originalText;
+                    button.classList.remove('bg-white/10');
+                }, 1800);
+            }).catch(err => {
+                console.error('Could not copy text: ', err);
+            });
+        }
+
+        // Global Copy All
+        btnCopyAll.addEventListener('click', () => {
+            if (state.summaries.length === 0) return;
+            const fullText = state.summaries.map((s, idx) => `[المقال ${idx + 1}] ${s.title}\n\n${s.summary}`).join('\n\n=======================\n\n');
+            copyToClipboard(fullText, btnCopyAll);
+        });
+
+        // Global Listening System
+        btnListenAll.addEventListener('click', () => {
+            if (state.summaries.length === 0) return;
+            
+            if (state.listeningAll) {
+                stopAllAudio();
+                return;
+            }
+            
+            startListeningAll();
+        });
+
+        function stopAllAudio() {
+            if (state.currentAudio) {
+                state.currentAudio.pause();
+                state.currentAudio = null;
+            }
+            state.listeningAll = false;
+            state.playlistIndex = -1;
+            
+            // Reset all card icons & text
+            document.querySelectorAll('.btn-play-card').forEach(btn => {
+                btn.querySelector('.btn-play-text').textContent = 'استماع';
+                btn.querySelector('svg').outerHTML = '<i data-lucide="volume-2" class="w-3.5 h-3.5"></i>';
+            });
+            
+            btnListenAll.innerHTML = '<i data-lucide="play" class="w-3.5 h-3.5 fill-black"></i><span>استماع لكل الملخصات</span>';
+            lucide.createIcons();
+        }
+
+        async function playSingleCard(data, button) {
+            const isPlayingThis = state.currentAudio && state.currentAudio.dataset.srcUrl === data.article_url;
+            
+            stopAllAudio();
+            
+            if (isPlayingThis) {
+                return; // toggled off
+            }
+            
+            button.querySelector('.btn-play-text').textContent = 'جاري التحميل...';
+            
+            try {
+                const audioBlob = await fetchTTSBlob(data.title, data.summary);
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                state.currentAudio = new Audio(audioUrl);
+                state.currentAudio.dataset.srcUrl = data.article_url;
+                
+                state.currentAudio.onended = () => {
+                    stopAllAudio();
+                };
+                
+                state.currentAudio.play();
+                button.querySelector('.btn-play-text').textContent = 'إيقاف';
+                button.querySelector('svg').outerHTML = '<i data-lucide="square" class="w-3.5 h-3.5 fill-current text-white animate-pulse"></i>';
+                lucide.createIcons();
+            } catch (err) {
+                console.error(err);
+                alert('فشل تشغيل الصوت. تأكد من اتصالك بالإنترنت وتوفر خدمة الصوت.');
+                button.querySelector('.btn-play-text').textContent = 'استماع';
+            }
+        }
+
+        async function fetchTTSBlob(title, summary) {
+            const res = await fetch('/api/arabic-tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: title, text: summary })
+            });
+            if (!res.ok) throw new Error('TTS fetch failed');
+            return await res.blob();
+        }
+
+        async function startListeningAll() {
+            state.listeningAll = true;
+            state.playlistIndex = 0;
+            btnListenAll.innerHTML = '<i data-lucide="square" class="w-3.5 h-3.5 fill-black"></i><span>إيقاف التشغيل</span>';
+            lucide.createIcons();
+            
+            playNextPlaylistItem();
+        }
+
+        async function playNextPlaylistItem() {
+            if (!state.listeningAll || state.playlistIndex >= state.summaries.length) {
+                stopAllAudio();
+                return;
+            }
+            
+            const currentItem = state.summaries[state.playlistIndex];
+            updateStatus(true, `جاري تشغيل صوت المقالة ${state.playlistIndex + 1} من ${state.summaries.length}... (استماع متتالي)`, false);
+            
+            // Find corresponding card button
+            const cards = resultsGrid.querySelectorAll('.article-card');
+            const targetCard = cards[state.playlistIndex];
+            let cardBtn = null;
+            if (targetCard) {
+                cardBtn = targetCard.querySelector('.btn-play-card');
+                if (cardBtn) {
+                    cardBtn.querySelector('.btn-play-text').textContent = 'جاري القراءة...';
+                    cardBtn.querySelector('svg').outerHTML = '<i data-lucide="volume-2" class="w-3.5 h-3.5 fill-current text-white animate-bounce"></i>';
+                    lucide.createIcons();
+                }
+            }
+
+            try {
+                const audioBlob = await fetchTTSBlob(currentItem.title, currentItem.summary);
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                state.currentAudio = new Audio(audioUrl);
+                state.currentAudio.onended = () => {
+                    if (cardBtn) {
+                        cardBtn.querySelector('.btn-play-text').textContent = 'استماع';
+                        cardBtn.querySelector('svg').outerHTML = '<i data-lucide="volume-2" class="w-3.5 h-3.5"></i>';
+                        lucide.createIcons();
+                    }
+                    state.playlistIndex++;
+                    playNextPlaylistItem();
+                };
+                
+                state.currentAudio.onerror = () => {
+                    state.playlistIndex++;
+                    playNextPlaylistItem();
+                };
+                
+                state.currentAudio.play();
+            } catch (err) {
+                console.error(currentItem.title, err);
+                state.playlistIndex++;
+                playNextPlaylistItem();
+            }
+        }
+    </script>
+</body>
+
+</html>

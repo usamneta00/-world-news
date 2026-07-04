@@ -26,6 +26,7 @@ from telethon.sessions import StringSession
 import requests
 import json
 import re
+from fastapi import Form
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)
@@ -131,6 +132,34 @@ class YemenNewsItem(Base):
 
 class YemenChannelLastVideo(Base):
     __tablename__ = "yemen_channel_last_video"
+    id = Column(Integer, primary_key=True, index=True)
+    channel_name = Column(String, unique=True)
+    last_video_ids = Column(String)  # JSON array of last 5 video IDs
+    last_video_published = Column(DateTime)
+    updated_at = Column(DateTime, default=datetime.now)
+
+# Arabic News Tables
+class ArabicNewsItem(Base):
+    __tablename__ = "arabic_news"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String)
+    link = Column(String, unique=True)
+    summary = Column(String)
+    published = Column(DateTime)
+    source = Column(String)
+    image_url = Column(String, nullable=True)
+    video_id = Column(String, nullable=True)
+    is_important = Column(Integer, default=0)
+    importance_reason = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    srt_transcript = Column(String, nullable=True)
+    full_transcript = Column(String, nullable=True)
+    full_transcript_cleaned = Column(String, nullable=True)
+    highlights = Column(String, nullable=True)
+    first_principles = Column(String, nullable=True)
+
+class ArabicChannelLastVideo(Base):
+    __tablename__ = "arabic_channel_last_video"
     id = Column(Integer, primary_key=True, index=True)
     channel_name = Column(String, unique=True)
     last_video_ids = Column(String)  # JSON array of last 5 video IDs
@@ -489,6 +518,20 @@ def migrate_database():
                 NewspaperLastArticle.__table__.create(engine)
                 logger.info("Successfully created newspaper_last_article table")
             
+            # Check if arabic_news table exists
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='arabic_news'"))
+            if not result.fetchone():
+                logger.info("Creating arabic_news table...")
+                ArabicNewsItem.__table__.create(engine)
+                logger.info("Successfully created arabic_news table")
+            
+            # Check if arabic_channel_last_video table exists
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='arabic_channel_last_video'"))
+            if not result.fetchone():
+                logger.info("Creating arabic_channel_last_video table...")
+                ArabicChannelLastVideo.__table__.create(engine)
+                logger.info("Successfully created arabic_channel_last_video table")
+            
             # Check if news_embedding_cache table exists
             result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='news_embedding_cache'"))
             if not result.fetchone():
@@ -757,6 +800,29 @@ YEMEN_YOUTUBE_CHANNELS = [
     {"url": "https://www.youtube.com/@TVyemenshabab/videos", "name": "قناة يمن شباب", "type": "channel"},
     {"url": "https://www.youtube.com/@AsharqNews/videos", "name": "الشرق للأخبار", "type": "channel"},
     {"url": "https://www.youtube.com/@Yementdy/videos", "name": "اليمن اليوم", "type": "channel"},
+]
+
+# Arabic YouTube Channels List
+ARABIC_YOUTUBE_CHANNELS = [
+    {"url": "https://www.youtube.com/@Mohammed.Naser.Official/videos", "name": "محمد ناصر", "type": "channel"},
+    {"url": "https://www.youtube.com/@aljazeera/videos", "name": "الجزيرة", "type": "channel"},
+    {"url": "https://www.youtube.com/@raghebelsergany/videos", "name": "راغب السرجاني", "type": "channel"},
+    {"url": "https://www.youtube.com/@AlarabyTv_News/videos", "name": "التلفزيون العربي", "type": "channel"},
+    {"url": "https://www.youtube.com/@AlHadath/videos", "name": "الحدث", "type": "channel"},
+    {"url": "https://www.youtube.com/@bbcnewsarabic/videos", "name": "بي بي سي عربي", "type": "channel"},
+    {"url": "https://www.youtube.com/@AlArabiya/videos", "name": "العربية", "type": "channel"},
+    {"url": "https://www.youtube.com/@ibrahiemmustafaelsharkawy/streams", "name": "إبراهيم مصطفى الشرقاوي", "type": "channel"},
+    {"url": "https://www.youtube.com/@-ibrahiemmustafaelsharkawy/streams", "name": "إبراهيم مصطفى الشرقاوي (بث مباشر)", "type": "channel"},
+    {"url": "https://www.youtube.com/@SkyNewsArabia/videos", "name": "سكاي نيوز عربية", "type": "channel"},
+    {"url": "https://www.youtube.com/@dwarabic/videos", "name": "DW عربية", "type": "channel"},
+    {"url": "https://www.youtube.com/@newstime17/videos", "name": "نيوز تايم 17", "type": "channel"},
+    {"url": "https://www.youtube.com/@TRTArabi/videos", "name": "تي آر تي عربي", "type": "channel"},
+    {"url": "https://www.youtube.com/@France24_ar/videos", "name": "فرانس 24 عربي", "type": "channel"},
+    {"url": "https://www.youtube.com/@CGTNArabic/videos", "name": "CGTN العربية", "type": "channel"},
+    {"url": "https://www.youtube.com/@HammediHoussem1/videos", "name": "حسام حميدي", "type": "channel"},
+    {"url": "https://www.youtube.com/@Shashofnews/videos", "name": "شاشوف", "type": "channel"},
+    {"url": "https://www.youtube.com/@almustakillahtv/videos", "name": "المستقلة", "type": "channel"},
+    {"url": "https://www.youtube.com/@hossamnassar/videos", "name": "حسام نصار", "type": "channel"}
 ]
 
 # Dubbed YouTube Channels List
@@ -1410,6 +1476,8 @@ def get_video_news_item(db: Session, news_type: str, news_id: int):
         return db.query(YemenNewsItem).filter(YemenNewsItem.id == news_id).first()
     if news_type == "dubbed":
         return db.query(DubbedNewsItem).filter(DubbedNewsItem.id == news_id).first()
+    if news_type == "arabic":
+        return db.query(ArabicNewsItem).filter(ArabicNewsItem.id == news_id).first()
     return None
 
 def video_update_payload(update: VideoSummaryUpdate) -> dict:
@@ -1903,7 +1971,8 @@ async def run_video_processing_flow(
                     # البحث في كل الجداول الممكنة
                     item = db_internal.query(NewsItem).filter(NewsItem.link == video_url).first() or \
                            db_internal.query(YemenNewsItem).filter(YemenNewsItem.link == video_url).first() or \
-                           db_internal.query(DubbedNewsItem).filter(DubbedNewsItem.link == video_url).first()
+                           db_internal.query(DubbedNewsItem).filter(DubbedNewsItem.link == video_url).first() or \
+                           db_internal.query(ArabicNewsItem).filter(ArabicNewsItem.link == video_url).first()
                     if item and item.full_transcript:
                         cached_transcript = item.full_transcript
                         if not fallback_title: fallback_title = item.title
@@ -1927,7 +1996,8 @@ async def run_video_processing_flow(
                     try:
                         item = db_internal.query(NewsItem).filter(NewsItem.link == video_url).first() or \
                                db_internal.query(YemenNewsItem).filter(YemenNewsItem.link == video_url).first() or \
-                               db_internal.query(DubbedNewsItem).filter(DubbedNewsItem.link == video_url).first()
+                               db_internal.query(DubbedNewsItem).filter(DubbedNewsItem.link == video_url).first() or \
+                               db_internal.query(ArabicNewsItem).filter(ArabicNewsItem.link == video_url).first()
                         if item:
                             item.full_transcript = transcript
                             db_internal.commit()
@@ -2033,6 +2103,8 @@ async def telegram_publish_by_id_endpoint(
             news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == news_id).first()
         elif news_type == 'newspaper':
             news_item = db.query(NewspaperNewsItem).filter(NewspaperNewsItem.id == news_id).first()
+        elif news_type == 'arabic':
+            news_item = db.query(ArabicNewsItem).filter(ArabicNewsItem.id == news_id).first()
             
         if not news_item or not news_item.link:
             return {"error": "الخبر غير موجود أو لا يحتوي على رابط"}, 404
@@ -2070,6 +2142,8 @@ async def get_video_insight_endpoint(news_type: str, news_id: int, mode: str = "
         news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == news_id).first()
     elif news_type == 'dubbed':
         news_item = db.query(DubbedNewsItem).filter(DubbedNewsItem.id == news_id).first()
+    elif news_type == 'arabic':
+        news_item = db.query(ArabicNewsItem).filter(ArabicNewsItem.id == news_id).first()
         
     if not news_item:
         return {"error": "Item not found"}, 404
@@ -2162,6 +2236,8 @@ async def get_video_full_text_endpoint(news_type: str, news_id: int, db: Session
         news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == news_id).first()
     elif news_type == 'dubbed':
         news_item = db.query(DubbedNewsItem).filter(DubbedNewsItem.id == news_id).first()
+    elif news_type == 'arabic':
+        news_item = db.query(ArabicNewsItem).filter(ArabicNewsItem.id == news_id).first()
         
     if not news_item:
         return {"error": "Item not found"}, 404
@@ -2206,6 +2282,8 @@ async def evaluate_video_endpoint(news_type: str, news_id: int, db: Session = De
         news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == news_id).first()
     elif news_type == 'dubbed':
         news_item = db.query(DubbedNewsItem).filter(DubbedNewsItem.id == news_id).first()
+    elif news_type == 'arabic':
+        news_item = db.query(ArabicNewsItem).filter(ArabicNewsItem.id == news_id).first()
         
     if not news_item:
         return {"error": "Item not found"}, 404
@@ -3905,12 +3983,158 @@ async def fetch_dubbed_youtube_feeds():
         logger.info("[Dubbed] Waiting 20 minutes before next fetch...")
         await asyncio.sleep(1200)
 
+async def fetch_all_arabic_youtube_channels(db) -> List[dict]:
+    """Fetch NEW videos from all Arabic YouTube channels/playlists in parallel, sorted from oldest to newest"""
+    channel_last_videos = {}
+    for channel in ARABIC_YOUTUBE_CHANNELS:
+        last_video_record = db.query(ArabicChannelLastVideo).filter(ArabicChannelLastVideo.channel_name == channel['name']).first()
+        if last_video_record and last_video_record.last_video_ids:
+            try:
+                channel_last_videos[channel['name']] = json.loads(last_video_record.last_video_ids)
+            except:
+                channel_last_videos[channel['name']] = None
+        else:
+            channel_last_videos[channel['name']] = None
+    
+    semaphore = asyncio.Semaphore(3)
+    async def fetch_with_semaphore(channel):
+        async with semaphore:
+            await pause_background_tasks.wait()
+            last_video_ids = channel_last_videos.get(channel['name'])
+            is_playlist = channel.get('type') == 'playlist'
+            return await asyncio.to_thread(fetch_youtube_channel_videos, channel['url'], channel['name'], last_video_ids, is_playlist)
+
+    tasks = [fetch_with_semaphore(channel) for channel in ARABIC_YOUTUBE_CHANNELS]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    all_videos = []
+    for idx, videos in enumerate(results):
+        if isinstance(videos, Exception):
+            logger.error(f"[Arabic] Error in channel fetch for {ARABIC_YOUTUBE_CHANNELS[idx]['name']}: {videos}")
+            continue
+        all_videos.extend(videos)
+    
+    all_videos.sort(key=lambda x: x['published'], reverse=True)
+    return all_videos
+
+async def fetch_arabic_youtube_feeds():
+    """Main function to fetch and store ONLY NEW Arabic YouTube videos"""
+    first_run = True
+    while True:
+        db = SessionLocal()
+        new_items_found = []
+        
+        try:
+            videos = await fetch_all_arabic_youtube_channels(db)
+            logger.info(f"[Arabic] Found {len(videos)} NEW Arabic videos from all channels combined")
+            
+            videos_by_channel = {}
+            for video in videos:
+                channel_name = video['source']
+                if channel_name not in videos_by_channel:
+                    videos_by_channel[channel_name] = []
+                videos_by_channel[channel_name].append(video)
+            
+            for video in videos:
+                try:
+                    exists = db.query(ArabicNewsItem).filter(ArabicNewsItem.link == video['link']).first()
+                    if exists:
+                        continue
+                    
+                    new_item = ArabicNewsItem(
+                        title=video['title'],
+                        link=video['link'],
+                        summary=video.get('summary', f"فيديو جديد من {video['source']}"),
+                        published=video['published'],
+                        source=video['source'],
+                        image_url=video.get('image_url'),
+                        video_id=video.get('video_id')
+                    )
+                    db.add(new_item)
+                    db.commit()
+                    db.refresh(new_item)
+                    
+                    item_dict = {
+                        "id": new_item.id,
+                        "title": new_item.title,
+                        "link": new_item.link,
+                        "summary": new_item.summary,
+                        "published": str(new_item.published),
+                        "source": new_item.source,
+                        "image_url": new_item.image_url,
+                        "video_id": new_item.video_id,
+                        "is_important": getattr(new_item, 'is_important', 0),
+                        "importance_reason": getattr(new_item, 'importance_reason', None)
+                    }
+                    new_items_found.append(item_dict)
+                    logger.info(f"[Arabic] ✓ SAVED to DB (ID: {new_item.id}): {video['title'][:50]}... from {video['source']}")
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"[Arabic] ✗ FAILED to save video: {video['title'][:50]}... Error: {e}")
+            
+            for channel in ARABIC_YOUTUBE_CHANNELS:
+                channel_name = channel['name']
+                channel_videos = videos_by_channel.get(channel_name, [])
+                
+                if not channel_videos:
+                    continue
+                
+                last_video_record = db.query(ArabicChannelLastVideo).filter(ArabicChannelLastVideo.channel_name == channel_name).first()
+                
+                existing_ids = []
+                if last_video_record and last_video_record.last_video_ids:
+                    try:
+                        existing_ids = json.loads(last_video_record.last_video_ids)
+                    except:
+                        existing_ids = []
+                
+                new_video_ids = [v['video_id'] for v in reversed(channel_videos)]
+                combined_ids = new_video_ids + existing_ids
+                seen = set()
+                unique_ids = []
+                for vid_id in combined_ids:
+                    if vid_id not in seen:
+                        seen.add(vid_id)
+                        unique_ids.append(vid_id)
+                
+                final_ids = unique_ids[:5]
+                most_recent_video = channel_videos[-1]
+                
+                if last_video_record:
+                    last_video_record.last_video_ids = json.dumps(final_ids)
+                    last_video_record.last_video_published = most_recent_video['published']
+                    last_video_record.updated_at = datetime.now()
+                    db.commit()
+                else:
+                    last_video_record = ArabicChannelLastVideo(
+                        channel_name=channel_name,
+                        last_video_ids=json.dumps(final_ids),
+                        last_video_published=most_recent_video['published']
+                    )
+                    db.add(last_video_record)
+                    db.commit()
+        
+        except Exception as e:
+            logger.error(f"[Arabic] Error in fetch_arabic_youtube_feeds: {e}")
+        
+        if new_items_found:
+            logger.info(f"[Arabic] Broadcasting {len(new_items_found)} new Arabic videos")
+            for item in new_items_found:
+                await manager.broadcast(json.dumps({"type": "new_arabic_news", "data": item}))
+        
+        db.close()
+        first_run = False
+        
+        logger.info("[Arabic] Waiting 5 minutes before next fetch...")
+        await asyncio.sleep(300)
+
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(fetch_youtube_feeds())
     asyncio.create_task(fetch_yemen_youtube_feeds())
     asyncio.create_task(fetch_newspaper_feeds())
     asyncio.create_task(fetch_dubbed_youtube_feeds())
+    asyncio.create_task(fetch_arabic_youtube_feeds())
 
 
 def _normalize_search_text(text: str) -> str:
@@ -4139,6 +4363,63 @@ async def get_dubbed_news(page: int = 1, limit: int = 20):
         "limit": limit
     }
 
+@app.get("/api/arabic-news")
+async def get_arabic_news(page: int = 1, limit: int = 20):
+    db = SessionLocal()
+    skip = (page - 1) * limit
+    news = db.query(ArabicNewsItem).order_by(desc(ArabicNewsItem.created_at), desc(ArabicNewsItem.id)).offset(skip).limit(limit).all()
+    total = db.query(ArabicNewsItem).count()
+    db.close()
+    return {
+        "items": news,
+        "total": total,
+        "page": page,
+        "limit": limit
+    }
+
+@app.post("/api/arabic-news/manual")
+async def create_manual_arabic_news(payload: dict):
+    video_url = (payload.get("url") or payload.get("link") or "").strip()
+    title = (payload.get("title") or "رابط YouTube يدوي").strip()
+    if not video_url:
+        raise HTTPException(status_code=400, detail="url is required")
+    if "youtube.com" not in video_url and "youtu.be" not in video_url:
+        raise HTTPException(status_code=400, detail="Only YouTube links are supported")
+
+    video_id_match = re.search(r"(?:v=|youtu\.be/|shorts/)([A-Za-z0-9_-]{11})", video_url)
+    video_id = video_id_match.group(1) if video_id_match else None
+    image_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg" if video_id else None
+    db = SessionLocal()
+    try:
+        item = db.query(ArabicNewsItem).filter(ArabicNewsItem.link == video_url).first()
+        if not item:
+            item = ArabicNewsItem(
+                title=title,
+                link=video_url,
+                summary="فيديو مضاف يدويا للتلخيص",
+                published=datetime.now(),
+                source="إدخال يدوي",
+                image_url=image_url,
+                video_id=video_id
+            )
+            db.add(item)
+            db.commit()
+            db.refresh(item)
+
+        schedule_video_summary_update("arabic", item.id)
+        return {"status": "queued", "item": {
+            "id": item.id,
+            "title": item.title,
+            "link": item.link,
+            "summary": item.summary,
+            "published": str(item.published) if item.published else None,
+            "source": item.source,
+            "image_url": item.image_url,
+            "video_id": item.video_id
+        }}
+    finally:
+        db.close()
+
 @app.get("/api/video-summary-updates")
 async def get_video_summary_updates(limit: int = 50, status: str = "all"):
     db = SessionLocal()
@@ -4160,8 +4441,8 @@ async def start_video_summary_update(payload: dict):
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="news_id is required")
 
-    if news_type not in {"world", "yemen", "dubbed"}:
-        raise HTTPException(status_code=400, detail="news_type must be world, yemen, or dubbed")
+    if news_type not in {"world", "yemen", "dubbed", "arabic"}:
+        raise HTTPException(status_code=400, detail="news_type must be world, yemen, dubbed, or arabic")
 
     if not force and (news_type, news_id) in _auto_summary_suppressed_items:
         return {"status": "skipped", "message": "تم تخطي التلخيص لهذه الدفعة الأولى بعد حذف الكل"}
@@ -4265,6 +4546,307 @@ async def process_news_ai(news_type: str, news_id: int):
         return {"error": str(e)}, 500
     finally:
         db.close()
+
+# ============================================================
+# Russian News (RT) Auto-Summarizer Helpers and Routes
+# ============================================================
+
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+}
+
+def extract_rt_homepage_links(limit: int = 0) -> List[str]:
+    """
+    استخراج روابط المقالات من الصفحة الرئيسية لـ RT.com
+    الأحدث أولاً (حسب ترتيب ظهورها في الصفحة)
+    limit = 0 يعني استخراج الكل
+    """
+    url = "https://www.rt.com/"
+    logger.info(f"جاري جلب الصفحة الرئيسية لـ RT: {url}")
+    
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=30)
+        response.raise_for_status()
+        logger.info(f"تم جلب الصفحة بنجاح (الحجم: {len(response.content)} bytes)")
+    except requests.RequestException as e:
+        logger.warning(f"فشل جلب rt.com، جاري محاولة الرابط البديل: {e}")
+        # محاولة رابط بديل (mirror) في حال كان الموقع الرئيسي محجوباً
+        mirror_url = "https://swentr.site/"
+        try:
+            response = requests.get(mirror_url, headers=HEADERS, timeout=30)
+            response.raise_for_status()
+            logger.info(f"تم جلب الصفحة من الرابط البديل بنجاح")
+        except requests.RequestException as e2:
+            logger.error(f"خطأ في جلب الصفحة من الرابط البديل أيضاً: {e2}")
+            return []
+    
+    base_url = response.url.rstrip('/')
+    if "rt.com" not in base_url and "swentr.site" not in base_url:
+        base_url = "https://www.rt.com"
+
+    soup = BeautifulSoup(response.content, 'html.parser')
+    all_links = soup.find_all('a', href=True)
+    
+    seen = set()
+    article_links = []
+    
+    for link in all_links:
+        href = link['href']
+        if href.startswith('/'):
+            href = f"{base_url}{href}"
+        
+        if not (href.startswith('https://www.rt.com/') or href.startswith('https://swentr.site/')):
+            continue
+            
+        excluded_patterns = [
+            '/tags/', '/search/', '/shows/', '/schedule/',
+            '/applications/', '/about/', '/privacy/', '/terms/',
+            '/contact/', '/vacancies/', '/promo/', '/live/',
+            '/podcasts/', '#', '?',
+        ]
+        
+        if any(pattern in href for pattern in excluded_patterns):
+            continue
+        
+        if re.search(r'/\d+-[a-z]', href) or re.search(r'/[a-z]+/\d+-', href):
+            href = href.rstrip('/')
+            if href not in seen:
+                seen.add(href)
+                article_links.append(href)
+                if limit > 0 and len(article_links) >= limit:
+                    break
+    
+    logger.info(f"تم العثور على {len(article_links)} رابط مقالة")
+    return article_links
+
+
+def scrape_rt_article(url: str) -> dict:
+    """
+    استخراج محتوى المقالة من RT.com
+    يرجع قاموس يحتوي على: title, content, image_url, category
+    """
+    url = url.strip()
+    logger.info(f"بدء جلب المقالة: {url}")
+    
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=30)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        logger.warning(f"فشل جلب المقالة من {url}، جاري محاولة التبديل للمرآة: {e}")
+        if "rt.com" in url:
+            alt_url = url.replace("rt.com", "swentr.site")
+            try:
+                response = requests.get(alt_url, headers=HEADERS, timeout=30)
+                response.raise_for_status()
+                logger.info(f"تم جلب المقالة من الرابط البديل: {alt_url}")
+            except requests.RequestException as e2:
+                logger.error(f"فشل جلب المقالة من الرابط البديل أيضاً: {e2}")
+                return {"title": "Error", "content": f"Could not fetch article: {e2}", "image_url": "", "category": ""}
+        else:
+            return {"title": "Error", "content": f"Could not fetch article: {e}", "image_url": "", "category": ""}
+        
+    soup = BeautifulSoup(response.content, 'html.parser')
+        
+    # Title
+    title = ""
+    title_tag = soup.find('h1')
+    if title_tag:
+        title = title_tag.get_text(strip=True)
+    
+    # Image
+    image_url = ""
+    og_image = soup.find('meta', property='og:image')
+    if og_image and og_image.get('content'):
+        image_url = og_image['content']
+    else:
+        article_img = soup.find('img', class_=re.compile(r'article|main|featured|hero', re.I))
+        if article_img and article_img.get('src'):
+            image_url = article_img['src']
+    
+    # Category
+    category = ""
+    breadcrumb = soup.find('a', class_=re.compile(r'breadcrumb|category', re.I))
+    if breadcrumb:
+        category = breadcrumb.get_text(strip=True)
+    else:
+        og_section = soup.find('meta', property='article:section')
+        if og_section and og_section.get('content'):
+            category = og_section['content']
+    
+    # Content
+    content_parts = []
+    article_body = soup.find('div', class_=re.compile(r'article__text|article-body|article__content|text__content|article_body', re.I))
+    if not article_body:
+        article_body = soup.find('article')
+    if not article_body:
+        article_body = soup.find('div', class_=re.compile(r'text|content|body', re.I))
+    
+    if article_body:
+        paragraphs = article_body.find_all(['p', 'blockquote'])
+        for p in paragraphs:
+            text = p.get_text(strip=True)
+            if text and len(text) > 30 and not re.search(r'(subscribe|follow us|read more|related)', text.lower()):
+                content_parts.append(text)
+    
+    if not content_parts:
+        all_paragraphs = soup.find_all('p')
+        for p in all_paragraphs:
+            text = p.get_text(strip=True)
+            if text and len(text) > 50:
+                content_parts.append(text)
+    
+    content = "\n\n".join(content_parts)
+    logger.info(f"تم جلب المقالة بنجاح: {title[:50]}... (حجم المحتوى: {len(content)} حرف)")
+    return {
+        "title": title,
+        "content": content,
+        "image_url": image_url,
+        "category": category,
+        "url": url
+    }
+
+async def translate_title_to_arabic(title: str) -> str:
+    """ترجمة العنوان من الإنجليزية إلى العربية باستخدام OpenAI."""
+    if not title or len(title.strip()) < 3 or not OPENAI_API_KEY:
+        return title
+    
+    arabic_chars = sum(1 for c in title if '\u0600' <= c <= '\u06FF')
+    if arabic_chars > len(title) * 0.3:
+        return title
+    
+    try:
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"قم بترجمة العنوان التالي من الإنجليزية إلى العربية، وأرجع الترجمة فقط بدون أي شرح أو نص إضافي أو علامات اقتباس:\n\n{title}"
+                }
+            ],
+            "temperature": 0.3
+        }
+        response = await asyncio.to_thread(
+            lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=20)
+        )
+        if response.status_code == 200:
+            translated = response.json()['choices'][0]['message']['content'].strip()
+            if translated:
+                return translated
+    except Exception as exc:
+        logger.warning(f"تعذر ترجمة العنوان: {exc}")
+    return title
+
+@app.get("/api/russian-news/extract")
+async def get_extracted_rt_links(limit: int = 10):
+    links = extract_rt_homepage_links(limit=limit)
+    return {"count": len(links), "links": links}
+
+@app.post("/api/russian-news/summarize-one")
+async def summarize_one_rt_article(url: str = Form(...)):
+    url = url.strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+        
+    article = scrape_rt_article(url)
+    if article.get("title") == "Error":
+        return {
+            "article_id": url.split("/")[-1],
+            "article_url": url,
+            "title": "خطأ في جلب المقالة",
+            "category": "",
+            "image_url": "",
+            "summary": f"تعذر جلب المقالة: {article.get('content')}",
+            "error": "scraping_failed"
+        }
+        
+    content = article.get("content", "")
+    title = article.get("title", "")
+    
+    if not content:
+        return {
+            "article_id": url.split("/")[-1],
+            "article_url": url,
+            "title": title,
+            "category": article.get("category", ""),
+            "image_url": article.get("image_url", ""),
+            "summary": "لا يوجد محتوى متاح لتلخيصه.",
+            "error": "empty_content"
+        }
+        
+    # Translate title
+    arabic_title = await translate_title_to_arabic(title)
+    
+    # AI summary
+    if not OPENAI_API_KEY:
+        return {
+            "article_id": url.split("/")[-1],
+            "article_url": url,
+            "title": arabic_title,
+            "category": article.get("category", ""),
+            "image_url": article.get("image_url", ""),
+            "summary": "مفتاح OpenAI (OPENAI_API_KEY) غير متوفر في الخادم.",
+            "error": "missing_api_key"
+        }
+        
+    system_prompt = (
+        "اريد ان تدخل في الموضوع مباشرة ولا تضيف اي شي اخر. "
+        "أنت كاتب عربي يصوغ ملخصات تبدو بشرية وطبيعية.\n"
+        "اكتب فقرة واحدة أو اثنتين مترابطتين تشرح الفكرة الأساسية وأهم الرسائل أو النتائج "
+        "الواردة في المقالة، بصياغة مباشرة وواضحة.\n"
+        "تجنّب تمامًا العبارات التي تكشف أن النص ملخص أو أنه مأخوذ من مقالة، "
+        "مثل: «تتحدث المقالة عن»، «في هذه المقالة»، «في هذا النص»، «هذا الملخص»، أو ما يشبهها.\n"
+        "اكتب المحتوى مباشرة بصيغة تقريرية إخبارية، كما لو كنت تكتب خبراً صحفياً."
+    )
+    user_prompt = (
+        "استخرج أهم ما يفيد القارئ من النص التالي، واكتبه في فقرة أو فقرتين عربيتين متصلتين، "
+        "بدون تعداد نقاط وبدون الإشارة إلى كلمة مقالة أو نص أو ملخص:\n\n"
+        f"{content}"
+    )
+    
+    try:
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": 0.5
+        }
+        response = await asyncio.to_thread(
+            lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=45)
+        )
+        if response.status_code == 200:
+            summary = response.json()['choices'][0]['message']['content'].strip()
+            return {
+                "article_id": url.split("/")[-1],
+                "article_url": url,
+                "title": arabic_title,
+                "category": article.get("category", ""),
+                "image_url": article.get("image_url", ""),
+                "summary": summary
+            }
+        else:
+            return {
+                "article_id": url.split("/")[-1],
+                "article_url": url,
+                "title": arabic_title,
+                "category": article.get("category", ""),
+                "image_url": article.get("image_url", ""),
+                "summary": f"فشل التلخص: استجاب الذكاء الاصطناعي برمز الخطأ {response.status_code}",
+                "error": "api_error"
+            }
+    except Exception as e:
+        return {
+            "article_id": url.split("/")[-1],
+            "article_url": url,
+            "title": arabic_title,
+            "category": article.get("category", ""),
+            "image_url": article.get("image_url", ""),
+            "summary": f"حدث خطأ أثناء التلخيص: {e}",
+            "error": "exception"
+        }
 
 @app.get("/api/newspaper-news")
 async def get_newspaper_news(page: int = 1, limit: int = 20):
