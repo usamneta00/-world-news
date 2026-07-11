@@ -1229,7 +1229,7 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
     """جلب SRT و TXT من DownSub في طلب واحد."""
     api_url = 'https://api.downsub.com/download'
     headers = {
-        'Authorization': 'Bearer AIzalTjrrsT1cKdr4HSWUryzgFRiqNYc8XBzztm',
+        'Authorization': 'Bearer AIzaBx9po7cMk0ooPwWjTd3YkRhz053AzfT-hGu',
         'Content-Type': 'application/json'
     }
     payload = {'url': video_url}
