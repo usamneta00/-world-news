@@ -1346,13 +1346,7 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
     
     results = {"srt": None, "txt": None, "title": None, "error": None}
     
-    # 1. إعدادات استخراج البيانات الأولية (بدون تحميل الفيديو)
-    ydl_opts = {
-        'skip_download': True,
-        'quiet': True,
-        'no_warnings': True,
-    }
-    
+    # 1. إعدادات استخراج البيانات الوصفية (عبر CLI لتجنب البلوك)
     cookies_base64 = os.environ.get('YOUTUBE_COOKIES')
     cookies_file_meta = None
     
@@ -1364,23 +1358,32 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
                 cookies_file_meta = os.path.join(tmpdir, 'cookies_meta.txt')
                 with open(cookies_file_meta, 'w', encoding='utf-8') as f:
                     f.write(cookies_content)
-                ydl_opts['cookiefile'] = cookies_file_meta
             except Exception as e:
-                logger.error(f"[yt-dlp meta] خطأ في الكوكيز: {e}")
+                logger.error(f"[yt-dlp meta] خطأ في كوكيز الاستعلام: {e}")
 
-        # استخراج قائمة الترجمات ولغة الفيديو
+        # استخراج قائمة الترجمات ولغة الفيديو باستخدام yt-dlp -j عبر CLI
         subtitles = {}
         automatic_captions = {}
         spoken_lang = None
+        
+        meta_args = ["yt-dlp", "-j", "--skip-download"]
+        if cookies_file_meta:
+            meta_args.extend(["--cookies", cookies_file_meta])
+        meta_args.append(video_url)
+        
         try:
-            logger.info(f"🔍 [yt-dlp meta] جاري استخراج بيانات الفيديو: {video_url}")
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(video_url, download=False)
-                if info:
-                    results["title"] = info.get('title')
-                    subtitles = info.get('subtitles', {})
-                    automatic_captions = info.get('automatic_captions', {})
-                    spoken_lang = info.get('language')
+            logger.info(f"🔍 [yt-dlp meta] جاري استخراج بيانات الفيديو عبر CLI: {video_url}")
+            meta_result = subprocess.run(meta_args, capture_output=True, text=True, timeout=60)
+            if meta_result.returncode != 0:
+                raise Exception(meta_result.stderr or meta_result.stdout or "فشل استعلام البيانات")
+                
+            import json
+            info = json.loads(meta_result.stdout)
+            if info:
+                results["title"] = info.get('title')
+                subtitles = info.get('subtitles', {})
+                automatic_captions = info.get('automatic_captions', {})
+                spoken_lang = info.get('language')
         except Exception as e:
             results["error"] = f"فشل استخراج بيانات الفيديو الأساسية: {e}"
             logger.error(f"❌ [yt-dlp meta] {results['error']}")
