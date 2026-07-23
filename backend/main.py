@@ -1288,22 +1288,119 @@ def vtt_to_srt(vtt_content: str) -> str:
         
     return "\n".join(srt_lines)
 
+def select_best_lang(subtitles, automatic_captions, spoken_lang):
+    """تحديد أفضل كود لغة متوفر لتجنب طلبات الترجمة الفورية من يوتيوب والتي تسبب خطأ 429."""
+    spoken_prefix = spoken_lang.split('-')[0].lower() if spoken_lang else None
+    
+    # 1. تفضيل الترجمات المرفوعة يدوياً (لأنها ملفات ثابتة ولا تسبب 429)
+    if subtitles:
+        # تفضيل اللغة العربية أولاً
+        for k in subtitles.keys():
+            if k == 'ar' or k.startswith('ar-'):
+                return k, False
+        # ثم اللغة الإنجليزية
+        for k in subtitles.keys():
+            if k == 'en' or k.startswith('en-'):
+                return k, False
+        # ثم أي ترجمة مرفوعة يدوياً أخرى
+        for k in subtitles.keys():
+            return k, False
+
+    # 2. الترجمات التلقائية (نأخذ فقط النسخ الأصلية غير المترجمة لتفادي حظر 429)
+    if automatic_captions:
+        # إذا كانت لغة الفيديو الأصلية عربية
+        if spoken_prefix == 'ar':
+            for k in automatic_captions.keys():
+                if k == 'ar' or k.startswith('ar-'):
+                    return k, True
+        # إذا كانت لغة الفيديو الأصلية إنجليزية
+        if spoken_prefix == 'en':
+            for k in ['en-orig', 'en', 'en-US', 'en-GB']:
+                if k in automatic_captions:
+                    return k, True
+            for k in automatic_captions.keys():
+                if k.startswith('en-'):
+                    return k, True
+        # إذا كانت لغة الفيديو أصلية أخرى
+        if spoken_lang and spoken_lang in automatic_captions:
+            return spoken_lang, True
+        if spoken_prefix:
+            for k in automatic_captions.keys():
+                if k.startswith(spoken_prefix):
+                    return k, True
+        # خيارات احتياطية شائعة للنسخ الأصلية
+        for k in ['en-orig', 'en', 'ar']:
+            if k in automatic_captions:
+                return k, True
+        # الحل الأخير
+        for k in automatic_captions.keys():
+            return k, True
+            
+    return None, False
+
 def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
-    """جلب SRT و TXT من اليوتيوب باستخدام yt-dlp CLI كعملية فرعية."""
+    """جلب SRT و TXT من اليوتيوب باستخدام yt-dlp CLI كعملية فرعية مع تجنب خطأ 429."""
     import tempfile
     import subprocess
     import base64
     
     results = {"srt": None, "txt": None, "title": None, "error": None}
     
+    # 1. إعدادات استخراج البيانات الأولية (بدون تحميل الفيديو)
+    ydl_opts = {
+        'skip_download': True,
+        'quiet': True,
+        'no_warnings': True,
+    }
+    
+    cookies_base64 = os.environ.get('YOUTUBE_COOKIES')
+    cookies_file_meta = None
+    
     with tempfile.TemporaryDirectory() as tmpdir:
+        # إعداد الكوكيز للاستخراج الأولي
+        if cookies_base64:
+            try:
+                cookies_content = base64.b64decode(cookies_base64.strip()).decode('utf-8')
+                cookies_file_meta = os.path.join(tmpdir, 'cookies_meta.txt')
+                with open(cookies_file_meta, 'w', encoding='utf-8') as f:
+                    f.write(cookies_content)
+                ydl_opts['cookiefile'] = cookies_file_meta
+            except Exception as e:
+                logger.error(f"[yt-dlp meta] خطأ في الكوكيز: {e}")
+
+        # استخراج قائمة الترجمات ولغة الفيديو
+        subtitles = {}
+        automatic_captions = {}
+        spoken_lang = None
+        try:
+            logger.info(f"🔍 [yt-dlp meta] جاري استخراج بيانات الفيديو: {video_url}")
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(video_url, download=False)
+                if info:
+                    results["title"] = info.get('title')
+                    subtitles = info.get('subtitles', {})
+                    automatic_captions = info.get('automatic_captions', {})
+                    spoken_lang = info.get('language')
+        except Exception as e:
+            results["error"] = f"فشل استخراج بيانات الفيديو الأساسية: {e}"
+            logger.error(f"❌ [yt-dlp meta] {results['error']}")
+            return results
+
+        # تحديد أفضل لغة متوفرة لا تسبب خطأ 429
+        best_lang, is_auto = select_best_lang(subtitles, automatic_captions, spoken_lang)
+        if not best_lang:
+            results["error"] = "لا توجد أي ملفات ترجمة أو نصوص تلقائية متاحة لهذا الفيديو"
+            logger.warning(f"⚠️ [yt-dlp meta] {results['error']}")
+            return results
+            
+        logger.info(f"🎯 [yt-dlp meta] تم اختيار لغة الترجمة: {best_lang} (تلقائية: {is_auto})")
+
+        # 2. بناء أمر CLI لتحميل الملف المحدد فقط
         output_template = os.path.join(tmpdir, "%(id)s")
-        
         args = [
             "yt-dlp",
-            "--write-subs",
-            "--write-auto-subs",
-            "--sub-lang", "ar,en",
+            "--write-auto-subs" if is_auto else "--write-subs",
+            "--sub-lang", best_lang,
             "--skip-download",
             "--no-playlist",
             "--no-warnings",
@@ -1313,24 +1410,22 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
             "-o", output_template
         ]
         
-        # كوكيز يوتيوب
-        cookies_base64 = os.environ.get('YOUTUBE_COOKIES')
         cookies_file = None
         if cookies_base64:
             try:
-                cookies_content = base64.b64decode(cookies_base64.strip()).decode('utf-8')
                 cookies_file = os.path.join(tmpdir, 'cookies.txt')
+                # فك التشفير مجدداً للملف المخصص للأمر
+                cookies_content = base64.b64decode(cookies_base64.strip()).decode('utf-8')
                 with open(cookies_file, 'w', encoding='utf-8') as f:
                     f.write(cookies_content)
                 args.extend(["--cookies", cookies_file])
-                logger.info("[yt-dlp] ✅ تم تمرير الكوكيز إلى yt-dlp CLI")
             except Exception as e:
-                logger.error(f"[yt-dlp] ❌ خطأ في فك كوكيز البيئة: {e}")
+                logger.error(f"[yt-dlp CLI] خطأ في كوكيز الأمر: {e}")
                 
         args.append(video_url)
         
         try:
-            logger.info(f"📡 [yt-dlp CLI] جاري تشغيل الأمر للرابط: {video_url}")
+            logger.info(f"📡 [yt-dlp CLI] تشغيل الأمر لجلب لغة ({best_lang}): {video_url}")
             result = subprocess.run(args, capture_output=True, text=True, timeout=90)
             
             logger.info(f"[yt-dlp CLI] كود الخروج: {result.returncode}")
@@ -1346,18 +1441,23 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
                 return results
                 
             files = os.listdir(tmpdir)
-            if cookies_file and 'cookies.txt' in files:
-                files.remove('cookies.txt')
+            for file_to_remove in ['cookies.txt', 'cookies_meta.txt']:
+                if file_to_remove in files:
+                    files.remove(file_to_remove)
                 
             sub_file = None
-            for suffix in ['.ar.vtt', '.ar.srt', '.en.vtt', '.en.srt']:
+            # البحث عن الملف المطابق للغة المختارة
+            for suffix in [f'.{best_lang}.vtt', f'.{best_lang}.srt']:
                 matched = [f for f in files if f.endswith(suffix)]
                 if matched:
                     sub_file = matched[0]
                     break
                     
             if not sub_file and files:
-                sub_file = files[0]
+                # محاولة مطابقة أي ملف ترجمة متوفر
+                vtt_or_srt_files = [f for f in files if f.endswith('.vtt') or f.endswith('.srt')]
+                if vtt_or_srt_files:
+                    sub_file = vtt_or_srt_files[0]
                 
             if sub_file:
                 filepath = os.path.join(tmpdir, sub_file)
@@ -1375,8 +1475,8 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
                 
                 logger.info(f"✅ [yt-dlp CLI] تم جلب ومعالجة الترجمة بنجاح: {sub_file}")
             else:
-                results["error"] = "لم يتم العثور على أي ترجمات بعد تشغيل yt-dlp"
-                logger.warning("⚠️ [yt-dlp CLI] لم تتوفر ملفات ترجمة.")
+                results["error"] = "لم يتم كتابة ملف الترجمة في المجلد المؤقت"
+                logger.warning("⚠️ [yt-dlp CLI] لم تتوفر ملفات ترجمة بعد التشغيل.")
                 
         except subprocess.TimeoutExpired:
             results["error"] = "انتهت المهلة الزمنية لطلب yt-dlp"
