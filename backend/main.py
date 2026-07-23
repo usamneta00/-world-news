@@ -1409,7 +1409,6 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
             "--no-warnings",
             "--no-check-formats",
             "--ignore-no-formats-error",
-            "-f", "ba",
             "-o", output_template
         ]
         
