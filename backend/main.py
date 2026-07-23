@@ -1333,6 +1333,12 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
             logger.info(f"📡 [yt-dlp CLI] جاري تشغيل الأمر للرابط: {video_url}")
             result = subprocess.run(args, capture_output=True, text=True, timeout=90)
             
+            logger.info(f"[yt-dlp CLI] كود الخروج: {result.returncode}")
+            if result.stdout:
+                logger.info(f"[yt-dlp CLI] المخرجات القياسية: {result.stdout.strip()}")
+            if result.stderr:
+                logger.warning(f"[yt-dlp CLI] الأخطاء القياسية: {result.stderr.strip()}")
+            
             if result.returncode != 0:
                 error_msg = result.stderr or result.stdout or "فشل غير معروف"
                 logger.error(f"❌ [yt-dlp CLI] خطأ أثناء تشغيل الأداة: {error_msg}")
