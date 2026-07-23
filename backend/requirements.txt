@@ -6,7 +6,7 @@ python-multipart
 aiosqlite
 asyncio
 python-dateutil
-yt-dlp
+yt-dlp[default]
 beautifulsoup4
 requests
 telethon

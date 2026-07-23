@@ -1366,7 +1366,14 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
         automatic_captions = {}
         spoken_lang = None
         
-        meta_args = ["yt-dlp", "-j", "--skip-download"]
+        meta_args = [
+            "yt-dlp",
+            "-j",
+            "--skip-download",
+            "--no-check-formats",
+            "--ignore-no-formats-error",
+            "--js-runtimes", "node"
+        ]
         if cookies_file_meta:
             meta_args.extend(["--cookies", cookies_file_meta])
         meta_args.append(video_url)
@@ -1409,6 +1416,7 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
             "--no-warnings",
             "--no-check-formats",
             "--ignore-no-formats-error",
+            "--js-runtimes", "node",
             "-o", output_template
         ]
         
