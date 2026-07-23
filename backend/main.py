@@ -1289,27 +1289,31 @@ def vtt_to_srt(vtt_content: str) -> str:
     return "\n".join(srt_lines)
 
 def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
-    """جلب SRT و TXT من اليوتيوب باستخدام yt-dlp محلياً."""
+    """جلب SRT و TXT من اليوتيوب باستخدام yt-dlp CLI كعملية فرعية."""
     import tempfile
+    import subprocess
     import base64
     
     results = {"srt": None, "txt": None, "title": None, "error": None}
     
     with tempfile.TemporaryDirectory() as tmpdir:
-        output_template = os.path.join(tmpdir, '%(id)s')
+        output_template = os.path.join(tmpdir, "%(id)s")
         
-        ydl_opts = {
-            'writesubtitles': True,
-            'writeautomaticsub': True,
-            'subtitleslangs': ['ar', 'en'],
-            'skip_download': True,
-            'outtmpl': output_template,
-            'quiet': True,
-            'no_warnings': True,
-            'format': 'ba',
-            'ignoreerrors': True,
-        }
+        args = [
+            "yt-dlp",
+            "--write-subs",
+            "--write-auto-subs",
+            "--sub-lang", "ar,en",
+            "--skip-download",
+            "--no-playlist",
+            "--no-warnings",
+            "--no-check-formats",
+            "--ignore-no-formats-error",
+            "-f", "ba",
+            "-o", output_template
+        ]
         
+        # كوكيز يوتيوب
         cookies_base64 = os.environ.get('YOUTUBE_COOKIES')
         cookies_file = None
         if cookies_base64:
@@ -1318,17 +1322,22 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
                 cookies_file = os.path.join(tmpdir, 'cookies.txt')
                 with open(cookies_file, 'w', encoding='utf-8') as f:
                     f.write(cookies_content)
-                ydl_opts['cookiefile'] = cookies_file
-                logger.info("[yt-dlp] ✅ تم استخدام كوكيز يوتيوب من البيئة")
+                args.extend(["--cookies", cookies_file])
+                logger.info("[yt-dlp] ✅ تم تمرير الكوكيز إلى yt-dlp CLI")
             except Exception as e:
                 logger.error(f"[yt-dlp] ❌ خطأ في فك كوكيز البيئة: {e}")
-
+                
+        args.append(video_url)
+        
         try:
-            logger.info(f"📡 [yt-dlp] جاري استخراج الترجمات للرابط: {video_url}")
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(video_url, download=True)
-                if info:
-                    results["title"] = info.get('title')
+            logger.info(f"📡 [yt-dlp CLI] جاري تشغيل الأمر للرابط: {video_url}")
+            result = subprocess.run(args, capture_output=True, text=True, timeout=90)
+            
+            if result.returncode != 0:
+                error_msg = result.stderr or result.stdout or "فشل غير معروف"
+                logger.error(f"❌ [yt-dlp CLI] خطأ أثناء تشغيل الأداة: {error_msg}")
+                results["error"] = error_msg
+                return results
                 
             files = os.listdir(tmpdir)
             if cookies_file and 'cookies.txt' in files:
@@ -1358,14 +1367,17 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
                 if 'txt' in formats:
                     results['txt'] = txt_data
                 
-                logger.info(f"✅ [yt-dlp] تم العثور على ملف الترجمة بنجاح: {sub_file}")
+                logger.info(f"✅ [yt-dlp CLI] تم جلب ومعالجة الترجمة بنجاح: {sub_file}")
             else:
-                results["error"] = "لم يتم العثور على ترجمة عربية أو إنجليزية"
-                logger.warning("⚠️ [yt-dlp] لم تتوفر ملفات ترجمة.")
+                results["error"] = "لم يتم العثور على أي ترجمات بعد تشغيل yt-dlp"
+                logger.warning("⚠️ [yt-dlp CLI] لم تتوفر ملفات ترجمة.")
                 
+        except subprocess.TimeoutExpired:
+            results["error"] = "انتهت المهلة الزمنية لطلب yt-dlp"
+            logger.error("❌ [yt-dlp CLI] انتهت مهلة الـ 90 ثانية")
         except Exception as e:
             results["error"] = str(e)
-            logger.error(f"❌ [yt-dlp] خطأ أثناء استخراج الترجمة: {e}")
+            logger.error(f"❌ [yt-dlp CLI] خطأ عام: {e}")
             
     return results
 
