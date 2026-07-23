@@ -1225,76 +1225,149 @@ async def post_to_telegram_channel(message_text):
         logger.error(f"❌ فشل النشر في تيليجرام: {e}")
         return False
 
-def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
-    """جلب SRT و TXT من DownSub في طلب واحد."""
-    api_url = 'https://api.downsub.com/download'
-    headers = {
-        'Authorization': 'Bearer AIzaBx9po7cMk0ooPwWjTd3YkRhz053AzfT-hGu',
-        'Content-Type': 'application/json'
-    }
-    payload = {'url': video_url}
-    max_retries = max(1, int(os.environ.get('DOWNSUB_RETRIES', '3')))
-    post_timeout = int(os.environ.get('DOWNSUB_POST_TIMEOUT', '55'))
-    get_timeout = int(os.environ.get('DOWNSUB_GET_TIMEOUT', '90'))
-
-    results = {"srt": None, "txt": None, "title": None, "error": None}
-    last_err: Optional[str] = None
-
-    for attempt in range(1, max_retries + 1):
-        try:
-            logger.info(f"📡 [DownSub] محاولة {attempt}/{max_retries} — طلب المعالجة لـ {video_url}")
-            resp = requests.post(api_url, headers=headers, json=payload, timeout=post_timeout)
-            resp.raise_for_status()
-            data = resp.json()
-            
-            if data.get('status') != 'success':
-                return {"srt": None, "txt": None, "title": None, "error": "DownSub Error: " + data.get('message', 'Unknown')}
-
-            original_subs = data.get('data', {}).get('subtitles', [])
-            if not original_subs:
-                return {"srt": None, "txt": None, "title": None, "error": "لم يتم العثور على أي ترجمات لهذا الفيديو"}
-
-            results["title"] = data.get('data', {}).get('title')
-            
-            # 1. التفضيل للترجمة غير التلقائية
-            selected_sub = original_subs[0]
-            for sub in original_subs:
-                if "auto-generated" not in sub.get('language', '').lower():
-                    selected_sub = sub
-                    break
-            
-            # 2. جلب الروابط المطلوبة
-            found_urls = {}
-            for fmt in selected_sub.get('formats', []):
-                f_type = fmt.get('format')
-                if f_type in formats:
-                    found_urls[f_type] = fmt.get('url')
-
-            # 3. تحميل المحتويات
-            for f_type, url in found_urls.items():
-                try:
-                    logger.info(f"📡 [DownSub] تحميل ملف {f_type.upper()}...")
-                    f_resp = requests.get(url, timeout=get_timeout)
-                    f_resp.raise_for_status()
-                    results[f_type] = f_resp.text
-                except Exception as e:
-                    logger.warning(f"⚠️ [DownSub] فشل تحميل {f_type}: {e}")
-            
-            # إذا لم يتم العثور على أي نتيجة رغم وجود روابط
-            if not any(results[f] for f in formats if f in found_urls):
-                continue
-                
-            return results
-
-        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.HTTPError) as e:
-            last_err = str(e)
-            if attempt < max_retries:
-                time.sleep(min(2 ** (attempt - 1), 12))
+def clean_vtt_or_srt_to_txt(content: str) -> str:
+    """تحويل محتوى VTT أو SRT إلى نص عادي نظيف."""
+    lines = content.splitlines()
+    cleaned_lines = []
+    timestamp_pattern = re.compile(r'\d{2}:\d{2}:\d{2}[,.]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[,.]\d{3}')
+    
+    for line in lines:
+        line_str = line.strip()
+        if (not line_str or 
+            line_str.startswith('WEBVTT') or 
+            line_str.startswith('Kind:') or 
+            line_str.startswith('Language:') or 
+            timestamp_pattern.search(line_str) or 
+            line_str.isdigit()):
             continue
-        except Exception as e:
-            return {"srt": None, "txt": None, "title": None, "error": str(e)}
+            
+        cleaned = re.sub(r'<[^>]+>', '', line_str).strip()
+        if not cleaned:
+            continue
+            
+        if not cleaned_lines or cleaned_lines[-1] != cleaned:
+            cleaned_lines.append(cleaned)
+            
+    return "\n".join(cleaned_lines)
 
-    return {"srt": None, "txt": None, "title": results.get("title"), "error": last_err or "فشل الاتصال بـ DownSub"}
+def vtt_to_srt(vtt_content: str) -> str:
+    """تحويل محتوى VTT إلى صيغة SRT."""
+    lines = vtt_content.splitlines()
+    srt_lines = []
+    block_counter = 1
+    timestamp_pattern = re.compile(r'(\d{2}:\d{2}:\d{2})[.](\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2})[.](\d{3})')
+    
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        match = timestamp_pattern.search(line)
+        if match:
+            srt_timestamp = f"{match.group(1)},{match.group(2)} --> {match.group(3)},{match.group(4)}"
+            text_lines = []
+            i += 1
+            while i < len(lines):
+                next_line = lines[i].strip()
+                if not next_line:
+                    break
+                if timestamp_pattern.search(next_line):
+                    i -= 1
+                    break
+                cleaned_text = re.sub(r'<[^>]+>', '', next_line).strip()
+                if cleaned_text:
+                    text_lines.append(cleaned_text)
+                i += 1
+            
+            if text_lines:
+                text_content = "\n".join(text_lines)
+                srt_lines.append(f"{block_counter}")
+                srt_lines.append(srt_timestamp)
+                srt_lines.append(text_content)
+                srt_lines.append("")
+                block_counter += 1
+        i += 1
+        
+    return "\n".join(srt_lines)
+
+def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
+    """جلب SRT و TXT من اليوتيوب باستخدام yt-dlp محلياً."""
+    import tempfile
+    import base64
+    
+    results = {"srt": None, "txt": None, "title": None, "error": None}
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_template = os.path.join(tmpdir, '%(id)s')
+        
+        ydl_opts = {
+            'writesubtitles': True,
+            'writeautomaticsub': True,
+            'subtitleslangs': ['ar', 'en'],
+            'skip_download': True,
+            'outtmpl': output_template,
+            'quiet': True,
+            'no_warnings': True,
+            'format': 'ba',
+            'ignoreerrors': True,
+        }
+        
+        cookies_base64 = os.environ.get('YOUTUBE_COOKIES')
+        cookies_file = None
+        if cookies_base64:
+            try:
+                cookies_content = base64.b64decode(cookies_base64.strip()).decode('utf-8')
+                cookies_file = os.path.join(tmpdir, 'cookies.txt')
+                with open(cookies_file, 'w', encoding='utf-8') as f:
+                    f.write(cookies_content)
+                ydl_opts['cookiefile'] = cookies_file
+                logger.info("[yt-dlp] ✅ تم استخدام كوكيز يوتيوب من البيئة")
+            except Exception as e:
+                logger.error(f"[yt-dlp] ❌ خطأ في فك كوكيز البيئة: {e}")
+
+        try:
+            logger.info(f"📡 [yt-dlp] جاري استخراج الترجمات للرابط: {video_url}")
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(video_url, download=True)
+                if info:
+                    results["title"] = info.get('title')
+                
+            files = os.listdir(tmpdir)
+            if cookies_file and 'cookies.txt' in files:
+                files.remove('cookies.txt')
+                
+            sub_file = None
+            for suffix in ['.ar.vtt', '.ar.srt', '.en.vtt', '.en.srt']:
+                matched = [f for f in files if f.endswith(suffix)]
+                if matched:
+                    sub_file = matched[0]
+                    break
+                    
+            if not sub_file and files:
+                sub_file = files[0]
+                
+            if sub_file:
+                filepath = os.path.join(tmpdir, sub_file)
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                is_vtt = sub_file.endswith('.vtt')
+                srt_data = vtt_to_srt(content) if is_vtt else content
+                txt_data = clean_vtt_or_srt_to_txt(content)
+                
+                if 'srt' in formats:
+                    results['srt'] = srt_data
+                if 'txt' in formats:
+                    results['txt'] = txt_data
+                
+                logger.info(f"✅ [yt-dlp] تم العثور على ملف الترجمة بنجاح: {sub_file}")
+            else:
+                results["error"] = "لم يتم العثور على ترجمة عربية أو إنجليزية"
+                logger.warning("⚠️ [yt-dlp] لم تتوفر ملفات ترجمة.")
+                
+        except Exception as e:
+            results["error"] = str(e)
+            logger.error(f"❌ [yt-dlp] خطأ أثناء استخراج الترجمة: {e}")
+            
+    return results
 
 # No more wrappers here
 
