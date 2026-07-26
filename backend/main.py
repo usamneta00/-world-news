@@ -5553,6 +5553,7 @@ async def debug_info():
     try:
         world_news_count = db.query(NewsItem).count()
         yemen_news_count = db.query(YemenNewsItem).count()
+        arabic_news_count = db.query(ArabicNewsItem).count()
         newspaper_news_count = db.query(NewspaperNewsItem).count()
         dubbed_news_count = db.query(DubbedNewsItem).count()
         world_channels_count = db.query(ChannelLastVideo).count()
@@ -5563,6 +5564,7 @@ async def debug_info():
         # Get latest news items
         latest_world = db.query(NewsItem).order_by(desc(NewsItem.created_at)).limit(3).all()
         latest_yemen = db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at)).limit(3).all()
+        latest_arabic = db.query(ArabicNewsItem).order_by(desc(ArabicNewsItem.created_at)).limit(3).all()
         latest_newspaper = db.query(NewspaperNewsItem).order_by(desc(NewspaperNewsItem.created_at)).limit(3).all()
         
         return {
@@ -5573,6 +5575,7 @@ async def debug_info():
             "counts": {
                 "world_news": world_news_count,
                 "yemen_news": yemen_news_count,
+                "arabic_news": arabic_news_count,
                 "newspaper_news": newspaper_news_count,
                 "dubbed_news": dubbed_news_count,
                 "world_channels_tracked": world_channels_count,
@@ -5582,6 +5585,7 @@ async def debug_info():
             },
             "latest_world_news": [{"title": n.title[:50], "published": str(n.published), "source": n.source} for n in latest_world],
             "latest_yemen_news": [{"title": n.title[:50], "published": str(n.published), "source": n.source} for n in latest_yemen],
+            "latest_arabic_news": [{"title": n.title[:50], "published": str(n.published), "source": n.source} for n in latest_arabic],
             "latest_newspaper_news": [{"title": n.title[:50], "published": str(n.published), "source": n.source} for n in latest_newspaper],
             "active_websocket_connections": len(manager.active_connections)
         }

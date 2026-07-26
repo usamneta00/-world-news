@@ -11,6 +11,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script>
+        window.lucide = window.lucide || { createIcons() {} };
+    </script>
+    <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
@@ -349,7 +352,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             if (reset) state.page = 1;
             document.getElementById('news-status').textContent = 'LOADING';
             try {
-                const res = await fetch(`${API_URL}/api/arabic-news?page=${state.page}&limit=${state.limit}`);
+                const res = await fetch(`${API_URL}/arabic-news?page=${state.page}&limit=${state.limit}`);
                 if (!res.ok) throw new Error('failed to load arabic news');
                 const data = await res.json();
                 state.news = Array.isArray(data.items) ? data.items : [];
@@ -413,7 +416,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
 
         async function startSummary(newsId) {
             try {
-                const res = await fetch(`${API_URL}/api/video-summary-updates/start`, {
+                const res = await fetch(`${API_URL}/video-summary-updates/start`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ news_type: 'arabic', news_id: newsId, force: true })
@@ -429,7 +432,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
         async function fetchSummaryUpdates() {
             document.getElementById('summary-status').textContent = 'LOADING';
             try {
-                const res = await fetch(`${API_URL}/api/video-summary-updates?limit=80`);
+                const res = await fetch(`${API_URL}/video-summary-updates?limit=80`);
                 const data = await res.json();
                 state.summaries = (Array.isArray(data.items) ? data.items : []).filter(item => item.news_type === 'arabic' || state.news.some(n => n.link === item.link));
                 renderSummaries();
@@ -510,7 +513,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             if (!item || !item.summary) return;
             stopAudio();
             try {
-                const res = await fetch(`${API_URL}/api/arabic-tts`, {
+                const res = await fetch(`${API_URL}/arabic-tts`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title: item.title || '', text: item.summary || '' })
@@ -538,7 +541,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                 return;
             }
             try {
-                const res = await fetch(`${API_URL}/api/arabic-news/manual`, {
+                const res = await fetch(`${API_URL}/arabic-news/manual`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url })
