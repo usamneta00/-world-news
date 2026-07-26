@@ -4820,6 +4820,39 @@ def extract_rt_homepage_links(limit: int = 0) -> List[str]:
     logger.info(f"تم العثور على {len(article_links)} رابط مقالة")
     return article_links
 
+def extract_rt_rss_links(limit: int = 10) -> List[str]:
+    """Fallback extractor using RT RSS feeds when the homepage markup is unavailable."""
+    import xml.etree.ElementTree as ET
+
+    rss_urls = [
+        "https://www.rt.com/rss/",
+        "https://www.rt.com/rss/news/",
+        "https://www.rt.com/rss/world/",
+    ]
+    seen = set()
+    links = []
+    for rss_url in rss_urls:
+        try:
+            response = requests.get(rss_url, headers=HEADERS, timeout=12)
+            response.raise_for_status()
+            root = ET.fromstring(response.content)
+            for item in root.findall(".//item"):
+                link_tag = item.find("link")
+                if link_tag is None or not link_tag.text:
+                    continue
+                link = link_tag.text.strip().rstrip("/")
+                if not link or link in seen:
+                    continue
+                if "rt.com" not in link:
+                    continue
+                seen.add(link)
+                links.append(link)
+                if limit > 0 and len(links) >= limit:
+                    return links
+        except Exception as exc:
+            logger.warning(f"RT RSS fallback failed for {rss_url}: {exc}")
+    return links
+
 
 def scrape_rt_article(url: str) -> dict:
     """
@@ -4941,7 +4974,14 @@ async def translate_title_to_arabic(title: str) -> str:
 @app.get("/api/russian-news/extract")
 async def get_extracted_rt_links(limit: int = 10):
     links = extract_rt_homepage_links(limit=limit)
-    return {"count": len(links), "links": links}
+    source = "homepage"
+    if not links:
+        links = extract_rt_rss_links(limit=limit)
+        source = "rss"
+    result = {"count": len(links), "links": links, "source": source}
+    if not links:
+        result["error"] = "تعذر استخراج روابط RT من الصفحة الرئيسية أو RSS. افحص وصول Railway إلى rt.com."
+    return result
 
 @app.post("/api/russian-news/summarize-one")
 async def summarize_one_rt_article(url: str = Form(...)):

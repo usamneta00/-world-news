@@ -436,6 +436,16 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
         const resultsGrid = document.getElementById('results-grid');
         const emptyState = document.getElementById('empty-state');
 
+        async function fetchWithTimeout(url, options = {}, timeoutMs = 25000) {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                return await fetch(url, { ...options, signal: controller.signal });
+            } finally {
+                clearTimeout(timeout);
+            }
+        }
+
         // Initial setup
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
@@ -448,11 +458,12 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             updateStatus(true, 'جاري الاتصال بموقع RT وجلب الروابط...');
             
             try {
-                const response = await fetch(`/api/russian-news/extract?limit=${limitSelect.value}`);
+                const response = await fetchWithTimeout(`/api/russian-news/extract?limit=${limitSelect.value}`, {}, 30000);
+                if (!response.ok) throw new Error(`فشل الخادم برمز ${response.status}`);
                 const data = await response.json();
                 
                 if (!data.links || data.links.length === 0) {
-                    updateStatus(false, 'لم يتم العثور على أي روابط في الصفحة الرئيسية.');
+                    updateStatus(true, data.error || 'لم يتم العثور على أي روابط في الصفحة الرئيسية أو أن RT لم يستجب من Railway.', false);
                     setProcessing(false, btnAutoExtract);
                     return;
                 }
@@ -460,7 +471,10 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                 await processUrls(data.links);
             } catch (error) {
                 console.error(error);
-                updateStatus(false, 'حدث خطأ أثناء استخراج الروابط: ' + error.message);
+                const message = error.name === 'AbortError'
+                    ? 'انتهت مهلة الاتصال أثناء جلب روابط RT. جرّب عددا أقل أو تحقق من سجلات Railway.'
+                    : 'حدث خطأ أثناء استخراج الروابط: ' + error.message;
+                updateStatus(true, message, false);
                 setProcessing(false, btnAutoExtract);
             }
         });
@@ -475,7 +489,13 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             }
             
             setProcessing(true, btnManualExtract);
-            await processUrls(urls);
+            try {
+                await processUrls(urls);
+            } catch (error) {
+                console.error(error);
+                updateStatus(true, 'حدث خطأ أثناء تلخيص الروابط: ' + error.message, false);
+                setProcessing(false, btnManualExtract);
+            }
         });
 
         // Update status UI
@@ -511,51 +531,57 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
 
         // Sequential processing of URLs
         async function processUrls(urls) {
-            state.summaries = [];
-            resultsGrid.querySelectorAll('.article-card').forEach(c => c.remove());
-            
-            let count = 0;
-            const total = urls.length;
-            
-            for (const url of urls) {
-                count++;
-                updateStatus(true, `جاري تلخيص المقال ${count} من ${total}...`);
+            try {
+                state.summaries = [];
+                resultsGrid.querySelectorAll('.article-card').forEach(c => c.remove());
                 
-                // Create temporary card holding placeholder state
-                const cardId = 'rt-' + Math.random().toString(36).substr(2, 9);
-                const tempCard = createCardPlaceholder(url, cardId, count);
+                let count = 0;
+                const total = urls.length;
                 
-                try {
-                    const formData = new FormData();
-                    formData.append('url', url);
+                for (const url of urls) {
+                    count++;
+                    updateStatus(true, `جاري تلخيص المقال ${count} من ${total}...`);
                     
-                    const res = await fetch('/api/russian-news/summarize-one', {
-                        method: 'POST',
-                        body: formData
-                    });
+                    // Create temporary card holding placeholder state
+                    const cardId = 'rt-' + Math.random().toString(36).substr(2, 9);
+                    const tempCard = createCardPlaceholder(url, cardId, count);
                     
-                    const item = await res.json();
-                    
-                    if (item.error) {
-                        renderErrorCard(tempCard, item);
-                    } else {
-                        state.summaries.push(item);
-                        renderSuccessCard(tempCard, item);
+                    try {
+                        const formData = new FormData();
+                        formData.append('url', url);
+                        
+                        const res = await fetchWithTimeout('/api/russian-news/summarize-one', {
+                            method: 'POST',
+                            body: formData
+                        }, 70000);
+                        if (!res.ok) throw new Error(`فشل الخادم برمز ${res.status}`);
+                        
+                        const item = await res.json();
+                        
+                        if (item.error) {
+                            renderErrorCard(tempCard, item);
+                        } else {
+                            state.summaries.push(item);
+                            renderSuccessCard(tempCard, item);
+                        }
+                    } catch (err) {
+                        renderErrorCard(tempCard, {
+                            title: 'خطأ في الاتصال بالخادم',
+                            summary: err.name === 'AbortError'
+                                ? 'انتهت مهلة التلخيص لهذا الرابط. غالبا RT أو OpenAI بطيء من Railway.'
+                                : 'تعذر إرسال المقالة للتلخيص. تفاصيل: ' + err.message,
+                            article_url: url
+                        });
                     }
-                } catch (err) {
-                    renderErrorCard(tempCard, {
-                        title: 'خطأ في الاتصال بالخادم',
-                        summary: 'تعذر إرسال المقالة للتلخيص. تفاصيل: ' + err.message,
-                        article_url: url
-                    });
                 }
-            }
-            
-            updateStatus(true, `اكتملت العملية بنجاح! تم معالجة ${state.summaries.length} مقالات.`, false);
-            setProcessing(false);
-            
-            if (state.summaries.length > 0) {
-                globalActions.classList.remove('hidden');
+                
+                updateStatus(true, `اكتملت العملية. تم تلخيص ${state.summaries.length} من ${total} مقالات.`, false);
+                
+                if (state.summaries.length > 0) {
+                    globalActions.classList.remove('hidden');
+                }
+            } finally {
+                setProcessing(false);
             }
         }
 
