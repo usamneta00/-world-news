@@ -5284,6 +5284,7 @@ async def _run_prompt_video_agent_pipeline(payload: dict) -> Dict[str, Any]:
     max_queries = max(3, min(int(payload.get("max_queries") or 6), 6))
     per_query_limit = max(1, min(int(payload.get("per_query_limit") or 20), 50))
     enrich_limit = max(1, min(int(payload.get("enrich_limit") or 50), 80))
+    metadata_only = bool(payload.get("metadata_only", True))
     transcript_limit = max(0, min(int(payload.get("transcript_limit") or 0), 10))
 
     search_plan = await _compile_prompt_to_search_plan(prompt_text)
@@ -5312,6 +5313,9 @@ async def _run_prompt_video_agent_pipeline(payload: dict) -> Dict[str, Any]:
             logger.warning(f"yt-dlp search failed for query '{query_item}': {exc}")
 
     candidates = _deduplicate_video_candidates(channel_candidates + search_candidates)
+    for item in candidates:
+        await asyncio.to_thread(_save_prompt_video_analysis, prompt_hash, {**item, "analysis": {"accepted": False, "rejection_reason": "مرشح محفوظ من مرحلة الاكتشاف", "total_score": 0}})
+
     filtered = []
     rejected = []
     for item in candidates:
@@ -5324,11 +5328,13 @@ async def _run_prompt_video_agent_pipeline(payload: dict) -> Dict[str, Any]:
         else:
             rejected.append({**item, "rejection_reason": reason})
 
-    enriched = []
-    for item in filtered[:enrich_limit]:
-        enriched_item = await asyncio.to_thread(_enrich_video_candidate, item)
-        enriched.append(enriched_item)
-        await asyncio.to_thread(_save_prompt_video_analysis, prompt_hash, {**enriched_item, "analysis": {"accepted": False, "rejection_reason": "مرشح محفوظ قبل استخراج النص", "total_score": 0}})
+    enriched = filtered[:enrich_limit]
+    if not metadata_only:
+        enriched = []
+        for item in filtered[:enrich_limit]:
+            enriched_item = await asyncio.to_thread(_enrich_video_candidate, item)
+            enriched.append(enriched_item)
+            await asyncio.to_thread(_save_prompt_video_analysis, prompt_hash, {**enriched_item, "analysis": {"accepted": False, "rejection_reason": "مرشح محفوظ قبل استخراج النص", "total_score": 0}})
 
     transcript_items = []
     analyses = []
@@ -5377,7 +5383,8 @@ async def _run_prompt_video_agent_pipeline(payload: dict) -> Dict[str, Any]:
             "automatic_repeat": False,
             "search_engine": "yt-dlp",
             "model": "gpt-4o-mini" if OPENAI_API_KEY else None
-        }
+        },
+        "metadata_only": metadata_only
     }
 
 def _set_prompt_agent_run_status(run_id: int, status: str, report: Optional[Dict[str, Any]] = None, error: Optional[str] = None) -> None:
@@ -5395,10 +5402,18 @@ def _set_prompt_agent_run_status(run_id: int, status: str, report: Optional[Dict
     finally:
         db.close()
 
+def _safe_json_loads(value: Optional[str], fallback: Any) -> Any:
+    if not value:
+        return fallback
+    try:
+        return json.loads(value)
+    except Exception:
+        return fallback
+
 async def _execute_prompt_video_agent_run(run_id: int, payload: dict):
     _set_prompt_agent_run_status(run_id, "processing")
     try:
-        result = await asyncio.wait_for(_run_prompt_video_agent_pipeline(payload), timeout=600)
+        result = await asyncio.wait_for(_run_prompt_video_agent_pipeline(payload), timeout=240)
         _set_prompt_agent_run_status(run_id, "ready", result)
         try:
             await manager.broadcast(json.dumps({"type": "prompt_agent_report_ready", "data": {"run_id": run_id, "report": result}}, ensure_ascii=False))
@@ -5430,14 +5445,14 @@ async def run_prompt_video_agent(payload: dict, background_tasks: BackgroundTask
 async def get_prompt_video_agent_reports(limit: int = 20):
     db = SessionLocal()
     try:
-        stale_cutoff = datetime.now() - timedelta(minutes=20)
+        stale_cutoff = datetime.now() - timedelta(minutes=5)
         stale_runs = db.query(PromptAgentRun).filter(
             PromptAgentRun.status.in_(["pending", "processing"]),
             PromptAgentRun.updated_at < stale_cutoff
         ).all()
         for run in stale_runs:
             run.status = "failed"
-            run.error = run.error or "توقف التشغيل قبل اكتمال التقرير. تم إنهاؤه تلقائياً بعد 20 دقيقة."
+            run.error = run.error or "توقف التشغيل قبل اكتمال التقرير. تم إنهاؤه تلقائياً بعد 5 دقائق."
             run.updated_at = datetime.now()
         if stale_runs:
             db.commit()
@@ -5453,7 +5468,7 @@ async def get_prompt_video_agent_reports(limit: int = 20):
                 "error": r.error,
                 "created_at": str(r.created_at),
                 "updated_at": str(r.updated_at),
-                "report": json.loads(r.report_json) if r.report_json else None,
+                "report": _safe_json_loads(r.report_json, None),
             } for r in runs],
             "videos": [{
                 "id": v.id,
@@ -5465,7 +5480,7 @@ async def get_prompt_video_agent_reports(limit: int = 20):
                 "speaker": v.speaker,
                 "selected": v.selected,
                 "created_at": str(v.created_at),
-                "analysis": json.loads(v.analysis_json) if v.analysis_json else {},
+                "analysis": _safe_json_loads(v.analysis_json, {}),
             } for v in videos]
         }
     finally:

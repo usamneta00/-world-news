@@ -2606,7 +2606,7 @@
                 const response = await fetch(`${API_URL}/prompt-video-agent/run`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt: promptText, query_pool_size: 40, max_queries: 6, per_query_limit: 20, enrich_limit: 50, transcript_limit: 0 })
+                    body: JSON.stringify({ prompt: promptText, query_pool_size: 40, max_queries: 6, per_query_limit: 20, enrich_limit: 50, transcript_limit: 0, metadata_only: true, live_channel_scan: false })
                 });
                 const raw = await response.text();
                 let data;
@@ -2643,7 +2643,7 @@
                     throw new Error(raw.slice(0, 220) || 'رد التقارير ليس JSON');
                 }
                 const latestReady = (data.runs || []).find(r => r.report);
-                const latestRunning = (data.runs || []).find(r => (r.status === 'pending' || r.status === 'processing') && Date.now() - Date.parse(r.updated_at || r.created_at) < 20 * 60 * 1000);
+                const latestRunning = (data.runs || []).find(r => (r.status === 'pending' || r.status === 'processing') && Date.now() - Date.parse(r.updated_at || r.created_at) < 5 * 60 * 1000);
                 const latestFailed = (data.runs || []).find(r => r.status === 'failed');
                 if (latestReady?.report) {
                     renderPromptAgentResults(latestReady.report.items || [], latestReady.report);
