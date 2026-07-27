@@ -1468,10 +1468,6 @@
                     class="p-2 hover:text-neon-blue transition-colors text-neutral-500" title="تحديثات ملخصات الفيديو">
                     <i data-lucide="radio" class="w-4 h-4"></i>
                 </button>
-                <button id="tab-prompt-agent" onclick="switchTab('prompt-agent')"
-                    class="p-2 hover:text-neon-blue transition-colors text-neutral-500" title="وكيل البرومبت">
-                    <i data-lucide="bot" class="w-4 h-4"></i>
-                </button>
                 <button id="tab-yemen" onclick="switchTab('yemen')"
                     class="p-2 hover:text-neon-blue transition-colors text-neutral-500" title="أخبار اليمن">
                     <i data-lucide="map-pin" class="w-4 h-4"></i>
@@ -1554,21 +1550,6 @@
                         <div class="text-sm font-bold text-neutral-200">الأخبار العالمية</div>
                         <div class="text-[9px] font-mono text-neutral-500 uppercase tracking-tighter">Global Affairs
                         </div>
-                    </div>
-                </div>
-                <i data-lucide="chevron-left" class="w-4 h-4 text-neutral-700 group-hover:text-neon-blue"></i>
-            </button>
-
-            <button onclick="switchTab('prompt-agent'); toggleSidebar()"
-                class="w-full flex items-center justify-between p-4 hover:bg-white/5 rounded-xl transition-all group border border-transparent hover:border-white/5">
-                <div class="flex items-center gap-4">
-                    <div
-                        class="w-10 h-10 rounded-lg bg-teal-500/10 flex items-center justify-center text-teal-400 group-hover:scale-110 transition-transform">
-                        <i data-lucide="bot" class="w-5 h-5"></i>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-sm font-bold text-neutral-200">وكيل البرومبت</div>
-                        <div class="text-[9px] font-mono text-neutral-500 uppercase tracking-tighter">Manual YouTube Agent</div>
                     </div>
                 </div>
                 <i data-lucide="chevron-left" class="w-4 h-4 text-neutral-700 group-hover:text-neon-blue"></i>
@@ -1811,51 +1792,6 @@
 
             <!-- Secondary Layout for leftovers or sidebar - Integrated into trending/bento usually -->
             <div id="trending-list" class="hidden"></div>
-        </div>
-
-        <!-- Prompt Agent View -->
-        <div id="prompt-agent-view" class="hidden">
-            <section class="max-w-6xl mx-auto">
-                <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-8 border-b border-neutral-200 dark:border-neutral-800 pb-5">
-                    <div>
-                        <h2 class="font-serif text-3xl md:text-4xl text-white mb-2">وكيل البحث بالبرومبت</h2>
-                        <p class="text-sm text-neutral-400">أدخل البرومبت الطويل هنا لتشغيل بحث يدوي واحد على YouTube عبر yt-dlp، بدون YouTube Data API وبدون تكرار تلقائي.</p>
-                    </div>
-                    <div class="flex items-center gap-2 text-xs text-neutral-500">
-                        <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
-                        <span>تشغيل عند الطلب فقط</span>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6">
-                    <form id="prompt-agent-form" class="glass-panel p-5 rounded-sm border border-white/10">
-                        <label for="prompt-agent-input" class="block text-sm font-bold text-neutral-200 mb-3">البرومبت</label>
-                        <textarea id="prompt-agent-input" rows="12"
-                            class="w-full min-h-[280px] resize-y rounded-sm bg-black/30 border border-white/10 p-4 text-sm text-neutral-100 placeholder:text-neutral-600 focus:outline-none focus:border-neon-blue"
-                            placeholder="اكتب البرومبت الطويل هنا: الموضوع، نوع المقاطع، المتحدثون المفضلون، القيود، وعدد النتائج المطلوب..."></textarea>
-                        <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <p id="prompt-agent-status" class="text-xs text-neutral-400 min-h-5"></p>
-                            <button id="prompt-agent-submit" type="submit"
-                                class="px-5 py-2.5 bg-neon-blue text-black font-black rounded-sm hover:bg-white transition-all flex items-center justify-center gap-2 text-sm">
-                                <i data-lucide="play" class="w-4 h-4"></i>
-                                <span>تشغيل الوكيل</span>
-                            </button>
-                        </div>
-                    </form>
-
-                    <aside class="glass-panel p-5 rounded-sm border border-white/10">
-                        <h3 class="text-sm font-bold text-neutral-200 mb-3">قواعد هذا القسم</h3>
-                        <div class="space-y-3 text-xs text-neutral-400 leading-6">
-                            <p>لا يستخدم YouTube Data API.</p>
-                            <p>لا يستخدم OpenAI Web Search.</p>
-                            <p>لا يعيد البحث تلقائياً كل خمس دقائق.</p>
-                            <p>يستخدم gpt-4o-mini فقط عند توفر مفتاح OpenAI لتوليد عبارات البحث.</p>
-                        </div>
-                    </aside>
-                </div>
-
-                <div id="prompt-agent-results" class="mt-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
-            </section>
         </div>
 
         <!-- Video Summary Updates View -->
@@ -2536,134 +2472,6 @@
                 toast.classList.remove('opacity-100');
                 toast.classList.add('opacity-0');
             }, 2200);
-        }
-
-        function renderPromptAgentResults(items, meta = {}) {
-            const container = document.getElementById('prompt-agent-results');
-            if (!container) return;
-            const pipeline = meta.pipeline || {};
-            const report = meta.report || {};
-            const generatedQueryCount = meta.generated_query_count || 0;
-            const referenceCount = Array.isArray(meta.reference_profiles) ? meta.reference_profiles.length : 0;
-            const header = `
-                <div class="col-span-full glass-panel p-5 rounded-sm border border-white/10">
-                    <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div>
-                            <h3 class="text-lg font-bold text-neutral-100">التقرير النهائي</h3>
-                            <p class="mt-2 text-sm text-neutral-400 leading-7">${report.summary || 'لم يتم إنشاء تقرير بعد.'}</p>
-                            <p class="mt-1 text-xs text-neutral-500">${report.selection_notes || ''}</p>
-                        </div>
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
-                            <div class="bg-white/5 p-3 rounded-sm"><div class="text-neutral-500">القنوات</div><div class="text-neon-blue font-bold">${pipeline.channel_candidates ?? 0}</div></div>
-                            <div class="bg-white/5 p-3 rounded-sm"><div class="text-neutral-500">البحث</div><div class="text-neon-blue font-bold">${pipeline.search_candidates ?? 0}</div></div>
-                            <div class="bg-white/5 p-3 rounded-sm"><div class="text-neutral-500">النصوص</div><div class="text-neon-blue font-bold">${pipeline.transcripts_extracted ?? 0}</div></div>
-                            <div class="bg-white/5 p-3 rounded-sm"><div class="text-neutral-500">النهائي</div><div class="text-neon-blue font-bold">${pipeline.final_selected ?? 0}</div></div>
-                            <div class="bg-white/5 p-3 rounded-sm"><div class="text-neutral-500">عبارات مخزنة</div><div class="text-neon-blue font-bold">${generatedQueryCount}</div></div>
-                            <div class="bg-white/5 p-3 rounded-sm"><div class="text-neutral-500">نماذج مرجعية</div><div class="text-neon-blue font-bold">${referenceCount}</div></div>
-                        </div>
-                    </div>
-                </div>`;
-            if (!items || !items.length) {
-                container.innerHTML = header + `<div class="col-span-full glass-panel p-6 rounded-sm text-center text-sm text-neutral-400">لا توجد نتائج نهائية مناسبة لهذا البرومبت.</div>`;
-                return;
-            }
-            container.innerHTML = header + items.map((item, index) => `
-                <article class="glass-panel rounded-sm overflow-hidden border border-white/10 hover:border-neon-blue/60 transition-all">
-                    <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="block aspect-video bg-neutral-900">
-                        <img src="${item.thumbnail || getThumbnailUrl(item.url)}" class="w-full h-full object-cover" alt="">
-                    </a>
-                    <div class="p-4 text-right">
-                        <div class="flex items-center justify-between gap-3 mb-3 text-[10px] font-mono text-neutral-500">
-                            <span>#${index + 1}</span>
-                            <span>${item.duration_text || ''}</span>
-                        </div>
-                        <h3 class="text-base font-bold text-neutral-100 leading-7 line-clamp-2">${item.title || 'بدون عنوان'}</h3>
-                        <p class="mt-2 text-xs text-neutral-400 line-clamp-2">${item.channel || ''}</p>
-                        <p class="mt-3 text-[11px] text-neutral-500 line-clamp-2">${item.analysis?.summary || item.discovery_query || ''}</p>
-                        <p class="mt-2 text-[11px] text-neutral-500 line-clamp-2">${item.selection?.transition_reason || ''}</p>
-                        <div class="mt-4 flex items-center justify-between text-[11px] text-neutral-500">
-                            <span>النقاط: ${item.analysis?.total_score ?? 0}</span>
-                            <span>${item.analysis?.requires_verification ? 'يحتاج تحقق' : 'مقبول'}</span>
-                        </div>
-                    </div>
-                </article>
-            `).join('');
-            if (window.lucide) lucide.createIcons();
-        }
-
-        async function runPromptAgent() {
-            const input = document.getElementById('prompt-agent-input');
-            const status = document.getElementById('prompt-agent-status');
-            const button = document.getElementById('prompt-agent-submit');
-            const promptText = (input?.value || '').trim();
-            if (!promptText) {
-                if (status) status.textContent = 'اكتب البرومبت أولاً.';
-                return;
-            }
-            if (button) button.disabled = true;
-            if (status) status.textContent = 'جارٍ تحويل البرومبت إلى عبارات بحث وتشغيل yt-dlp مرة واحدة...';
-            try {
-                const response = await fetch(`${API_URL}/prompt-video-agent/run`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt: promptText, query_pool_size: 40, max_queries: 6, per_query_limit: 20, enrich_limit: 50, transcript_limit: 0, metadata_only: true, live_channel_scan: false })
-                });
-                const raw = await response.text();
-                let data;
-                try {
-                    data = JSON.parse(raw);
-                } catch {
-                    throw new Error(raw.slice(0, 220) || 'الخادم أعاد رداً غير JSON');
-                }
-                if (!response.ok) throw new Error(data.detail || 'فشل تشغيل الوكيل');
-                if (status) status.textContent = `تم وضع المهمة في الطابور. رقم التشغيل: ${data.run_id}. سيتم تحديث التقرير تلقائياً.`;
-                await fetchPromptAgentReports();
-                setTimeout(fetchPromptAgentReports, 5000);
-                setTimeout(fetchPromptAgentReports, 15000);
-                setTimeout(fetchPromptAgentReports, 30000);
-                setTimeout(fetchPromptAgentReports, 60000);
-            } catch (error) {
-                console.error(error);
-                await fetchPromptAgentReports();
-                if (status) status.textContent = error.message || 'حدث خطأ أثناء تشغيل الوكيل.';
-            } finally {
-                if (button) button.disabled = false;
-            }
-        }
-
-        async function fetchPromptAgentReports() {
-            const status = document.getElementById('prompt-agent-status');
-            try {
-                const response = await fetch(`${API_URL}/prompt-video-agent/reports?limit=20`);
-                const raw = await response.text();
-                let data;
-                try {
-                    data = JSON.parse(raw);
-                } catch {
-                    throw new Error(raw.slice(0, 220) || 'رد التقارير ليس JSON');
-                }
-                const latestReady = (data.runs || []).find(r => r.report);
-                const latestRunning = (data.runs || []).find(r => (r.status === 'pending' || r.status === 'processing') && Date.now() - Date.parse(r.updated_at || r.created_at) < 5 * 60 * 1000);
-                const latestFailed = (data.runs || []).find(r => r.status === 'failed');
-                if (latestReady?.report) {
-                    renderPromptAgentResults(latestReady.report.items || [], latestReady.report);
-                    if (status) status.textContent = `آخر تقرير محفوظ: ${latestReady.status} - ${latestReady.created_at}`;
-                } else {
-                    renderPromptAgentResults((data.videos || []).map(v => ({
-                        title: v.title,
-                        channel: v.channel,
-                        url: v.url,
-                        video_id: v.video_id,
-                        thumbnail: v.video_id ? `https://img.youtube.com/vi/${v.video_id}/hqdefault.jpg` : '',
-                        analysis: v.analysis || {}
-                    })), { report: { summary: latestRunning ? 'التقرير قيد التنفيذ الآن.' : 'لا يوجد تقرير نهائي محفوظ بعد.' }, pipeline: {} });
-                    if (status && latestRunning) status.textContent = `الوكيل يعمل الآن: ${latestRunning.status}`;
-                    else if (status && latestFailed) status.textContent = `آخر تشغيل فشل: ${latestFailed.error || 'فشل غير معروف'}`;
-                }
-            } catch (error) {
-                console.error(error);
-                if (status) status.textContent = error.message || 'تعذر جلب تقارير الوكيل.';
-            }
         }
 
         async function syncRecommendedBadgesFromServer() {
@@ -3896,7 +3704,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                 instantVideoListening = false;
                 stopSummaryAudio();
             }
-            const tabs = ['world', 'video-updates', 'prompt-agent', 'yemen', 'newspaper', 'dubbed', 'recommended', 'clusters', 'heatmap'];
+            const tabs = ['world', 'video-updates', 'yemen', 'newspaper', 'dubbed', 'recommended', 'clusters', 'heatmap'];
             tabs.forEach(t => {
                 const el = document.getElementById(`tab-${t}`);
                 if (el) {
@@ -3914,7 +3722,6 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             const heatmapView = document.getElementById('heatmap-view');
             const clustersView = document.getElementById('clusters-view');
             const videoUpdatesView = document.getElementById('video-updates-view');
-            const promptAgentView = document.getElementById('prompt-agent-view');
             const loader = document.getElementById('loading-state');
 
             if (tab === 'heatmap') {
@@ -3922,7 +3729,6 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                 if (heatmapView) heatmapView.classList.remove('hidden');
                 if (clustersView) clustersView.classList.add('hidden');
                 if (videoUpdatesView) videoUpdatesView.classList.add('hidden');
-                if (promptAgentView) promptAgentView.classList.add('hidden');
                 if (loader) loader.classList.add('hidden');
                 initHeatmap();
                 return;
@@ -3933,7 +3739,6 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                 if (heatmapView) heatmapView.classList.add('hidden');
                 if (clustersView) clustersView.classList.remove('hidden');
                 if (videoUpdatesView) videoUpdatesView.classList.add('hidden');
-                if (promptAgentView) promptAgentView.classList.add('hidden');
                 if (loader) loader.classList.add('hidden');
                 fetchClusters();
                 if (pendingClusterUpdates.length > 0) {
@@ -3948,21 +3753,8 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                 if (heatmapView) heatmapView.classList.add('hidden');
                 if (clustersView) clustersView.classList.add('hidden');
                 if (videoUpdatesView) videoUpdatesView.classList.remove('hidden');
-                if (promptAgentView) promptAgentView.classList.add('hidden');
                 if (loader) loader.classList.add('hidden');
                 fetchVideoSummaryUpdates();
-                return;
-            }
-
-            if (tab === 'prompt-agent') {
-                hideClusterBanner();
-                if (newsContent) newsContent.classList.add('hidden');
-                if (heatmapView) heatmapView.classList.add('hidden');
-                if (clustersView) clustersView.classList.add('hidden');
-                if (videoUpdatesView) videoUpdatesView.classList.add('hidden');
-                if (promptAgentView) promptAgentView.classList.remove('hidden');
-                if (loader) loader.classList.add('hidden');
-                fetchPromptAgentReports();
                 return;
             }
 
@@ -3972,7 +3764,6 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             if (heatmapView) heatmapView.classList.add('hidden');
             if (clustersView) clustersView.classList.add('hidden');
             if (videoUpdatesView) videoUpdatesView.classList.add('hidden');
-            if (promptAgentView) promptAgentView.classList.add('hidden');
             if (newsContent) newsContent.classList.remove('hidden');
 
             const labels = {
@@ -4005,7 +3796,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             const loader = document.getElementById('loading-state');
             const content = document.getElementById('news-content');
             if (loader) loader.classList.toggle('hidden', !l);
-            if (activeTab !== 'heatmap' && activeTab !== 'clusters' && activeTab !== 'video-updates' && activeTab !== 'prompt-agent') {
+            if (activeTab !== 'heatmap' && activeTab !== 'clusters' && activeTab !== 'video-updates') {
                 if (content) content.classList.toggle('hidden', l);
             }
             if (!l) lucide.createIcons();
@@ -5106,14 +4897,6 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
 
             const deepSearchCloseBtn = document.getElementById('deep-search-close-btn');
             if (deepSearchCloseBtn) deepSearchCloseBtn.addEventListener('click', closeDeepSearchModal);
-
-            const promptAgentForm = document.getElementById('prompt-agent-form');
-            if (promptAgentForm) {
-                promptAgentForm.addEventListener('submit', async (e) => {
-                    e.preventDefault();
-                    await runPromptAgent();
-                });
-            }
 
             const deepSearchModal = document.getElementById('deep-search-modal');
             if (deepSearchModal) {
