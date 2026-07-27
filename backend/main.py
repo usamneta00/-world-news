@@ -4679,21 +4679,87 @@ def _format_duration(seconds: Optional[int]) -> str:
 def _prompt_hash(prompt_text: str) -> str:
     return hashlib.sha256(re.sub(r"\s+", " ", prompt_text).strip().encode("utf-8")).hexdigest()
 
+def _extract_prompt_topic_terms(prompt_text: str) -> Dict[str, List[str]]:
+    text = prompt_text.lower()
+    entity_map = {
+        "iran": ["إيران", "ايران", "iran", "iranian", "طهران", "tehran"],
+        "ukraine": ["أوكرانيا", "اوكرانيا", "ukraine", "ukrainian", "كييف", "kyiv", "kiev"],
+        "israel": ["إسرائيل", "اسرائيل", "israel", "israeli", "تل أبيب"],
+        "caspian": ["بحر قزوين", "قزوين", "caspian"],
+        "ship": ["سفينة", "سفن", "تجارية", "ناقلة", "ship", "vessel", "merchant"],
+        "drones": ["مسيرات", "مسيّرات", "طائرات مسيرة", "drone", "drones", "uav"],
+        "missiles": ["صواريخ", "missile", "missiles"],
+        "attack": ["هجوم", "استهداف", "attack", "strike"],
+    }
+    found = []
+    for canonical, variants in entity_map.items():
+        if any(v.lower() in text for v in variants):
+            found.append(canonical)
+    required_groups = []
+    if any(x in found for x in ["iran", "ukraine", "israel"]):
+        required_groups.append(["iran", "ukraine", "israel"])
+    if any(x in found for x in ["caspian", "ship", "drones", "missiles", "attack"]):
+        required_groups.append(["caspian", "ship", "drones", "missiles", "attack"])
+    return {"found": found, "required_groups": required_groups, "variants": entity_map}
+
+def _text_contains_topic_key(text: str, key: str, variants: Dict[str, List[str]]) -> bool:
+    haystack = (text or "").lower()
+    return any(v.lower() in haystack for v in variants.get(key, [key]))
+
+def _candidate_topic_relevance_score(item: Dict[str, Any], search_plan: Dict[str, Any]) -> int:
+    topic_terms = search_plan.get("topic_terms") or {}
+    variants = topic_terms.get("variants") or {}
+    found_keys = topic_terms.get("found") or []
+    text = " ".join(str(item.get(k) or "") for k in ["title", "channel", "summary", "description", "discovery_query"]).lower()
+    score = 0
+    matched = set()
+    for key in found_keys:
+        if _text_contains_topic_key(text, key, variants):
+            matched.add(key)
+            score += 3
+    if {"iran", "ukraine"}.issubset(matched):
+        score += 6
+    if {"iran", "israel"}.issubset(matched):
+        score += 4
+    if "caspian" in matched:
+        score += 5
+    if "ship" in matched:
+        score += 4
+    if "drones" in matched or "missiles" in matched:
+        score += 3
+    source = (item.get("channel") or "").lower()
+    trusted_sources = ["الجزيرة", "العربية", "الحدث", "الشرق", "سكاي", "bbc", "dw", "فرانس", "trt", "cnn", "reuters", "ap", "bloomberg", "france 24"]
+    if any(src in source for src in trusted_sources):
+        score += 2
+    return score
+
 def _fallback_prompt_queries(prompt_text: str, maximum: int) -> List[Dict[str, Any]]:
     cleaned = re.sub(r"\s+", " ", prompt_text).strip()
     if not cleaned:
         return []
-    base = cleaned[:180]
-    query_seeds = [
-        (base, "عام", 10),
-        (f"{base} محاضرة مؤثرة", "إيماني", 9),
-        (f"{base} قصة مؤثرة", "قصصي", 9),
-        (f"{base} مقطع قصير", "مقاطع قصيرة", 8),
-        (f"{base} كلام يهز القلب", "تأملي", 8),
-        (f"{base} بدون موسيقى", "منضبط", 7),
-        (f"{base} نهاية مؤثرة", "نهاية", 7),
-        (f"{base} خطبة قصيرة", "خطبة", 6),
-    ]
+    topic_terms = _extract_prompt_topic_terms(cleaned)
+    if {"iran", "ukraine", "israel"}.intersection(topic_terms["found"]):
+        query_seeds = [
+            ("إيران أوكرانيا إسرائيل سفينة بحر قزوين تحليل", "تحليل سياسي", 10),
+            ("اتهام إيران أوكرانيا استهداف سفينة بحر قزوين", "خبر وتحليل", 10),
+            ("Iran Ukraine Israel Caspian Sea ship attack analysis", "English analysis", 9),
+            ("إيران سفينة تجارية بحر قزوين طائرات مسيرة صواريخ", "تحليل عسكري", 9),
+            ("أوكرانيا إسرائيل إيران سفينة مكونات مسيرات صواريخ", "زاوية عسكرية", 8),
+            ("الجزيرة إيران أوكرانيا إسرائيل بحر قزوين سفينة", "مصادر عربية", 8),
+            ("العربية الحدث إيران أوكرانيا إسرائيل سفينة قزوين", "مصادر عربية", 8),
+            ("BBC عربي إيران أوكرانيا إسرائيل بحر قزوين", "مصادر موثوقة", 7),
+            ("DW عربية إيران أوكرانيا إسرائيل سفينة بحر قزوين", "مصادر موثوقة", 7),
+            ("Iranian ship Caspian Ukraine Israel drones missiles", "English reports", 7),
+        ]
+    else:
+        base = cleaned[:160]
+        query_seeds = [
+            (f"{base} تحليل سياسي", "تحليل سياسي", 10),
+            (f"{base} نقاش خبراء", "نقاش خبراء", 9),
+            (f"{base} مقابلة محلل", "مقابلة", 8),
+            (f"{base} تداعيات عسكرية", "تحليل عسكري", 8),
+            (f"{base} سيناريوهات مستقبلية", "سيناريوهات", 7),
+        ]
     seen = set()
     queries = []
     for query, category, priority in query_seeds:
@@ -4714,6 +4780,12 @@ async def _generate_prompt_agent_queries(prompt_text: str, search_plan: Dict[str
         "أنت مخطط بحث عربي لوكيل YouTube. أنشئ 30 إلى 50 عبارة بحث متنوعة. "
         "لا تستخدم Web Search. أعد JSON فقط بالمفتاح queries، وكل عنصر يحتوي query وcategory وpriority من 1 إلى 10. "
         "نوّع المتحدثين والموضوعات والمعاني ولا تكرر نفس العبارة."
+    )
+    system_prompt = (
+        "You are a YouTube news-search planner. Generate 30 to 50 very precise search queries for the exact news topic only. "
+        "Return JSON only with key queries; each item must contain query, category, and priority from 1 to 10. "
+        "Every high-priority query must include the central entities, place, and event from the prompt when present, such as Iran, Ukraine, Israel, Caspian Sea, ship, drones, missiles, attack. "
+        "Prefer Arabic news-analysis queries first, then a few English queries. Do not generate religious, emotional, generic, or unrelated queries."
     )
     user_prompt = json.dumps({"prompt": prompt_text, "search_plan": search_plan, "required_queries": maximum}, ensure_ascii=False)
     try:
@@ -4907,7 +4979,7 @@ def _get_previous_prompt_agent_results(prompt_hash: str) -> Dict[str, Set[str]]:
     try:
         rows = db.query(PromptAgentVideoAnalysis).filter(PromptAgentVideoAnalysis.prompt_hash == prompt_hash).all()
         return {
-            "video_ids": {row.video_id for row in rows if row.video_id},
+            "video_ids": {row.video_id for row in rows if row.video_id and row.selected == 1},
             "transcript_hashes": {row.transcript_hash for row in rows if row.transcript_hash},
         }
     finally:
@@ -5018,15 +5090,23 @@ def _basic_prompt_video_filter(item: Dict[str, Any], search_plan: Dict[str, Any]
     default_excluded = ["سحر", "تكفير", "فضيحة", "قبل الحذف", "سيأتيك المال", "الجن العاشق"]
     if any(str(word).lower() in text for word in excluded + default_excluded):
         return False, "موضوع مستبعد"
+    relevance_score = _candidate_topic_relevance_score(item, search_plan)
+    if relevance_score < int(search_plan.get("minimum_relevance_score") or 8):
+        return False, "خارج موضوع البحث"
+    item["relevance_score"] = relevance_score
     return True, None
 
 async def _compile_prompt_to_search_plan(prompt_text: str) -> Dict[str, Any]:
     fallback = {
-        "required_count": {"minimum": 12, "maximum": 18},
+        "required_count": {"minimum": 5, "maximum": 10},
         "durations": {"preferred_min_seconds": 30, "preferred_max_seconds": 720},
         "topics": [prompt_text[:120]],
-        "excluded_topics": ["الفتاوى المباشرة", "التكفير", "التحريض", "العناوين المضللة"],
-        "limits": {"max_per_speaker": 2, "max_per_channel": 2}
+        "date_windows": [7, 30],
+        "categories": ["خبر عاجل", "تحليل سياسي", "تحليل عسكري", "تحليل اقتصادي", "رأي مخالف", "سيناريوهات مستقبلية"],
+        "excluded_topics": ["قراءة خبر قصيرة", "عنوان مضلل", "مصدر غير واضح", "فيديو قديم", "محتوى سطحي"],
+        "limits": {"max_per_speaker": 2, "max_per_channel": 2},
+        "minimum_relevance_score": 8,
+        "topic_terms": _extract_prompt_topic_terms(prompt_text)
     }
     if not OPENAI_API_KEY:
         return fallback
@@ -5047,7 +5127,10 @@ async def _compile_prompt_to_search_plan(prompt_text: str) -> Dict[str, Any]:
         if response.status_code == 200:
             data = json.loads(response.json()["choices"][0]["message"]["content"])
             if isinstance(data, dict):
-                return {**fallback, **data}
+                merged = {**fallback, **data}
+                merged["topic_terms"] = fallback["topic_terms"]
+                merged["minimum_relevance_score"] = fallback["minimum_relevance_score"]
+                return merged
     except Exception as exc:
         logger.warning(f"Prompt agent search plan fallback: {exc}")
     return fallback
@@ -5228,7 +5311,7 @@ async def _select_metadata_prompt_playlist(candidates: List[Dict[str, Any]], sea
 
     ranked = []
     for item in candidates:
-        score = 0
+        score = int(item.get("relevance_score") or 0)
         title = (item.get("title") or "").lower()
         summary = (item.get("summary") or item.get("description") or "").lower()
         text = f"{title} {summary}"
@@ -5242,6 +5325,8 @@ async def _select_metadata_prompt_playlist(candidates: List[Dict[str, Any]], sea
         item_copy["analysis"] = {
             "accepted": True,
             "total_score": score,
+            "relevance_score": min(10, max(1, round(score / 2))),
+            "discussion_strength_score": min(10, max(1, round((score + int(item.get("query_priority") or 0)) / 2))),
             "summary": item.get("summary") or item.get("description") or item.get("discovery_query") or "",
             "requires_verification": True,
             "warnings": ["metadata_only_no_transcript"]
@@ -5258,8 +5343,9 @@ async def _select_metadata_prompt_playlist(candidates: List[Dict[str, Any]], sea
         channel_counts[channel] = channel_counts.get(channel, 0) + 1
         item["selection"] = {
             "rank": len(final_items) + 1,
-            "transition_reason": "اختير مبدئياً بناءً على العنوان والقناة وعبارة الاكتشاف، بدون استخراج نص.",
-            "best_for": item.get("query_category") or "مرشح أولي"
+            "transition_reason": "يفتح أو يضيف زاوية مرتبطة مباشرة بالموضوع بناءً على العنوان وعبارة الاكتشاف. يحتاج فحصاً لاحقاً للنص قبل الاعتماد النهائي.",
+            "best_for": item.get("query_category") or "تحليل سياسي",
+            "angle": item.get("query_category") or "تحليل سياسي"
         }
         final_items.append(item)
         if len(final_items) >= max_count:
@@ -5290,7 +5376,7 @@ async def _run_prompt_video_agent_pipeline(payload: dict) -> Dict[str, Any]:
     search_plan = await _compile_prompt_to_search_plan(prompt_text)
     generated_queries = await _generate_prompt_agent_queries(prompt_text, search_plan, int(payload.get("query_pool_size") or 40))
     await asyncio.to_thread(_save_prompt_agent_queries, prompt_hash, generated_queries)
-    queries = await asyncio.to_thread(_select_due_prompt_queries, prompt_hash, max_queries)
+    queries = sorted(generated_queries, key=lambda q: int(q.get("priority") or 0), reverse=True)[:max_queries]
 
     reference_profiles = []
     for ref_url in _extract_youtube_reference_urls(prompt_text):
@@ -5313,13 +5399,10 @@ async def _run_prompt_video_agent_pipeline(payload: dict) -> Dict[str, Any]:
             logger.warning(f"yt-dlp search failed for query '{query_item}': {exc}")
 
     candidates = _deduplicate_video_candidates(channel_candidates + search_candidates)
-    for item in candidates:
-        await asyncio.to_thread(_save_prompt_video_analysis, prompt_hash, {**item, "analysis": {"accepted": False, "rejection_reason": "مرشح محفوظ من مرحلة الاكتشاف", "total_score": 0}})
-
     filtered = []
     rejected = []
     for item in candidates:
-        if item.get("video_id") in previous["video_ids"]:
+        if not metadata_only and item.get("video_id") in previous["video_ids"]:
             rejected.append({**item, "rejection_reason": "سبق تحليله لهذا البرومبت"})
             continue
         ok, reason = _basic_prompt_video_filter(item, search_plan)
@@ -5329,6 +5412,8 @@ async def _run_prompt_video_agent_pipeline(payload: dict) -> Dict[str, Any]:
             rejected.append({**item, "rejection_reason": reason})
 
     enriched = filtered[:enrich_limit]
+    for item in enriched:
+        await asyncio.to_thread(_save_prompt_video_analysis, prompt_hash, {**item, "analysis": {"accepted": True, "rejection_reason": None, "total_score": item.get("relevance_score") or 0, "summary": item.get("discovery_query") or "", "warnings": ["metadata_only_verified_by_topic_filter"]}})
     if not metadata_only:
         enriched = []
         for item in filtered[:enrich_limit]:
