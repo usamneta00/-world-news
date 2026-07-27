@@ -47,7 +47,7 @@
             -webkit-backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
-        
+
         .glow-red {
             box-shadow: 0 0 30px rgba(239, 68, 68, 0.15);
         }
@@ -90,7 +90,7 @@
 
     <!-- Main Wrapper -->
     <div class="max-w-6xl mx-auto px-6 py-10 relative z-10">
-        
+
         <!-- Header -->
         <header class="flex items-center justify-between mb-12 pb-6 border-b border-white/5">
             <div class="flex items-center gap-4">
@@ -100,7 +100,7 @@
                 <span class="text-neutral-500 text-sm hidden sm:inline">|</span>
                 <span class="text-neutral-400 text-sm font-medium hidden sm:inline">الأخبار الروسية (RT)</span>
             </div>
-            
+
             <a href="/" class="flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 hover:bg-white/5 text-xs text-neutral-300 transition-all font-medium">
                 <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
                 <span>العودة للمنصة الرئيسية</span>
@@ -123,10 +123,10 @@
 
         <!-- Main Workspace -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-12">
-            
+
             <!-- Left Panel (Controls) -->
             <div class="lg:col-span-4 space-y-6">
-                
+
                 <!-- Auto Extract Tool -->
                 <div class="glass-panel p-6 rounded-2xl glow-red">
                     <div class="flex items-center gap-3 mb-4">
@@ -135,7 +135,7 @@
                         </div>
                         <h3 class="font-bold text-white text-base">استخراج تلقائي</h3>
                     </div>
-                    
+
                     <p class="text-xs text-neutral-400 mb-5 leading-relaxed">
                         يقوم النظام بالاتصال بموقع RT وجلب أحدث المقالات المنشورة في الصفحة الرئيسية الآن.
                     </p>
@@ -176,7 +176,7 @@
 
                     <div class="space-y-4">
                         <textarea id="manual-urls" placeholder="https://www.rt.com/news/..." rows="3" class="w-full bg-neutral-900 border border-white/10 rounded-xl p-3 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-amber-500 font-mono"></textarea>
-                        
+
                         <button id="btn-manual-extract" class="w-full bg-neutral-800 hover:bg-neutral-700 border border-white/10 text-white text-xs font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2">
                             <span>تلخيص الروابط</span>
                             <div class="loading-ring"></div>
@@ -188,7 +188,7 @@
 
             <!-- Right Panel (Status & Results) -->
             <div class="lg:col-span-8 space-y-6">
-                
+
                 <!-- Status Message Banner -->
                 <div id="status-card" class="glass-panel px-6 py-4 rounded-2xl flex items-center justify-between hidden">
                     <div class="flex items-center gap-3">
@@ -285,49 +285,492 @@
 
 @Youtube`;
 
-        const PROMPT_2_DEEP = `\n\nأريد بحثاً عميقاً في YouTube عن أفضل الفيديوهات العربية أو المدبلجة إلى العربية حول الموضوع الذي سأرسله لك.
+        const PROMPT_2_DEEP = `\n\n# بناء سلسلة نقاشية متدرجة من فيديوهات YouTube حول موضوع محدد
 
-لا أريد نتائج عادية. أريد فيديوهات قوية، راقية، تحليلية، ومناسبة لبناء نقاش طويل لا يُنسى. اختر الفيديوهات كأنك تبني برنامجاً حوارياً متكاملاً من عدة حلقات، بحيث يكون كل فيديو مرتبطاً بما قبله ويمهّد لما بعده.
+استخدم اتصالك بالإنترنت للبحث في YouTube عن فيديوهات قوية تتناول الموضوع نفسه الموجود في النص أو المقال أو الخبر أو رابط الفيديو الذي سأرسله لك.
 
-ابدأ بتحليل النص أو المقال أو الفيديو الذي أرسله لك، ثم استخرج القضايا الرئيسية والفرعية، وبعدها ابحث عن فيديوهات YouTube التي تناقش هذه القضايا بعمق.
+## الهدف الأساسي
 
-شروط الاختيار:
+لا أريد قائمة فيديوهات منفصلة أو عشوائية، بل أريد بناء **سلسلة مشاهدة نقاشية مترابطة** تشبه حلقة حوار طويلة مقسمة إلى عدة أجزاء.
 
-الفيديوهات يجب أن تكون عربية أو مترجمة أو مدبلجة إلى العربية.
-إذا لم تجد فيديوهات باللغة العربية أو مترجمة/مدبلجة كافية، فيمكنك جلب فيديوهات حديثة جداً بأي لغة كانت (مثل الإنجليزية، الروسية، إلخ) وتتناول نفس الموضوع بدقة، حتى لو لم تكن مترجمة أو مدبلجة طالما أنها تغطي الموضوع.
-الأولوية لآخر أسبوع، ثم آخر شهر إذا لم توجد نتائج كافية.
-الأولوية للبرامج الحوارية، المقابلات، تحليلات الخبراء، والمواد التي تستشهد بتقارير أو صحف عالمية.
-الأولوية للمصادر الموثوقة والقنوات المعروفة.
-لا تختَر فيديو لمجرد أن عنوانه يشبه الموضوع؛ اختره فقط إذا كان محتواه يخدم النقاش فعلاً.
+يجب أن ينتقل المشاهد من فيديو إلى الفيديو الذي يليه بتسلسل منطقي:
 
-اعرض من 5 إلى 10 فيديوهات بهذا الشكل:
 
-* رقم الفيديو في السلسلة.
-* عنوان الفيديو.
-* القناة.
-* تاريخ النشر.
-* رابط YouTube.
-* الفكرة الرئيسية في الفيديو.
-* ملخص من سطرين.
-* لماذا يستحق المشاهدة.
-* كيف يرتبط بالفيديو السابق.
-* كيف يفتح الطريق للفيديو التالي.
-* نوع النقاش: سياسي، عسكري، اقتصادي، استراتيجي، إعلامي، قانوني، إنساني، أو جيوسياسي.
-* قوة المصدر من 10.
-* قوة التحليل من 10.
-* قوة الارتباط بالموضوع من 10.
+1.
+يبدأ بفهم خلفية القضية.
 
-في النهاية:
-اكتب لي خلاصة توضح كيف يمكن استخدام هذه الفيديوهات لصناعة نقاش طويل ومترابط.
-اذكر أي تناقضات بين الفيديوهات إن وجدت.
-أضف آخر تطور عاجل متعلق بالقضية إن وجد.
-اقترح 10 كلمات مفتاحية إضافية للبحث المتخصص، 5 بالعربية و5 بالإنجليزية.
 
-لا تستخدم فيديوهات ضعيفة أو مكررة أو سطحية.
-لا تختلق أي معلومات.
-إذا لم تجد فيديوهات عربية كافية، استخدم فيديوهات أجنبية موثوقة بشرط أن تكون مترجمة أو مدبلجة أو يمكن شرحها بالعربية.
+2.
+ينتقل إلى آخر التطورات والوقائع.
 
-@Youtube`;
+
+3.
+يتعمق في التحليل السياسي.
+
+
+4.
+يناقش الجانب العسكري أو الأمني.
+
+
+5.
+يدرس الأبعاد الاقتصادية أو الدولية.
+
+
+6.
+يعرض رأياً مخالفاً أو رواية مقابلة.
+
+
+7.
+ينتهي بالسيناريوهات المستقبلية والنتائج المحتملة.
+
+
+
+
+ليس ضرورياً استخدام جميع هذه المراحل إذا كان الموضوع لا يحتاجها، لكن يجب أن تكون السلسلة متدرجة ومترابطة بوضوح.
+
+## عدد الفيديوهات والفترة الزمنية
+
+ابحث عن:
+
+
+-
+من 5 إلى 10 فيديوهات.
+
+
+-
+ابدأ بالفيديوهات المنشورة خلال آخر 7 أيام.
+
+
+-
+إذا لم تتوفر نتائج قوية وكافية، وسّع البحث إلى آخر شهر.
+
+
+-
+وضّح بجانب كل فيديو ما إذا كان من آخر أسبوع أو من الفترة الموسعة.
+
+
+
+
+الأولوية للفيديوهات العربية أو المدبلجة أو المترجمة إلى العربية.
+
+إذا لم تجد عدداً كافياً من الفيديوهات العربية القوية، يمكنك إضافة فيديوهات حديثة جداً بأي لغة، مثل الإنجليزية أو الروسية أو الفرنسية، بشرط أن تتناول الموضوع بدقة وأن تضيف قيمة حقيقية إلى السلسلة.
+
+## نوعية الفيديوهات المطلوبة
+
+ركّز على الفيديوهات التي تحتوي على واحد أو أكثر من العناصر التالية:
+
+
+-
+تحليل سياسي عميق.
+
+
+-
+تحليل عسكري أو أمني.
+
+
+-
+تحليل اقتصادي أو للطاقة والأسواق.
+
+
+-
+مقابلات مع خبراء أو مسؤولين أو باحثين.
+
+
+-
+نقاشات تلفزيونية وبرامج حوارية.
+
+
+-
+شرح استراتيجي للحدث وتداعياته.
+
+
+-
+مقارنة بين روايات الأطراف المختلفة.
+
+
+-
+سيناريوهات مستقبلية محتملة.
+
+
+-
+استشهاد بتقارير أو مقالات من مؤسسات وصحف عالمية موثوقة.
+
+
+
+
+أعطِ الأولوية لقنوات ومؤسسات مثل:
+
+Reuters، AP، BBC، CNN، Bloomberg، Financial Times، The Guardian، The Economist، The New York Times، The Washington Post.
+
+ومن المصادر العربية:
+
+الجزيرة، العربية، الحدث، الشرق، سكاي نيوز عربية، BBC عربي، DW عربية، فرانس 24 عربي، TRT عربي، CNBC عربية، CNN بالعربية.
+
+يمكنك استخدام قنوات تحليلية أخرى، بشرط أن تكون واضحة المصدر، جادة، وغير مضللة.
+
+## ما يجب تجنبه
+
+استبعد الفيديوهات التي تكون:
+
+
+-
+مجرد قراءة سريعة لخبر قصير.
+
+
+-
+تقارير لا تحتوي على تحليل أو نقاش.
+
+
+-
+عناوين مثيرة لا يطابقها المحتوى.
+
+
+-
+مكررة ولا تضيف زاوية جديدة.
+
+
+-
+من مصادر مجهولة أو ضعيفة.
+
+
+-
+قديمة ولا ترتبط بالتطور الحالي.
+
+
+-
+مقاطع Shorts سطحية، إلا إذا كانت تحتوي على تصريح مهم أو معلومة حاسمة.
+
+
+-
+نسخاً متطابقة من التقرير نفسه منشورة على قنوات مختلفة.
+
+
+
+
+لا تضع أكثر من فيديوين من القناة نفسها، إلا إذا كانت الفيديوهات مختلفة بوضوح ويضيف كل واحد منها مرحلة ضرورية في النقاش.
+
+# طريقة بناء السلسلة
+
+قبل عرض الفيديوهات، أنشئ قسماً بعنوان:
+
+## خريطة السلسلة النقاشية
+
+اشرح في نقاط قصيرة مسار النقاش، مثلاً:
+
+
+-
+المرحلة الأولى: خلفية القضية وفهم جذورها.
+
+
+-
+المرحلة الثانية: آخر التطورات الميدانية أو السياسية.
+
+
+-
+المرحلة الثالثة: تفسير أهداف الأطراف.
+
+
+-
+المرحلة الرابعة: تحليل موازين القوة.
+
+
+-
+المرحلة الخامسة: عرض الرواية المقابلة.
+
+
+-
+المرحلة السادسة: السيناريوهات المستقبلية.
+
+
+
+
+بعد ذلك رتّب الفيديوهات وفقاً لهذا المسار، وليس وفق عدد المشاهدات فقط.
+
+يجب أن يكون لكل فيديو دور واضح داخل السلسلة.
+
+## معلومات مطلوبة لكل فيديو
+
+اعرض كل فيديو بهذا التنسيق:
+
+### الحلقة رقم (1): اسم المرحلة النقاشية
+
+**عنوان الفيديو:** اكتب العنوان كما يظهر على YouTube دون اختلاق أو تعديل مضلل.
+
+**القناة:** اسم القناة.
+
+**تاريخ النشر:** اكتب التاريخ الدقيق المتاح.
+
+**اللغة:** العربية، مترجم للعربية، الإنجليزية، الروسية، أو غيرها.
+
+**رابط YouTube:** ضع الرابط المباشر الصحيح والقابل للتحقق.
+
+**الزاوية التي يغطيها:** اختر واحدة أو أكثر من الآتي:
+
+خلفية القضية — آخر التطورات — تحليل سياسي — تحليل عسكري — تحليل اقتصادي — أبعاد دولية — رأي مخالف — رواية أحد الأطراف — سيناريوهات مستقبلية.
+
+**ملخص الفيديو:** اكتب ملخصاً من سطرين أو ثلاثة يشرح أهم الأفكار والمعلومات التي يقدمها الفيديو، وليس العنوان فقط.
+
+**لماذا هذا الفيديو قوي؟** اشرح ما الذي يجعله مهماً: قوة الضيف، عمق التحليل، المعلومات الحصرية، وضوح الخرائط، الاستشهاد بالمصادر، أو عرض زاوية لا تقدمها بقية الفيديوهات.
+
+**دوره داخل السلسلة:** اشرح لماذا وضعت الفيديو في هذا الموقع تحديداً من السلسلة.
+
+**علاقته بالفيديو السابق:** ابتداءً من الفيديو الثاني، اشرح بجملة واضحة:
+
+
+-
+ما الذي يكمله من الفيديو السابق؟
+
+
+-
+ما السؤال الذي يجيب عنه؟
+
+
+-
+ما الزاوية الجديدة التي ينقل النقاش إليها؟
+
+
+
+
+**السؤال الذي يتركه للفيديو التالي:** اكتب سؤالاً قصيراً يمهد للفيديو الذي يليه، حتى يبدو الانتقال بين المقاطع طبيعياً ومشوقاً.
+
+**درجة الصلة بالموضوع:** اكتب الدرجة من 10 مع سبب مختصر.
+
+**درجة قوة النقاش والتحليل:** اكتب الدرجة من 10 مع سبب مختصر.
+
+## ترتيب الفيديوهات
+
+لا ترتب النتائج اعتماداً على الصلة فقط، بل وازن بين:
+
+
+1.
+قوة الفيديو.
+
+
+2.
+حداثة النشر.
+
+
+3.
+موثوقية المصدر.
+
+
+4.
+عمق النقاش.
+
+
+5.
+عدم تكرار الفكرة.
+
+
+6.
+موقع الفيديو المناسب داخل السلسلة.
+
+
+
+
+يجب أن تكون النتيجة النهائية كأنها برنامج حواري واحد:
+
+
+-
+الفيديو الأول يفتح القضية.
+
+
+-
+الثاني يوضح التطور الحالي.
+
+
+-
+الثالث يفسر الدوافع.
+
+
+-
+الرابع يحلل موازين القوة.
+
+
+-
+الخامس يقدم زاوية جديدة.
+
+
+-
+السادس يعرض الرأي المقابل.
+
+
+-
+الأخير يناقش ما قد يحدث لاحقاً.
+
+
+
+
+# الروايات المتعارضة
+
+بعد عرض السلسلة، أنشئ قسماً بعنوان:
+
+## نقاط الاتفاق والتناقض بين الفيديوهات
+
+وضّح فيه:
+
+
+-
+المعلومات التي تتفق عليها أغلب المصادر.
+
+
+-
+الادعاءات التي لا تزال غير مؤكدة.
+
+
+-
+الروايات المتعارضة بين الأطراف.
+
+
+-
+الفيديو الذي يقدم كل رواية.
+
+
+-
+هل التناقض متعلق بالوقائع، أم تفسير الدوافع، أم توقع النتائج؟
+
+
+-
+أي الروايات تبدو أكثر استناداً إلى أدلة، دون تقديم رأي قطعي إذا لم تتوفر معلومات كافية.
+
+
+
+
+# تقييم السلسلة كاملة
+
+أنشئ قسماً بعنوان:
+
+## تقييم السلسلة النقاشية
+
+اذكر فيه:
+
+
+-
+أفضل فيديو لفتح الموضوع.
+
+
+-
+أعمق فيديو تحليلي.
+
+
+-
+أفضل مقابلة أو نقاش.
+
+
+-
+أفضل فيديو يقدم رأياً مخالفاً.
+
+
+-
+أفضل فيديو لفهم المستقبل.
+
+
+-
+الفيديو الذي يمكن الاستغناء عنه إذا أردت سلسلة أقصر.
+
+
+-
+أفضل ترتيب مختصر من 3 فيديوهات فقط لمن لا يملك وقتاً لمشاهدة السلسلة كاملة.
+
+
+
+
+# آخر التطورات
+
+إذا كان هناك خبر عاجل أو تطور جديد مرتبط بالموضوع، أضف في النهاية قسماً بعنوان:
+
+## آخر تطور مرتبط بالقضية
+
+اذكر:
+
+
+-
+ما الذي حدث؟
+
+
+-
+التاريخ والوقت التقريبي.
+
+
+-
+المصدر الموثوق.
+
+
+-
+كيف يؤثر هذا التطور في تحليلات الفيديوهات السابقة؟
+
+
+-
+هل يجعل أحد الفيديوهات قديماً أو أقل دقة؟
+
+
+
+
+لا تضف خبراً عاجلاً إلا إذا كان منشوراً في مصدر موثوق ويمكن التحقق منه.
+
+# كلمات البحث المقترحة
+
+في نهاية التقرير، اقترح:
+
+## كلمات مفتاحية عربية
+
+اكتب 5 عبارات بحث عربية عميقة ومتخصصة، وليس كلمات عامة فقط.
+
+## كلمات مفتاحية إنجليزية
+
+اكتب 5 عبارات بحث إنجليزية تساعد على العثور على تحليلات وخبراء وتقارير أعمق.
+
+اجعل العبارات مرتبطة مباشرة بالموضوع وبالزوايا غير المغطاة بشكل كافٍ في السلسلة.
+
+# قواعد الدقة
+
+
+-
+لا تختلق أي فيديو أو رابط أو قناة أو تاريخ نشر.
+
+
+-
+لا تضع فيديو إلا بعد التأكد من أنه موجود فعلاً على YouTube.
+
+
+-
+افتح نتيجة الفيديو أو تحقق من صفحته قبل إضافته.
+
+
+-
+تأكد من أن عنوان الفيديو والقناة والتاريخ والرابط متطابقة.
+
+
+-
+لا تعتبر تاريخ إعادة رفع الفيديو تاريخاً للحدث الأصلي دون توضيح.
+
+
+-
+إذا تعذر التأكد من تاريخ النشر أو محتوى الفيديو، فلا تضعه.
+
+
+-
+لا تعتمد على العنوان والصورة المصغرة فقط؛ تحقق من الوصف أو المحتوى المتاح.
+
+
+-
+ميّز بوضوح بين الخبر المؤكد، والتصريح، والادعاء، والتحليل، والتوقع.
+
+
+-
+أخبرني بوضوح إذا لم تجد نتائج كافية تستوفي المعايير، ولا تملأ القائمة بفيديوهات ضعيفة.
+
+
+-
+اجعل الأسلوب مناسباً لشخص يريد بناء نقاش راقٍ وطويل ومترابط، وليس فقط معرفة ملخص الخبر.
+
+
+
+
+# المادة المطلوب البحث عنها
+
+
+@YouTube`;
 
         const PROMPT_3_LEADERS = `\n\nابحث في YouTube باستخدام اتصالك بالإنترنت عن أفضل الفيديوهات العربية أو المدبلجة إلى العربية حول الموضوع الذي سأرسله لك.
 
@@ -456,18 +899,18 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             if (state.processing) return;
             setProcessing(true, btnAutoExtract);
             updateStatus(true, 'جاري الاتصال بموقع RT وجلب الروابط...');
-            
+
             try {
                 const response = await fetchWithTimeout(`/api/russian-news/extract?limit=${limitSelect.value}`, {}, 30000);
                 if (!response.ok) throw new Error(`فشل الخادم برمز ${response.status}`);
                 const data = await response.json();
-                
+
                 if (!data.links || data.links.length === 0) {
                     updateStatus(true, data.error || 'لم يتم العثور على أي روابط في الصفحة الرئيسية أو أن RT لم يستجب من Railway.', false);
                     setProcessing(false, btnAutoExtract);
                     return;
                 }
-                
+
                 await processUrls(data.links);
             } catch (error) {
                 console.error(error);
@@ -487,7 +930,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                 alert('يرجى إدخال رابط واحد على الأقل.');
                 return;
             }
-            
+
             setProcessing(true, btnManualExtract);
             try {
                 await processUrls(urls);
@@ -534,30 +977,30 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             try {
                 state.summaries = [];
                 resultsGrid.querySelectorAll('.article-card').forEach(c => c.remove());
-                
+
                 let count = 0;
                 const total = urls.length;
-                
+
                 for (const url of urls) {
                     count++;
                     updateStatus(true, `جاري تلخيص المقال ${count} من ${total}...`);
-                    
+
                     // Create temporary card holding placeholder state
                     const cardId = 'rt-' + Math.random().toString(36).substr(2, 9);
                     const tempCard = createCardPlaceholder(url, cardId, count);
-                    
+
                     try {
                         const formData = new FormData();
                         formData.append('url', url);
-                        
+
                         const res = await fetchWithTimeout('/api/russian-news/summarize-one', {
                             method: 'POST',
                             body: formData
                         }, 70000);
                         if (!res.ok) throw new Error(`فشل الخادم برمز ${res.status}`);
-                        
+
                         const item = await res.json();
-                        
+
                         if (item.error) {
                             renderErrorCard(tempCard, item);
                         } else {
@@ -574,9 +1017,9 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                         });
                     }
                 }
-                
+
                 updateStatus(true, `اكتملت العملية. تم تلخيص ${state.summaries.length} من ${total} مقالات.`, false);
-                
+
                 if (state.summaries.length > 0) {
                     globalActions.classList.remove('hidden');
                 }
@@ -590,7 +1033,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             const card = document.createElement('div');
             card.id = cardId;
             card.className = 'article-card glass-panel p-5 sm:p-6 rounded-2xl relative overflow-hidden transition-all duration-300';
-            
+
             card.innerHTML = `
                 <div class="flex flex-col md:flex-row gap-6">
                     <div class="flex-1 space-y-3">
@@ -609,7 +1052,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                     </div>
                 </div>
             `;
-            
+
             resultsGrid.appendChild(card);
             lucide.createIcons();
             return card;
@@ -617,7 +1060,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
 
         // Successful summary card replacement
         function renderSuccessCard(cardElement, data) {
-            const imgHtml = data.image_url 
+            const imgHtml = data.image_url
                 ? `<div class="w-full md:w-40 h-32 rounded-xl overflow-hidden relative group shrink-0 border border-white/5 bg-neutral-950">
                      <img src="${data.image_url}" alt="RT Thumbnail" class="w-full h-full object-cover group-hover:scale-105 transition-all duration-500">
                    </div>`
@@ -632,21 +1075,21 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                                 <span class="px-2 py-0.5 rounded bg-red-500/10 text-[10px] text-red-400 font-semibold">${data.category || 'أخبار روسيا'}</span>
                                 <span class="text-[10px] text-neutral-500 font-mono">RT.com</span>
                             </div>
-                            
+
                             <!-- TTS Voice Play Button -->
                             <button class="btn-play-card flex items-center gap-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">
                                 <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>
                                 <span class="btn-play-text">استماع</span>
                             </button>
                         </div>
-                        
+
                         <h2 class="text-base sm:text-lg font-bold text-white leading-snug">
                             <a href="${data.article_url}" target="_blank" class="hover:text-red-500 transition-colors flex items-center gap-1.5">
                                 <span>${data.title}</span>
                                 <i data-lucide="external-link" class="w-3.5 h-3.5 text-neutral-500 shrink-0"></i>
                             </a>
                         </h2>
-                        
+
                         <p class="summary-content text-neutral-300 text-xs sm:text-sm leading-relaxed text-justify">
                             ${data.summary}
                         </p>
@@ -657,7 +1100,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                                 <i data-lucide="target" class="w-3.5 h-3.5 text-red-500"></i>
                                 <span>نسخ الملخص مع بروم يوتيوب:</span>
                             </span>
-                            
+
                             <div class="flex flex-wrap gap-1.5">
                                 <button class="btn-prompt px-2.5 py-1.5 rounded bg-neutral-900 hover:bg-neutral-800 text-[10px] text-neutral-400 hover:text-white transition-all flex items-center gap-1 border border-white/5" data-prompt="1">
                                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
@@ -676,7 +1119,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                     </div>
                 </div>
             `;
-            
+
             // Set up card actions
             const btnPlay = cardElement.querySelector('.btn-play-card');
             btnPlay.addEventListener('click', () => {
@@ -689,7 +1132,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                     let promptSuffix = PROMPT_1_SEQUENTIAL;
                     if (promptType === '2') promptSuffix = PROMPT_2_DEEP;
                     if (promptType === '3') promptSuffix = PROMPT_3_LEADERS;
-                    
+
                     copyToClipboard(data.summary + promptSuffix, btn);
                 });
             });
@@ -720,7 +1163,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                 const originalText = button.querySelector('span:last-child').textContent;
                 button.querySelector('span:last-child').textContent = 'تم النسخ ✓';
                 button.classList.add('bg-white/10');
-                
+
                 setTimeout(() => {
                     button.querySelector('span:last-child').textContent = originalText;
                     button.classList.remove('bg-white/10');
@@ -740,12 +1183,12 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
         // Global Listening System
         btnListenAll.addEventListener('click', () => {
             if (state.summaries.length === 0) return;
-            
+
             if (state.listeningAll) {
                 stopAllAudio();
                 return;
             }
-            
+
             startListeningAll();
         });
 
@@ -756,39 +1199,39 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             }
             state.listeningAll = false;
             state.playlistIndex = -1;
-            
+
             // Reset all card icons & text
             document.querySelectorAll('.btn-play-card').forEach(btn => {
                 btn.querySelector('.btn-play-text').textContent = 'استماع';
                 btn.querySelector('svg').outerHTML = '<i data-lucide="volume-2" class="w-3.5 h-3.5"></i>';
             });
-            
+
             btnListenAll.innerHTML = '<i data-lucide="play" class="w-3.5 h-3.5 fill-black"></i><span>استماع لكل الملخصات</span>';
             lucide.createIcons();
         }
 
         async function playSingleCard(data, button) {
             const isPlayingThis = state.currentAudio && state.currentAudio.dataset.srcUrl === data.article_url;
-            
+
             stopAllAudio();
-            
+
             if (isPlayingThis) {
                 return; // toggled off
             }
-            
+
             button.querySelector('.btn-play-text').textContent = 'جاري التحميل...';
-            
+
             try {
                 const audioBlob = await fetchTTSBlob(data.title, data.summary);
                 const audioUrl = URL.createObjectURL(audioBlob);
-                
+
                 state.currentAudio = new Audio(audioUrl);
                 state.currentAudio.dataset.srcUrl = data.article_url;
-                
+
                 state.currentAudio.onended = () => {
                     stopAllAudio();
                 };
-                
+
                 state.currentAudio.play();
                 button.querySelector('.btn-play-text').textContent = 'إيقاف';
                 button.querySelector('svg').outerHTML = '<i data-lucide="square" class="w-3.5 h-3.5 fill-current text-white animate-pulse"></i>';
@@ -815,7 +1258,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             state.playlistIndex = 0;
             btnListenAll.innerHTML = '<i data-lucide="square" class="w-3.5 h-3.5 fill-black"></i><span>إيقاف التشغيل</span>';
             lucide.createIcons();
-            
+
             playNextPlaylistItem();
         }
 
@@ -824,10 +1267,10 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                 stopAllAudio();
                 return;
             }
-            
+
             const currentItem = state.summaries[state.playlistIndex];
             updateStatus(true, `جاري تشغيل صوت المقالة ${state.playlistIndex + 1} من ${state.summaries.length}... (استماع متتالي)`, false);
-            
+
             // Find corresponding card button
             const cards = resultsGrid.querySelectorAll('.article-card');
             const targetCard = cards[state.playlistIndex];
@@ -844,7 +1287,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             try {
                 const audioBlob = await fetchTTSBlob(currentItem.title, currentItem.summary);
                 const audioUrl = URL.createObjectURL(audioBlob);
-                
+
                 state.currentAudio = new Audio(audioUrl);
                 state.currentAudio.onended = () => {
                     if (cardBtn) {
@@ -855,12 +1298,12 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                     state.playlistIndex++;
                     playNextPlaylistItem();
                 };
-                
+
                 state.currentAudio.onerror = () => {
                     state.playlistIndex++;
                     playNextPlaylistItem();
                 };
-                
+
                 state.currentAudio.play();
             } catch (err) {
                 console.error(currentItem.title, err);
