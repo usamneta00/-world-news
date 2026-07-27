@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Set, Any
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Query, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Query, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, desc
 from sqlalchemy.ext.declarative import declarative_base
@@ -313,6 +313,17 @@ class PromptAgentReferenceProfile(Base):
     url = Column(String, unique=True)
     profile_json = Column(String)
     created_at = Column(DateTime, default=datetime.now)
+
+class PromptAgentRun(Base):
+    __tablename__ = "prompt_agent_runs"
+    id = Column(Integer, primary_key=True, index=True)
+    prompt_hash = Column(String, index=True)
+    prompt = Column(String)
+    status = Column(String, default="pending")
+    report_json = Column(String, nullable=True)
+    error = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now)
 
 Base.metadata.create_all(bind=engine)
 
@@ -5207,8 +5218,7 @@ async def _select_diverse_prompt_playlist(analyses: List[Dict[str, Any]], search
     }
     return {"items": final_items, "report": report}
 
-@app.post("/api/prompt-video-agent/run")
-async def run_prompt_video_agent(payload: dict):
+async def _run_prompt_video_agent_pipeline(payload: dict) -> Dict[str, Any]:
     prompt_text = (payload.get("prompt") or "").strip()
     if len(prompt_text) < 5:
         raise HTTPException(status_code=400, detail="prompt is required")
@@ -5217,7 +5227,7 @@ async def run_prompt_video_agent(payload: dict):
     max_queries = max(3, min(int(payload.get("max_queries") or 6), 6))
     per_query_limit = max(1, min(int(payload.get("per_query_limit") or 20), 50))
     enrich_limit = max(1, min(int(payload.get("enrich_limit") or 50), 80))
-    transcript_limit = max(1, min(int(payload.get("transcript_limit") or 30), 40))
+    transcript_limit = max(1, min(int(payload.get("transcript_limit") or 12), 30))
 
     search_plan = await _compile_prompt_to_search_plan(prompt_text)
     generated_queries = await _generate_prompt_agent_queries(prompt_text, search_plan, int(payload.get("query_pool_size") or 40))
@@ -5259,7 +5269,9 @@ async def run_prompt_video_agent(payload: dict):
 
     enriched = []
     for item in filtered[:enrich_limit]:
-        enriched.append(await asyncio.to_thread(_enrich_video_candidate, item))
+        enriched_item = await asyncio.to_thread(_enrich_video_candidate, item)
+        enriched.append(enriched_item)
+        await asyncio.to_thread(_save_prompt_video_analysis, prompt_hash, {**enriched_item, "analysis": {"accepted": False, "rejection_reason": "مرشح محفوظ قبل استخراج النص", "total_score": 0}})
 
     transcript_items = []
     for item in enriched[:transcript_limit]:
@@ -5309,6 +5321,85 @@ async def run_prompt_video_agent(payload: dict):
             "model": "gpt-4o-mini" if OPENAI_API_KEY else None
         }
     }
+
+def _set_prompt_agent_run_status(run_id: int, status: str, report: Optional[Dict[str, Any]] = None, error: Optional[str] = None) -> None:
+    db = SessionLocal()
+    try:
+        row = db.query(PromptAgentRun).filter(PromptAgentRun.id == run_id).first()
+        if row:
+            row.status = status
+            row.updated_at = datetime.now()
+            if report is not None:
+                row.report_json = json.dumps(report, ensure_ascii=False)
+            if error:
+                row.error = error
+            db.commit()
+    finally:
+        db.close()
+
+async def _execute_prompt_video_agent_run(run_id: int, payload: dict):
+    _set_prompt_agent_run_status(run_id, "processing")
+    try:
+        result = await _run_prompt_video_agent_pipeline(payload)
+        _set_prompt_agent_run_status(run_id, "ready", result)
+        try:
+            await manager.broadcast(json.dumps({"type": "prompt_agent_report_ready", "data": {"run_id": run_id, "report": result}}, ensure_ascii=False))
+        except Exception:
+            pass
+    except Exception as exc:
+        logger.exception(f"Prompt video agent run failed: {exc}")
+        _set_prompt_agent_run_status(run_id, "failed", error=str(exc))
+
+@app.post("/api/prompt-video-agent/run")
+async def run_prompt_video_agent(payload: dict, background_tasks: BackgroundTasks):
+    prompt_text = (payload.get("prompt") or "").strip()
+    if len(prompt_text) < 5:
+        raise HTTPException(status_code=400, detail="prompt is required")
+    prompt_hash = _prompt_hash(prompt_text)
+    db = SessionLocal()
+    try:
+        run = PromptAgentRun(prompt_hash=prompt_hash, prompt=prompt_text, status="pending")
+        db.add(run)
+        db.commit()
+        db.refresh(run)
+        run_id = run.id
+    finally:
+        db.close()
+    background_tasks.add_task(_execute_prompt_video_agent_run, run_id, payload)
+    return {"status": "queued", "run_id": run_id, "prompt_hash": prompt_hash}
+
+@app.get("/api/prompt-video-agent/reports")
+async def get_prompt_video_agent_reports(limit: int = 20):
+    db = SessionLocal()
+    try:
+        runs = db.query(PromptAgentRun).order_by(desc(PromptAgentRun.created_at), desc(PromptAgentRun.id)).limit(limit).all()
+        videos = db.query(PromptAgentVideoAnalysis).order_by(desc(PromptAgentVideoAnalysis.created_at), desc(PromptAgentVideoAnalysis.id)).limit(200).all()
+        return {
+            "runs": [{
+                "id": r.id,
+                "prompt_hash": r.prompt_hash,
+                "prompt": r.prompt,
+                "status": r.status,
+                "error": r.error,
+                "created_at": str(r.created_at),
+                "updated_at": str(r.updated_at),
+                "report": json.loads(r.report_json) if r.report_json else None,
+            } for r in runs],
+            "videos": [{
+                "id": v.id,
+                "prompt_hash": v.prompt_hash,
+                "video_id": v.video_id,
+                "url": v.url,
+                "title": v.title,
+                "channel": v.channel,
+                "speaker": v.speaker,
+                "selected": v.selected,
+                "created_at": str(v.created_at),
+                "analysis": json.loads(v.analysis_json) if v.analysis_json else {},
+            } for v in videos]
+        }
+    finally:
+        db.close()
 
 @app.get("/api/video-summary-updates")
 async def get_video_summary_updates(limit: int = 50, status: str = "all"):
