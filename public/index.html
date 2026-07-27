@@ -2606,7 +2606,7 @@
                 const response = await fetch(`${API_URL}/prompt-video-agent/run`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt: promptText, query_pool_size: 40, max_queries: 6, per_query_limit: 20, enrich_limit: 50, transcript_limit: 12 })
+                    body: JSON.stringify({ prompt: promptText, query_pool_size: 40, max_queries: 6, per_query_limit: 20, enrich_limit: 50, transcript_limit: 0 })
                 });
                 const raw = await response.text();
                 let data;
@@ -2621,6 +2621,7 @@
                 setTimeout(fetchPromptAgentReports, 5000);
                 setTimeout(fetchPromptAgentReports, 15000);
                 setTimeout(fetchPromptAgentReports, 30000);
+                setTimeout(fetchPromptAgentReports, 60000);
             } catch (error) {
                 console.error(error);
                 await fetchPromptAgentReports();
@@ -2642,7 +2643,8 @@
                     throw new Error(raw.slice(0, 220) || 'رد التقارير ليس JSON');
                 }
                 const latestReady = (data.runs || []).find(r => r.report);
-                const latestRunning = (data.runs || []).find(r => r.status === 'pending' || r.status === 'processing');
+                const latestRunning = (data.runs || []).find(r => (r.status === 'pending' || r.status === 'processing') && Date.now() - Date.parse(r.updated_at || r.created_at) < 20 * 60 * 1000);
+                const latestFailed = (data.runs || []).find(r => r.status === 'failed');
                 if (latestReady?.report) {
                     renderPromptAgentResults(latestReady.report.items || [], latestReady.report);
                     if (status) status.textContent = `آخر تقرير محفوظ: ${latestReady.status} - ${latestReady.created_at}`;
@@ -2656,6 +2658,7 @@
                         analysis: v.analysis || {}
                     })), { report: { summary: latestRunning ? 'التقرير قيد التنفيذ الآن.' : 'لا يوجد تقرير نهائي محفوظ بعد.' }, pipeline: {} });
                     if (status && latestRunning) status.textContent = `الوكيل يعمل الآن: ${latestRunning.status}`;
+                    else if (status && latestFailed) status.textContent = `آخر تشغيل فشل: ${latestFailed.error || 'فشل غير معروف'}`;
                 }
             } catch (error) {
                 console.error(error);

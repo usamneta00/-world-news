@@ -4841,36 +4841,37 @@ def _prompt_agent_item_from_db(item: Any, section: str) -> Optional[Dict[str, An
         "discovery_query": "monitored_channels",
     }
 
-def _scan_monitored_channel_candidates(limit_per_section: int = 80) -> List[Dict[str, Any]]:
-    configured_channels = []
-    for channel_group in [YOUTUBE_CHANNELS, YEMEN_YOUTUBE_CHANNELS, ARABIC_YOUTUBE_CHANNELS, DUBBED_YOUTUBE_CHANNELS]:
-        configured_channels.extend(channel_group[:8])
-
+def _scan_monitored_channel_candidates(limit_per_section: int = 80, live_scan: bool = False) -> List[Dict[str, Any]]:
     live_candidates: List[Dict[str, Any]] = []
-    for channel in configured_channels:
-        try:
-            videos = fetch_youtube_channel_videos(
-                channel["url"],
-                channel["name"],
-                last_video_ids=None,
-                is_playlist=channel.get("type") == "playlist"
-            )
-            for video in videos[:5]:
-                live_candidates.append({
-                    "video_id": video.get("video_id"),
-                    "title": video.get("title") or "",
-                    "channel": video.get("source") or channel.get("name") or "",
-                    "duration": None,
-                    "duration_text": "",
-                    "url": video.get("link"),
-                    "thumbnail": video.get("image_url"),
-                    "published": str(video.get("published") or ""),
-                    "summary": video.get("summary") or "",
-                    "source_type": "monitored_channel_scan",
-                    "discovery_query": "scan_monitored_channels",
-                })
-        except Exception as exc:
-            logger.warning(f"Prompt agent channel scan failed for {channel.get('name')}: {exc}")
+    if live_scan:
+        configured_channels = []
+        for channel_group in [YOUTUBE_CHANNELS, YEMEN_YOUTUBE_CHANNELS, ARABIC_YOUTUBE_CHANNELS, DUBBED_YOUTUBE_CHANNELS]:
+            configured_channels.extend(channel_group[:4])
+
+        for channel in configured_channels:
+            try:
+                videos = fetch_youtube_channel_videos(
+                    channel["url"],
+                    channel["name"],
+                    last_video_ids=None,
+                    is_playlist=channel.get("type") == "playlist"
+                )
+                for video in videos[:3]:
+                    live_candidates.append({
+                        "video_id": video.get("video_id"),
+                        "title": video.get("title") or "",
+                        "channel": video.get("source") or channel.get("name") or "",
+                        "duration": None,
+                        "duration_text": "",
+                        "url": video.get("link"),
+                        "thumbnail": video.get("image_url"),
+                        "published": str(video.get("published") or ""),
+                        "summary": video.get("summary") or "",
+                        "source_type": "monitored_channel_scan",
+                        "discovery_query": "scan_monitored_channels",
+                    })
+            except Exception as exc:
+                logger.warning(f"Prompt agent channel scan failed for {channel.get('name')}: {exc}")
 
     db = SessionLocal()
     try:
@@ -5218,6 +5219,62 @@ async def _select_diverse_prompt_playlist(analyses: List[Dict[str, Any]], search
     }
     return {"items": final_items, "report": report}
 
+async def _select_metadata_prompt_playlist(candidates: List[Dict[str, Any]], search_plan: Dict[str, Any]) -> Dict[str, Any]:
+    limits = search_plan.get("limits") or {}
+    required = search_plan.get("required_count") or {}
+    max_per_channel = int(limits.get("max_per_channel") or 2)
+    max_count = int(required.get("maximum") or 18)
+    min_count = int(required.get("minimum") or 12)
+
+    ranked = []
+    for item in candidates:
+        score = 0
+        title = (item.get("title") or "").lower()
+        summary = (item.get("summary") or item.get("description") or "").lower()
+        text = f"{title} {summary}"
+        for topic in search_plan.get("topics") or []:
+            if str(topic).lower() in text:
+                score += 5
+        score += int(item.get("query_priority") or 0)
+        if item.get("source_type") == "monitored_channel_scan":
+            score += 2
+        item_copy = dict(item)
+        item_copy["analysis"] = {
+            "accepted": True,
+            "total_score": score,
+            "summary": item.get("summary") or item.get("description") or item.get("discovery_query") or "",
+            "requires_verification": True,
+            "warnings": ["metadata_only_no_transcript"]
+        }
+        ranked.append(item_copy)
+
+    ranked.sort(key=lambda x: int((x.get("analysis") or {}).get("total_score") or 0), reverse=True)
+    channel_counts: Dict[str, int] = {}
+    final_items = []
+    for item in ranked:
+        channel = item.get("channel") or "unknown"
+        if channel_counts.get(channel, 0) >= max_per_channel:
+            continue
+        channel_counts[channel] = channel_counts.get(channel, 0) + 1
+        item["selection"] = {
+            "rank": len(final_items) + 1,
+            "transition_reason": "اختير مبدئياً بناءً على العنوان والقناة وعبارة الاكتشاف، بدون استخراج نص.",
+            "best_for": item.get("query_category") or "مرشح أولي"
+        }
+        final_items.append(item)
+        if len(final_items) >= max_count:
+            break
+
+    return {
+        "items": final_items,
+        "report": {
+            "summary": f"تم حفظ {len(candidates)} مرشحاً واختيار {len(final_items)} مبدئياً. لم يتم استخراج النصوص تلقائياً لتجنب تعليق yt-dlp وطلبات التحقق من YouTube.",
+            "selection_notes": "هذا تقرير أولي محفوظ من البيانات المتاحة. العناصر التي تحتاج تحقق أو تفريغ لاحق وُسمت بعلامة metadata_only_no_transcript.",
+            "needs_more_search": len(final_items) < min_count,
+            "metadata_only": True
+        }
+    }
+
 async def _run_prompt_video_agent_pipeline(payload: dict) -> Dict[str, Any]:
     prompt_text = (payload.get("prompt") or "").strip()
     if len(prompt_text) < 5:
@@ -5227,7 +5284,7 @@ async def _run_prompt_video_agent_pipeline(payload: dict) -> Dict[str, Any]:
     max_queries = max(3, min(int(payload.get("max_queries") or 6), 6))
     per_query_limit = max(1, min(int(payload.get("per_query_limit") or 20), 50))
     enrich_limit = max(1, min(int(payload.get("enrich_limit") or 50), 80))
-    transcript_limit = max(1, min(int(payload.get("transcript_limit") or 12), 30))
+    transcript_limit = max(0, min(int(payload.get("transcript_limit") or 0), 10))
 
     search_plan = await _compile_prompt_to_search_plan(prompt_text)
     generated_queries = await _generate_prompt_agent_queries(prompt_text, search_plan, int(payload.get("query_pool_size") or 40))
@@ -5242,7 +5299,7 @@ async def _run_prompt_video_agent_pipeline(payload: dict) -> Dict[str, Any]:
 
     previous = await asyncio.to_thread(_get_previous_prompt_agent_results, prompt_hash)
 
-    channel_candidates = await asyncio.to_thread(_scan_monitored_channel_candidates, 80)
+    channel_candidates = await asyncio.to_thread(_scan_monitored_channel_candidates, 80, bool(payload.get("live_channel_scan")))
     search_candidates: List[Dict[str, Any]] = []
     for query_item in queries:
         try:
@@ -5274,21 +5331,22 @@ async def _run_prompt_video_agent_pipeline(payload: dict) -> Dict[str, Any]:
         await asyncio.to_thread(_save_prompt_video_analysis, prompt_hash, {**enriched_item, "analysis": {"accepted": False, "rejection_reason": "مرشح محفوظ قبل استخراج النص", "total_score": 0}})
 
     transcript_items = []
-    for item in enriched[:transcript_limit]:
-        transcript_item = await _extract_candidate_transcript(item)
-        transcript_hash = _transcript_fingerprint(transcript_item.get("transcript") or "")
-        if transcript_hash and transcript_hash in previous["transcript_hashes"]:
-            rejected.append({**transcript_item, "rejection_reason": "نص مشابه سبق تحليله"})
-            continue
-        transcript_items.append(transcript_item)
-
     analyses = []
-    for item in transcript_items:
-        analyzed = await _analyze_prompt_candidate(item, search_plan, reference_profiles, previously_seen=False)
-        analyses.append(analyzed)
-        await asyncio.to_thread(_save_prompt_video_analysis, prompt_hash, analyzed)
+    if transcript_limit > 0:
+        for item in enriched[:transcript_limit]:
+            transcript_item = await _extract_candidate_transcript(item)
+            transcript_hash = _transcript_fingerprint(transcript_item.get("transcript") or "")
+            if transcript_hash and transcript_hash in previous["transcript_hashes"]:
+                rejected.append({**transcript_item, "rejection_reason": "نص مشابه سبق تحليله"})
+                continue
+            transcript_items.append(transcript_item)
 
-    final_selection = await _select_diverse_prompt_playlist(analyses, search_plan)
+        for item in transcript_items:
+            analyzed = await _analyze_prompt_candidate(item, search_plan, reference_profiles, previously_seen=False)
+            analyses.append(analyzed)
+            await asyncio.to_thread(_save_prompt_video_analysis, prompt_hash, analyzed)
+
+    final_selection = await _select_diverse_prompt_playlist(analyses, search_plan) if analyses else await _select_metadata_prompt_playlist(enriched, search_plan)
 
     return {
         "status": "done",
@@ -5340,7 +5398,7 @@ def _set_prompt_agent_run_status(run_id: int, status: str, report: Optional[Dict
 async def _execute_prompt_video_agent_run(run_id: int, payload: dict):
     _set_prompt_agent_run_status(run_id, "processing")
     try:
-        result = await _run_prompt_video_agent_pipeline(payload)
+        result = await asyncio.wait_for(_run_prompt_video_agent_pipeline(payload), timeout=600)
         _set_prompt_agent_run_status(run_id, "ready", result)
         try:
             await manager.broadcast(json.dumps({"type": "prompt_agent_report_ready", "data": {"run_id": run_id, "report": result}}, ensure_ascii=False))
@@ -5372,6 +5430,18 @@ async def run_prompt_video_agent(payload: dict, background_tasks: BackgroundTask
 async def get_prompt_video_agent_reports(limit: int = 20):
     db = SessionLocal()
     try:
+        stale_cutoff = datetime.now() - timedelta(minutes=20)
+        stale_runs = db.query(PromptAgentRun).filter(
+            PromptAgentRun.status.in_(["pending", "processing"]),
+            PromptAgentRun.updated_at < stale_cutoff
+        ).all()
+        for run in stale_runs:
+            run.status = "failed"
+            run.error = run.error or "توقف التشغيل قبل اكتمال التقرير. تم إنهاؤه تلقائياً بعد 20 دقيقة."
+            run.updated_at = datetime.now()
+        if stale_runs:
+            db.commit()
+
         runs = db.query(PromptAgentRun).order_by(desc(PromptAgentRun.created_at), desc(PromptAgentRun.id)).limit(limit).all()
         videos = db.query(PromptAgentVideoAnalysis).order_by(desc(PromptAgentVideoAnalysis.created_at), desc(PromptAgentVideoAnalysis.id)).limit(200).all()
         return {
