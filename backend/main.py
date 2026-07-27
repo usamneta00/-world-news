@@ -279,6 +279,41 @@ class VideoSummaryUpdate(Base):
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now)
 
+class PromptAgentSearchQuery(Base):
+    __tablename__ = "prompt_agent_search_queries"
+    id = Column(Integer, primary_key=True, index=True)
+    prompt_hash = Column(String, index=True)
+    query = Column(String, index=True)
+    category = Column(String, nullable=True)
+    priority = Column(Integer, default=5)
+    run_count = Column(Integer, default=0)
+    last_run_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+
+class PromptAgentVideoAnalysis(Base):
+    __tablename__ = "prompt_agent_video_analyses"
+    id = Column(Integer, primary_key=True, index=True)
+    prompt_hash = Column(String, index=True)
+    video_id = Column(String, index=True)
+    url = Column(String, unique=True)
+    title = Column(String)
+    channel = Column(String, nullable=True)
+    speaker = Column(String, nullable=True)
+    transcript_hash = Column(String, nullable=True, index=True)
+    analysis_json = Column(String)
+    selected = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now)
+
+class PromptAgentReferenceProfile(Base):
+    __tablename__ = "prompt_agent_reference_profiles"
+    id = Column(Integer, primary_key=True, index=True)
+    prompt_hash = Column(String, index=True)
+    reference_id = Column(String, index=True)
+    url = Column(String, unique=True)
+    profile_json = Column(String)
+    created_at = Column(DateTime, default=datetime.now)
+
 Base.metadata.create_all(bind=engine)
 
 # Migration: Add video_id column and channel_last_video table
@@ -4620,6 +4655,660 @@ async def create_manual_arabic_news(payload: dict):
         }}
     finally:
         db.close()
+
+def _format_duration(seconds: Optional[int]) -> str:
+    if not seconds:
+        return ""
+    minutes, secs = divmod(int(seconds), 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes}:{secs:02d}"
+
+def _prompt_hash(prompt_text: str) -> str:
+    return hashlib.sha256(re.sub(r"\s+", " ", prompt_text).strip().encode("utf-8")).hexdigest()
+
+def _fallback_prompt_queries(prompt_text: str, maximum: int) -> List[Dict[str, Any]]:
+    cleaned = re.sub(r"\s+", " ", prompt_text).strip()
+    if not cleaned:
+        return []
+    base = cleaned[:180]
+    query_seeds = [
+        (base, "عام", 10),
+        (f"{base} محاضرة مؤثرة", "إيماني", 9),
+        (f"{base} قصة مؤثرة", "قصصي", 9),
+        (f"{base} مقطع قصير", "مقاطع قصيرة", 8),
+        (f"{base} كلام يهز القلب", "تأملي", 8),
+        (f"{base} بدون موسيقى", "منضبط", 7),
+        (f"{base} نهاية مؤثرة", "نهاية", 7),
+        (f"{base} خطبة قصيرة", "خطبة", 6),
+    ]
+    seen = set()
+    queries = []
+    for query, category, priority in query_seeds:
+        normalized = query.strip()
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            queries.append({"query": normalized, "category": category, "priority": priority})
+        if len(queries) >= maximum:
+            break
+    return queries
+
+async def _generate_prompt_agent_queries(prompt_text: str, search_plan: Dict[str, Any], maximum: int = 40) -> List[Dict[str, Any]]:
+    maximum = max(30, min(maximum, 50))
+    if not OPENAI_API_KEY:
+        return _fallback_prompt_queries(prompt_text, maximum)
+
+    system_prompt = (
+        "أنت مخطط بحث عربي لوكيل YouTube. أنشئ 30 إلى 50 عبارة بحث متنوعة. "
+        "لا تستخدم Web Search. أعد JSON فقط بالمفتاح queries، وكل عنصر يحتوي query وcategory وpriority من 1 إلى 10. "
+        "نوّع المتحدثين والموضوعات والمعاني ولا تكرر نفس العبارة."
+    )
+    user_prompt = json.dumps({"prompt": prompt_text, "search_plan": search_plan, "required_queries": maximum}, ensure_ascii=False)
+    try:
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": 0.4,
+            "response_format": {"type": "json_object"}
+        }
+        response = await asyncio.to_thread(
+            lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=30)
+        )
+        if response.status_code != 200:
+            logger.warning(f"Prompt agent query generation failed: {response.status_code} - {response.text[:300]}")
+            return _fallback_prompt_queries(prompt_text, maximum)
+        content = response.json()["choices"][0]["message"]["content"]
+        data = json.loads(content)
+        queries = data.get("queries") if isinstance(data, dict) else []
+        clean_queries = []
+        seen = set()
+        for item in queries:
+            raw_query = item.get("query") if isinstance(item, dict) else item
+            normalized = re.sub(r"\s+", " ", str(raw_query)).strip()
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                clean_queries.append({
+                    "query": normalized[:220],
+                    "category": (item.get("category") if isinstance(item, dict) else None) or "عام",
+                    "priority": max(1, min(int((item.get("priority") if isinstance(item, dict) else 5) or 5), 10))
+                })
+            if len(clean_queries) >= maximum:
+                break
+        return clean_queries or _fallback_prompt_queries(prompt_text, maximum)
+    except Exception as exc:
+        logger.warning(f"Prompt agent query generation exception: {exc}")
+        return _fallback_prompt_queries(prompt_text, maximum)
+
+def _save_prompt_agent_queries(prompt_hash: str, queries: List[Dict[str, Any]]) -> None:
+    db = SessionLocal()
+    try:
+        existing = {row.query for row in db.query(PromptAgentSearchQuery).filter(PromptAgentSearchQuery.prompt_hash == prompt_hash).all()}
+        for item in queries:
+            query = (item.get("query") or "").strip()
+            if not query or query in existing:
+                continue
+            db.add(PromptAgentSearchQuery(
+                prompt_hash=prompt_hash,
+                query=query,
+                category=item.get("category") or "عام",
+                priority=int(item.get("priority") or 5),
+            ))
+        db.commit()
+    finally:
+        db.close()
+
+def _select_due_prompt_queries(prompt_hash: str, maximum: int = 6) -> List[Dict[str, Any]]:
+    db = SessionLocal()
+    try:
+        rows = db.query(PromptAgentSearchQuery).filter(
+            PromptAgentSearchQuery.prompt_hash == prompt_hash
+        ).order_by(PromptAgentSearchQuery.run_count.asc(), PromptAgentSearchQuery.priority.desc(), PromptAgentSearchQuery.id.asc()).limit(maximum).all()
+        selected = []
+        for row in rows:
+            row.run_count = (row.run_count or 0) + 1
+            row.last_run_at = datetime.now()
+            selected.append({"query": row.query, "category": row.category, "priority": row.priority})
+        db.commit()
+        return selected
+    finally:
+        db.close()
+
+def _search_youtube_with_ytdlp(query: str, limit: int) -> List[Dict[str, Any]]:
+    safe_limit = max(1, min(int(limit or 20), 50))
+    ydl_opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "extract_flat": "in_playlist",
+        "ignoreerrors": True,
+        "socket_timeout": 20,
+        "retries": 2,
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        result = ydl.extract_info(f"ytsearch{safe_limit}:{query}", download=False)
+    entries = (result or {}).get("entries") or []
+    items = []
+    for entry in entries:
+        if not entry or not entry.get("id"):
+            continue
+        video_id = entry.get("id")
+        duration = entry.get("duration")
+        items.append({
+            "video_id": video_id,
+            "title": entry.get("title") or "",
+            "channel": entry.get("channel") or entry.get("uploader") or "",
+            "duration": duration,
+            "duration_text": _format_duration(duration),
+            "url": f"https://www.youtube.com/watch?v={video_id}",
+            "thumbnail": f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
+            "discovery_query": query,
+        })
+    return items
+
+def _prompt_agent_item_from_db(item: Any, section: str) -> Optional[Dict[str, Any]]:
+    link = getattr(item, "link", "") or ""
+    match = re.search(r"(?:v=|youtu\.be/|shorts/|embed/)([A-Za-z0-9_-]{11})", link)
+    video_id = getattr(item, "video_id", None) or (match.group(1) if match else None)
+    if not video_id:
+        return None
+    return {
+        "video_id": video_id,
+        "title": getattr(item, "title", "") or "",
+        "channel": getattr(item, "source", "") or "",
+        "duration": None,
+        "duration_text": "",
+        "url": f"https://www.youtube.com/watch?v={video_id}",
+        "thumbnail": getattr(item, "image_url", None) or f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
+        "published": str(getattr(item, "published", "") or ""),
+        "summary": getattr(item, "summary", "") or "",
+        "source_type": section,
+        "discovery_query": "monitored_channels",
+    }
+
+def _scan_monitored_channel_candidates(limit_per_section: int = 80) -> List[Dict[str, Any]]:
+    configured_channels = []
+    for channel_group in [YOUTUBE_CHANNELS, YEMEN_YOUTUBE_CHANNELS, ARABIC_YOUTUBE_CHANNELS, DUBBED_YOUTUBE_CHANNELS]:
+        configured_channels.extend(channel_group[:8])
+
+    live_candidates: List[Dict[str, Any]] = []
+    for channel in configured_channels:
+        try:
+            videos = fetch_youtube_channel_videos(
+                channel["url"],
+                channel["name"],
+                last_video_ids=None,
+                is_playlist=channel.get("type") == "playlist"
+            )
+            for video in videos[:5]:
+                live_candidates.append({
+                    "video_id": video.get("video_id"),
+                    "title": video.get("title") or "",
+                    "channel": video.get("source") or channel.get("name") or "",
+                    "duration": None,
+                    "duration_text": "",
+                    "url": video.get("link"),
+                    "thumbnail": video.get("image_url"),
+                    "published": str(video.get("published") or ""),
+                    "summary": video.get("summary") or "",
+                    "source_type": "monitored_channel_scan",
+                    "discovery_query": "scan_monitored_channels",
+                })
+        except Exception as exc:
+            logger.warning(f"Prompt agent channel scan failed for {channel.get('name')}: {exc}")
+
+    db = SessionLocal()
+    try:
+        pools = [
+            ("world", db.query(NewsItem).order_by(desc(NewsItem.created_at), desc(NewsItem.id)).limit(limit_per_section).all()),
+            ("yemen", db.query(YemenNewsItem).order_by(desc(YemenNewsItem.created_at), desc(YemenNewsItem.id)).limit(limit_per_section).all()),
+            ("arabic", db.query(ArabicNewsItem).order_by(desc(ArabicNewsItem.created_at), desc(ArabicNewsItem.id)).limit(limit_per_section).all()),
+            ("dubbed", db.query(DubbedNewsItem).order_by(desc(DubbedNewsItem.created_at), desc(DubbedNewsItem.id)).limit(limit_per_section).all()),
+        ]
+        candidates = []
+        for section, rows in pools:
+            for row in rows:
+                candidate = _prompt_agent_item_from_db(row, section)
+                if candidate:
+                    candidates.append(candidate)
+        return _deduplicate_video_candidates(live_candidates + candidates)
+    finally:
+        db.close()
+
+def _deduplicate_video_candidates(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen = set()
+    deduped = []
+    for item in candidates:
+        video_id = item.get("video_id")
+        if not video_id or video_id in seen:
+            continue
+        seen.add(video_id)
+        deduped.append(item)
+    return deduped
+
+def _get_previous_prompt_agent_results(prompt_hash: str) -> Dict[str, Set[str]]:
+    db = SessionLocal()
+    try:
+        rows = db.query(PromptAgentVideoAnalysis).filter(PromptAgentVideoAnalysis.prompt_hash == prompt_hash).all()
+        return {
+            "video_ids": {row.video_id for row in rows if row.video_id},
+            "transcript_hashes": {row.transcript_hash for row in rows if row.transcript_hash},
+        }
+    finally:
+        db.close()
+
+def _transcript_fingerprint(text: str) -> Optional[str]:
+    normalized = re.sub(r"\s+", " ", (text or "").strip().lower())
+    if len(normalized) < 120:
+        return None
+    return hashlib.sha256(normalized[:6000].encode("utf-8")).hexdigest()
+
+def _save_prompt_video_analysis(prompt_hash: str, item: Dict[str, Any]) -> None:
+    analysis = item.get("analysis") or {}
+    transcript_hash = _transcript_fingerprint(item.get("transcript") or "")
+    db = SessionLocal()
+    try:
+        existing = db.query(PromptAgentVideoAnalysis).filter(PromptAgentVideoAnalysis.url == item.get("url")).first()
+        if not existing:
+            existing = PromptAgentVideoAnalysis(
+                prompt_hash=prompt_hash,
+                video_id=item.get("video_id"),
+                url=item.get("url"),
+                title=item.get("title") or "",
+                channel=item.get("channel") or "",
+            )
+            db.add(existing)
+        existing.speaker = analysis.get("speaker")
+        existing.transcript_hash = transcript_hash
+        existing.analysis_json = json.dumps(analysis, ensure_ascii=False)
+        existing.selected = 1 if analysis.get("accepted") else 0
+        existing.updated_at = datetime.now()
+        db.commit()
+    finally:
+        db.close()
+
+def _extract_youtube_reference_urls(prompt_text: str) -> List[str]:
+    urls = re.findall(r"https?://(?:www\.)?(?:youtube\.com/watch\?v=[A-Za-z0-9_-]{11}|youtu\.be/[A-Za-z0-9_-]{11}|youtube\.com/shorts/[A-Za-z0-9_-]{11})[^\s\"']*", prompt_text)
+    seen = set()
+    output = []
+    for url in urls:
+        clean = url.rstrip(").,،؛")
+        if clean not in seen:
+            seen.add(clean)
+            output.append(clean)
+    return output[:8]
+
+async def _analyze_reference_profile(prompt_hash: str, url: str) -> Optional[Dict[str, Any]]:
+    ref_match = re.search(r"(?:v=|youtu\.be/|shorts/)([A-Za-z0-9_-]{11})", url)
+    reference_id = ref_match.group(1) if ref_match else hashlib.sha1(url.encode("utf-8")).hexdigest()[:12]
+    db = SessionLocal()
+    try:
+        existing = db.query(PromptAgentReferenceProfile).filter(PromptAgentReferenceProfile.url == url).first()
+        if existing and existing.profile_json:
+            return json.loads(existing.profile_json)
+    finally:
+        db.close()
+
+    res = await asyncio.to_thread(fetch_youtube_subs_downsub, url, formats=["txt"])
+    transcript = ((res or {}).get("txt") or "")[:7000]
+    if not OPENAI_API_KEY or not transcript:
+        return None
+    try:
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": "حلل خصائص هذا الفيديو المرجعي مرة واحدة. أعد JSON فقط: reference_id,hook,delivery,structure,emotional_curve,ending_style,topic_style."},
+                {"role": "user", "content": json.dumps({"reference_id": reference_id, "transcript": transcript}, ensure_ascii=False)}
+            ],
+            "temperature": 0.2,
+            "response_format": {"type": "json_object"}
+        }
+        response = await asyncio.to_thread(
+            lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=45)
+        )
+        if response.status_code != 200:
+            return None
+        profile = json.loads(response.json()["choices"][0]["message"]["content"])
+        db = SessionLocal()
+        try:
+            db.add(PromptAgentReferenceProfile(
+                prompt_hash=prompt_hash,
+                reference_id=reference_id,
+                url=url,
+                profile_json=json.dumps(profile, ensure_ascii=False),
+            ))
+            db.commit()
+        finally:
+            db.close()
+        return profile
+    except Exception as exc:
+        logger.warning(f"Reference profile analysis failed: {exc}")
+        return None
+
+def _basic_prompt_video_filter(item: Dict[str, Any], search_plan: Dict[str, Any]) -> tuple[bool, Optional[str]]:
+    title = (item.get("title") or "").strip()
+    text = f"{title} {item.get('summary') or ''}".lower()
+    if not title or title.lower() in {"[private video]", "[deleted video]"}:
+        return False, "عنوان غير صالح"
+    duration = item.get("duration")
+    min_seconds = int((search_plan.get("durations") or {}).get("preferred_min_seconds") or 25)
+    max_seconds = int((search_plan.get("durations") or {}).get("preferred_max_seconds") or 1800)
+    if duration and duration < min_seconds:
+        return False, "أقصر من المطلوب"
+    if duration and duration > max_seconds:
+        return False, "أطول من المطلوب"
+    excluded = search_plan.get("excluded_topics") or []
+    default_excluded = ["سحر", "تكفير", "فضيحة", "قبل الحذف", "سيأتيك المال", "الجن العاشق"]
+    if any(str(word).lower() in text for word in excluded + default_excluded):
+        return False, "موضوع مستبعد"
+    return True, None
+
+async def _compile_prompt_to_search_plan(prompt_text: str) -> Dict[str, Any]:
+    fallback = {
+        "required_count": {"minimum": 12, "maximum": 18},
+        "durations": {"preferred_min_seconds": 30, "preferred_max_seconds": 720},
+        "topics": [prompt_text[:120]],
+        "excluded_topics": ["الفتاوى المباشرة", "التكفير", "التحريض", "العناوين المضللة"],
+        "limits": {"max_per_speaker": 2, "max_per_channel": 2}
+    }
+    if not OPENAI_API_KEY:
+        return fallback
+    try:
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": "حوّل البرومبت إلى خطة بحث JSON فقط. لا تستخدم web_search. التزم بالمفاتيح: required_count,durations,topics,preferred_speakers,excluded_topics,limits."},
+                {"role": "user", "content": prompt_text}
+            ],
+            "temperature": 0.2,
+            "response_format": {"type": "json_object"}
+        }
+        response = await asyncio.to_thread(
+            lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=30)
+        )
+        if response.status_code == 200:
+            data = json.loads(response.json()["choices"][0]["message"]["content"])
+            if isinstance(data, dict):
+                return {**fallback, **data}
+    except Exception as exc:
+        logger.warning(f"Prompt agent search plan fallback: {exc}")
+    return fallback
+
+def _enrich_video_candidate(item: Dict[str, Any]) -> Dict[str, Any]:
+    enriched = dict(item)
+    try:
+        ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True, "ignoreerrors": True, "socket_timeout": 20}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(item["url"], download=False)
+        if info:
+            enriched.update({
+                "title": info.get("title") or enriched.get("title"),
+                "channel": info.get("channel") or info.get("uploader") or enriched.get("channel"),
+                "duration": info.get("duration") or enriched.get("duration"),
+                "duration_text": _format_duration(info.get("duration") or enriched.get("duration")),
+                "published": info.get("upload_date") or enriched.get("published"),
+                "description": (info.get("description") or "")[:1200],
+                "thumbnail": info.get("thumbnail") or enriched.get("thumbnail"),
+            })
+    except Exception as exc:
+        enriched["enrich_error"] = str(exc)
+    return enriched
+
+async def _extract_candidate_transcript(item: Dict[str, Any]) -> Dict[str, Any]:
+    enriched = dict(item)
+    res = await asyncio.to_thread(fetch_youtube_subs_downsub, item["url"], formats=["txt"])
+    transcript = (res or {}).get("txt") or ""
+    enriched["transcript"] = transcript
+    enriched["transcript_error"] = (res or {}).get("error")
+    if (res or {}).get("title") and not enriched.get("title"):
+        enriched["title"] = res["title"]
+    return enriched
+
+async def _analyze_prompt_candidate(item: Dict[str, Any], search_plan: Dict[str, Any], reference_profiles: List[Dict[str, Any]], previously_seen: bool = False) -> Dict[str, Any]:
+    transcript = (item.get("transcript") or "")[:9000]
+    if not OPENAI_API_KEY or not transcript:
+        return {
+            **item,
+            "analysis": {
+                "accepted": bool(transcript),
+                "rejection_reason": None if transcript else "لا يوجد نص متاح",
+                "total_score": 0,
+                "summary": item.get("summary") or item.get("description") or "",
+                "requires_verification": False,
+                "warnings": []
+            }
+        }
+    system_prompt = (
+        "أنت محلل متخصص في اختيار المقاطع العربية الدينية والقصصية. "
+        "حلل الفيديو وفق خطة البحث. لا تفترض صحة الأحاديث أو القصص. "
+        "اقبل الفيديو فقط إذا احتوى على ثلاثة عناصر قوية على الأقل: افتتاحية قوية، سؤال، قصة، تصاعد، نص شرعي، ربط بالواقع، نهاية مؤثرة، معنى قابل للمشاركة، فائدة عملية، اكتمال الفكرة. "
+        "ارفض الفتاوى المباشرة، القصص غير الموثقة، التحريض، التكفير، العناوين المضللة، الصراخ، المقاطع المبتورة، والمونتاج بلا مضمون. "
+        "أعد JSON فقط بالمفاتيح: accepted,rejection_reason,category,speaker,total_score,hook_score,story_score,progression_score,ending_score,delivery_score,idea_quality_score,religious_reliability_score,similarity_score,completeness_score,strongest_element,summary,best_start_second,best_end_second,religious_claims,warnings."
+    )
+    user_prompt = json.dumps({
+        "search_plan": search_plan,
+        "reference_profiles": reference_profiles,
+        "video": {k: item.get(k) for k in ["title", "channel", "duration", "description", "url"]},
+        "previously_suggested": previously_seen,
+        "transcript": transcript
+    }, ensure_ascii=False)
+    try:
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+            "temperature": 0.2,
+            "response_format": {"type": "json_object"}
+        }
+        response = await asyncio.to_thread(
+            lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=45)
+        )
+        if response.status_code == 200:
+            analysis = json.loads(response.json()["choices"][0]["message"]["content"])
+            if isinstance(analysis, dict):
+                return {**item, "analysis": analysis}
+    except Exception as exc:
+        logger.warning(f"Prompt candidate analysis failed: {exc}")
+    return {**item, "analysis": {"accepted": False, "rejection_reason": "فشل التحليل", "total_score": 0, "warnings": ["analysis_failed"]}}
+
+async def _select_diverse_prompt_playlist(analyses: List[Dict[str, Any]], search_plan: Dict[str, Any]) -> Dict[str, Any]:
+    accepted = [x for x in analyses if (x.get("analysis") or {}).get("accepted")]
+    accepted.sort(key=lambda x: int((x.get("analysis") or {}).get("total_score") or 0), reverse=True)
+    limits = search_plan.get("limits") or {}
+    max_per_channel = int(limits.get("max_per_channel") or 2)
+    required = search_plan.get("required_count") or {}
+    max_count = int(required.get("maximum") or 18)
+    min_count = int(required.get("minimum") or 12)
+    channel_counts: Dict[str, int] = {}
+    final_items = []
+    for item in accepted:
+        channel = item.get("channel") or "unknown"
+        if channel_counts.get(channel, 0) >= max_per_channel:
+            continue
+        channel_counts[channel] = channel_counts.get(channel, 0) + 1
+        final_items.append(item)
+        if len(final_items) >= max_count:
+            break
+
+    if OPENAI_API_KEY and accepted:
+        top_candidates = []
+        for item in accepted[:30]:
+            analysis = item.get("analysis") or {}
+            top_candidates.append({
+                "video_id": item.get("video_id"),
+                "title": item.get("title"),
+                "channel": item.get("channel"),
+                "speaker": analysis.get("speaker"),
+                "category": analysis.get("category"),
+                "duration": item.get("duration"),
+                "scores": {
+                    "total": analysis.get("total_score"),
+                    "hook": analysis.get("hook_score"),
+                    "story": analysis.get("story_score"),
+                    "ending": analysis.get("ending_score"),
+                    "similarity": analysis.get("similarity_score"),
+                    "completeness": analysis.get("completeness_score"),
+                },
+                "summary": analysis.get("summary"),
+                "url": item.get("url"),
+            })
+        try:
+            headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+            payload = {
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": "أنت وكيل الاختيار النهائي. لا تختر بالنقاط فقط. ابنِ قائمة مشاهدة واحدة من 12 إلى 18 فيديو، لا تتجاوز مقطعين لكل قناة أو متحدث، نوّع الموضوعات، واشرح العلاقة بين كل فيديو والذي قبله. أعد JSON فقط: items[{video_id,rank,transition_reason,best_for}],report."},
+                    {"role": "user", "content": json.dumps({
+                        "required_count": min(max_count, max(min_count, 15)),
+                        "max_per_speaker": int(limits.get("max_per_speaker") or 2),
+                        "max_per_channel": max_per_channel,
+                        "target_duration_minutes": {"minimum": 30, "maximum": 60},
+                        "search_plan": search_plan,
+                        "candidates": top_candidates
+                    }, ensure_ascii=False)}
+                ],
+                "temperature": 0.25,
+                "response_format": {"type": "json_object"}
+            }
+            response = await asyncio.to_thread(
+                lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=45)
+            )
+            if response.status_code == 200:
+                selection = json.loads(response.json()["choices"][0]["message"]["content"])
+                ordered_ids = [x.get("video_id") for x in selection.get("items", []) if isinstance(x, dict)]
+                by_id = {x.get("video_id"): x for x in accepted}
+                ai_items = []
+                for selected_meta in selection.get("items", []):
+                    item = by_id.get(selected_meta.get("video_id"))
+                    if item:
+                        merged = dict(item)
+                        merged["selection"] = selected_meta
+                        ai_items.append(merged)
+                if ai_items:
+                    final_items = ai_items[:max_count]
+                    report = selection.get("report") if isinstance(selection.get("report"), dict) else {}
+                    report.setdefault("summary", f"تم اختيار {len(final_items)} مقطعاً عبر وكيل الاختيار النهائي.")
+                    report.setdefault("selection_notes", "الاختيار النهائي راعى التنوع، التسلسل، وحدود القناة والمتحدث.")
+                    report.setdefault("needs_more_search", len(final_items) < min_count)
+                    return {"items": final_items, "report": report}
+        except Exception as exc:
+            logger.warning(f"Final playlist AI selection failed, using score fallback: {exc}")
+
+    report = {
+        "summary": f"تم اختيار {len(final_items)} مقطعاً من أصل {len(analyses)} مقطعاً محللاً. الحد الأدنى المطلوب {min_count}.",
+        "selection_notes": "تمت مراعاة جودة التحليل، توفر النص، وإزالة التكرار وحد القناة.",
+        "needs_more_search": len(final_items) < min_count
+    }
+    return {"items": final_items, "report": report}
+
+@app.post("/api/prompt-video-agent/run")
+async def run_prompt_video_agent(payload: dict):
+    prompt_text = (payload.get("prompt") or "").strip()
+    if len(prompt_text) < 5:
+        raise HTTPException(status_code=400, detail="prompt is required")
+
+    prompt_hash = _prompt_hash(prompt_text)
+    max_queries = max(3, min(int(payload.get("max_queries") or 6), 6))
+    per_query_limit = max(1, min(int(payload.get("per_query_limit") or 20), 50))
+    enrich_limit = max(1, min(int(payload.get("enrich_limit") or 50), 80))
+    transcript_limit = max(1, min(int(payload.get("transcript_limit") or 30), 40))
+
+    search_plan = await _compile_prompt_to_search_plan(prompt_text)
+    generated_queries = await _generate_prompt_agent_queries(prompt_text, search_plan, int(payload.get("query_pool_size") or 40))
+    await asyncio.to_thread(_save_prompt_agent_queries, prompt_hash, generated_queries)
+    queries = await asyncio.to_thread(_select_due_prompt_queries, prompt_hash, max_queries)
+
+    reference_profiles = []
+    for ref_url in _extract_youtube_reference_urls(prompt_text):
+        profile = await _analyze_reference_profile(prompt_hash, ref_url)
+        if profile:
+            reference_profiles.append(profile)
+
+    previous = await asyncio.to_thread(_get_previous_prompt_agent_results, prompt_hash)
+
+    channel_candidates = await asyncio.to_thread(_scan_monitored_channel_candidates, 80)
+    search_candidates: List[Dict[str, Any]] = []
+    for query_item in queries:
+        try:
+            results = await asyncio.to_thread(_search_youtube_with_ytdlp, query_item["query"], per_query_limit)
+            for result in results:
+                result["query_category"] = query_item.get("category")
+                result["query_priority"] = query_item.get("priority")
+            search_candidates.extend(results)
+        except Exception as exc:
+            logger.warning(f"yt-dlp search failed for query '{query_item}': {exc}")
+
+    candidates = _deduplicate_video_candidates(channel_candidates + search_candidates)
+    filtered = []
+    rejected = []
+    for item in candidates:
+        if item.get("video_id") in previous["video_ids"]:
+            rejected.append({**item, "rejection_reason": "سبق تحليله لهذا البرومبت"})
+            continue
+        ok, reason = _basic_prompt_video_filter(item, search_plan)
+        if ok:
+            filtered.append(item)
+        else:
+            rejected.append({**item, "rejection_reason": reason})
+
+    enriched = []
+    for item in filtered[:enrich_limit]:
+        enriched.append(await asyncio.to_thread(_enrich_video_candidate, item))
+
+    transcript_items = []
+    for item in enriched[:transcript_limit]:
+        transcript_item = await _extract_candidate_transcript(item)
+        transcript_hash = _transcript_fingerprint(transcript_item.get("transcript") or "")
+        if transcript_hash and transcript_hash in previous["transcript_hashes"]:
+            rejected.append({**transcript_item, "rejection_reason": "نص مشابه سبق تحليله"})
+            continue
+        transcript_items.append(transcript_item)
+
+    analyses = []
+    for item in transcript_items:
+        analyzed = await _analyze_prompt_candidate(item, search_plan, reference_profiles, previously_seen=False)
+        analyses.append(analyzed)
+        await asyncio.to_thread(_save_prompt_video_analysis, prompt_hash, analyzed)
+
+    final_selection = await _select_diverse_prompt_playlist(analyses, search_plan)
+
+    return {
+        "status": "done",
+        "prompt_hash": prompt_hash,
+        "search_plan": search_plan,
+        "queries": queries,
+        "generated_query_count": len(generated_queries),
+        "reference_profiles": reference_profiles,
+        "pipeline": {
+            "channel_candidates": len(channel_candidates),
+            "search_candidates": len(search_candidates),
+            "deduplicated_candidates": len(candidates),
+            "filtered_candidates": len(filtered),
+            "rejected_candidates": len(rejected),
+            "enriched_candidates": len(enriched),
+            "transcripts_extracted": len([x for x in transcript_items if x.get("transcript")]),
+            "analyzed_candidates": len(analyses),
+            "final_selected": len(final_selection["items"])
+        },
+        "total": len(final_selection["items"]),
+        "items": final_selection["items"],
+        "candidates": enriched[:120],
+        "rejected": rejected[:30],
+        "report": final_selection["report"],
+        "rules": {
+            "youtube_data_api": False,
+            "openai_web_search": False,
+            "automatic_repeat": False,
+            "search_engine": "yt-dlp",
+            "model": "gpt-4o-mini" if OPENAI_API_KEY else None
+        }
+    }
 
 @app.get("/api/video-summary-updates")
 async def get_video_summary_updates(limit: int = 50, status: str = "all"):
