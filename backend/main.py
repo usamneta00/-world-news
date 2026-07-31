@@ -1345,7 +1345,7 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
     results = {"srt": None, "txt": None, "title": None, "error": None}
     output_template = os.path.join(tmpdir, "%(id)s")
 
-    def build_args(sub_langs=None):
+    def build_args(sub_langs=None, extractor_args=None):
         args = [
             "yt-dlp",
             "--write-subs",
@@ -1360,6 +1360,8 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
         ]
         if sub_langs:
             args.extend(["--sub-langs", sub_langs])
+        if extractor_args:
+            args.extend(["--extractor-args", extractor_args])
         if cookies_file:
             args.extend(["--cookies", cookies_file])
         args.append(video_url)
@@ -1367,7 +1369,8 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
 
     attempts = [
         ("preferred", build_args("ar,en,en-orig,en-US,en-GB,en.*")),
-        ("all", build_args()),
+        ("all", build_args("all,-live_chat")),
+        ("web-all", build_args("all,-live_chat", "youtube:player_client=web,default")),
     ]
 
     try:
