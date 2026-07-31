@@ -1572,7 +1572,7 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
 
         try:
             client = OpenAI(api_key=OPENAI_API_KEY)
-            model = os.environ.get("OPENAI_HIGHLIGHTS_MODEL", "gpt-5.6-luna")
+            model = "gpt-5.6-luna"
             logger.info(f"[Highlights] Calling OpenAI Responses API with model={model} for part {part_index}")
 
             response = await asyncio.to_thread(
