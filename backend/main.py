@@ -1337,8 +1337,7 @@ def select_best_lang(subtitles, automatic_captions, spoken_lang):
         for k in automatic_captions.keys():
             return k, True
             
-    logger.warning("[yt-dlp meta] Metadata did not list subtitles; falling back to direct subtitle download request.")
-    return "ar,en,en-orig,en-US,en-GB,en.*", True
+    return None, False
 
 def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, formats=['txt', 'srt']):
     import subprocess
@@ -1482,6 +1481,11 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
         # تحديد أفضل لغة متوفرة لا تسبب خطأ 429
         best_lang, is_auto = select_best_lang(subtitles, automatic_captions, spoken_lang)
         if not best_lang:
+            logger.warning("[yt-dlp meta] No subtitles in metadata; trying direct subtitle download fallback.")
+            fallback_results = try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file_meta, formats=formats)
+            if fallback_results.get("srt") or fallback_results.get("txt"):
+                return fallback_results
+            logger.warning(f"[yt-dlp fallback] {fallback_results.get('error')}")
             results["error"] = "لا توجد أي ملفات ترجمة أو نصوص تلقائية متاحة لهذا الفيديو"
             logger.warning(f"⚠️ [yt-dlp meta] {results['error']}")
             return results
