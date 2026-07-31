@@ -1337,7 +1337,89 @@ def select_best_lang(subtitles, automatic_captions, spoken_lang):
         for k in automatic_captions.keys():
             return k, True
             
-    return None, False
+    logger.warning("[yt-dlp meta] Metadata did not list subtitles; falling back to direct subtitle download request.")
+    return "ar,en,en-orig,en-US,en-GB,en.*", True
+
+def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, formats=['txt', 'srt']):
+    import subprocess
+
+    results = {"srt": None, "txt": None, "title": None, "error": None}
+    output_template = os.path.join(tmpdir, "%(id)s")
+    args = [
+        "yt-dlp",
+        "--write-subs",
+        "--write-auto-subs",
+        "--sub-langs", "ar,en,en-orig,en-US,en-GB,en.*",
+        "--skip-download",
+        "--no-playlist",
+        "--no-warnings",
+        "--no-check-formats",
+        "--ignore-no-formats-error",
+        "--js-runtimes", "node",
+        "-o", output_template,
+    ]
+    if cookies_file:
+        args.extend(["--cookies", cookies_file])
+    args.append(video_url)
+
+    try:
+        result = subprocess.run(args, capture_output=True, text=True, timeout=90)
+        logger.info(f"[yt-dlp fallback] exit code: {result.returncode}")
+        if result.stderr:
+            logger.warning(f"[yt-dlp fallback] stderr: {result.stderr.strip()[:1000]}")
+
+        files = os.listdir(tmpdir)
+        for file_to_remove in ['cookies.txt', 'cookies_meta.txt']:
+            if file_to_remove in files:
+                files.remove(file_to_remove)
+
+        preferred_suffixes = [
+            ".ar.vtt", ".ar.srt",
+            ".en-orig.vtt", ".en-orig.srt",
+            ".en.vtt", ".en.srt",
+            ".en-US.vtt", ".en-US.srt",
+            ".en-GB.vtt", ".en-GB.srt",
+        ]
+        sub_file = None
+        for suffix in preferred_suffixes:
+            matched = [f for f in files if f.endswith(suffix)]
+            if matched:
+                sub_file = matched[0]
+                break
+        if not sub_file:
+            vtt_or_srt_files = [f for f in files if f.endswith('.vtt') or f.endswith('.srt')]
+            if vtt_or_srt_files:
+                sub_file = vtt_or_srt_files[0]
+
+        if not sub_file:
+            results["error"] = "No subtitle file was written by yt-dlp fallback"
+            return results
+
+        filepath = os.path.join(tmpdir, sub_file)
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        is_vtt = sub_file.endswith('.vtt')
+        srt_data = vtt_to_srt(content) if is_vtt else content
+        txt_data = clean_vtt_or_srt_to_txt(content)
+
+        if not srt_data or not parse_srt_cues(srt_data):
+            results["error"] = f"Subtitle file was found but could not be parsed: {sub_file}"
+            return results
+
+        if 'srt' in formats:
+            results['srt'] = srt_data
+        if 'txt' in formats:
+            results['txt'] = txt_data
+        logger.info(f"✅ [yt-dlp fallback] تم جلب ومعالجة الترجمة بنجاح: {sub_file}")
+        return results
+    except subprocess.TimeoutExpired:
+        results["error"] = "yt-dlp fallback timed out after 90 seconds"
+        logger.error(f"[yt-dlp fallback] {results['error']}")
+    except Exception as e:
+        results["error"] = str(e)
+        logger.error(f"[yt-dlp fallback] failed: {e}")
+    return results
 
 def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
     """جلب SRT و TXT من اليوتيوب باستخدام yt-dlp CLI كعملية فرعية مع تجنب خطأ 429."""
