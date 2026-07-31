@@ -1344,28 +1344,45 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
 
     results = {"srt": None, "txt": None, "title": None, "error": None}
     output_template = os.path.join(tmpdir, "%(id)s")
-    args = [
-        "yt-dlp",
-        "--write-subs",
-        "--write-auto-subs",
-        "--sub-langs", "ar,en,en-orig,en-US,en-GB,en.*",
-        "--skip-download",
-        "--no-playlist",
-        "--no-warnings",
-        "--no-check-formats",
-        "--ignore-no-formats-error",
-        "--js-runtimes", "node",
-        "-o", output_template,
+
+    def build_args(sub_langs=None):
+        args = [
+            "yt-dlp",
+            "--write-subs",
+            "--write-auto-subs",
+            "--skip-download",
+            "--no-playlist",
+            "--no-warnings",
+            "--no-check-formats",
+            "--ignore-no-formats-error",
+            "--js-runtimes", "node",
+            "-o", output_template,
+        ]
+        if sub_langs:
+            args.extend(["--sub-langs", sub_langs])
+        if cookies_file:
+            args.extend(["--cookies", cookies_file])
+        args.append(video_url)
+        return args
+
+    attempts = [
+        ("preferred", build_args("ar,en,en-orig,en-US,en-GB,en.*")),
+        ("all", build_args()),
     ]
-    if cookies_file:
-        args.extend(["--cookies", cookies_file])
-    args.append(video_url)
 
     try:
-        result = subprocess.run(args, capture_output=True, text=True, timeout=90)
-        logger.info(f"[yt-dlp fallback] exit code: {result.returncode}")
-        if result.stderr:
-            logger.warning(f"[yt-dlp fallback] stderr: {result.stderr.strip()[:1000]}")
+        for label, args in attempts:
+            before = set(os.listdir(tmpdir))
+            result = subprocess.run(args, capture_output=True, text=True, timeout=90)
+            logger.info(f"[yt-dlp fallback:{label}] exit code: {result.returncode}")
+            if result.stdout:
+                logger.info(f"[yt-dlp fallback:{label}] stdout: {result.stdout.strip()[:1000]}")
+            if result.stderr:
+                logger.warning(f"[yt-dlp fallback:{label}] stderr: {result.stderr.strip()[:1000]}")
+            after = set(os.listdir(tmpdir))
+            written_subs = [f for f in after - before if f.endswith('.vtt') or f.endswith('.srt')]
+            if written_subs:
+                break
 
         files = os.listdir(tmpdir)
         for file_to_remove in ['cookies.txt', 'cookies_meta.txt']:
