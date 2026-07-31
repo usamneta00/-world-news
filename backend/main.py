@@ -17,6 +17,7 @@ import os
 import yt_dlp
 import requests
 from bs4 import BeautifulSoup
+from openai import OpenAI
 import hashlib
 from urllib.parse import urljoin, urlparse, quote
 import html
@@ -1570,32 +1571,29 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
         """
 
         try:
-            headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
-            payload = {
-                "model": os.environ.get("OPENAI_HIGHLIGHTS_MODEL", "gpt-5.6-luna"),
-                "messages": [
-                    {"role": "system", "content": system_msg},
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": 0.1
-            }
-            
+            client = OpenAI(api_key=OPENAI_API_KEY)
+            model = os.environ.get("OPENAI_HIGHLIGHTS_MODEL", "gpt-5.6-luna")
+            logger.info(f"[Highlights] Calling OpenAI Responses API with model={model} for part {part_index}")
+
             response = await asyncio.to_thread(
-                lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=60)
+                lambda: client.responses.create(
+                    model=model,
+                    input=[
+                        {"role": "system", "content": system_msg},
+                        {"role": "user", "content": prompt},
+                    ],
+                )
             )
-            
-            if response.status_code == 200:
-                content = response.json()['choices'][0]['message']['content'].strip()
-                match = re.search(r'\[.*\]', content, re.DOTALL)
-                if match:
-                    try:
-                        return json.loads(match.group(0))
-                    except json.JSONDecodeError as json_err:
-                        logger.error(f"[Highlights] Invalid JSON from AI part {part_index}: {json_err}; content={content[:500]}")
-                        return []
-                logger.warning(f"[Highlights] AI part {part_index} returned no JSON list. content={content[:500]}")
-            else:
-                logger.error(f"[Highlights] OpenAI API error part {part_index}: {response.status_code} - {response.text[:500]}")
+
+            content = (response.output_text or "").strip()
+            match = re.search(r'\[.*\]', content, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group(0))
+                except json.JSONDecodeError as json_err:
+                    logger.error(f"[Highlights] Invalid JSON from AI part {part_index}: {json_err}; content={content[:500]}")
+                    return []
+            logger.warning(f"[Highlights] AI part {part_index} returned no JSON list. content={content[:500]}")
             return []
         except Exception as e:
             logger.error(f"Error in moments AI part {part_index}: {e}")
