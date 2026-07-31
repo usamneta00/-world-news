@@ -1567,7 +1567,7 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
         try:
             headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
             payload = {
-                "model": "gpt-4o-mini",
+                "model": "gpt-5.6-luna",
                 "messages": [
                     {"role": "system", "content": system_msg},
                     {"role": "user", "content": prompt}
