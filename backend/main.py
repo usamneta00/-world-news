@@ -1501,11 +1501,16 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
 
 async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title: str = "", mode: str = "highlights"):
     """استخراج اللحظات الهامة أو المبادئ الأولى من ملف SRT (منطق mosalslat المطور)."""
-    if not OPENAI_API_KEY or not srt_content:
+    if not OPENAI_API_KEY:
+        logger.warning("[Highlights] OPENAI_API_KEY is missing; cannot extract AI moments.")
+        return []
+    if not srt_content:
+        logger.warning("[Highlights] Empty SRT content; cannot extract moments.")
         return []
 
     cues = parse_srt_cues(srt_content)
     if not cues:
+        logger.warning("[Highlights] Could not parse any SRT cues from transcript.")
         return []
 
     # Duration: max of passed duration or last cue end
@@ -1567,7 +1572,7 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
         try:
             headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
             payload = {
-                "model": "gpt-5.6-luna",
+                "model": os.environ.get("OPENAI_HIGHLIGHTS_MODEL", "gpt-5.6-luna"),
                 "messages": [
                     {"role": "system", "content": system_msg},
                     {"role": "user", "content": prompt}
@@ -1583,7 +1588,14 @@ async def analyze_video_highlights_ai(srt_content: str, duration: int = 0, title
                 content = response.json()['choices'][0]['message']['content'].strip()
                 match = re.search(r'\[.*\]', content, re.DOTALL)
                 if match:
-                    return json.loads(match.group(0))
+                    try:
+                        return json.loads(match.group(0))
+                    except json.JSONDecodeError as json_err:
+                        logger.error(f"[Highlights] Invalid JSON from AI part {part_index}: {json_err}; content={content[:500]}")
+                        return []
+                logger.warning(f"[Highlights] AI part {part_index} returned no JSON list. content={content[:500]}")
+            else:
+                logger.error(f"[Highlights] OpenAI API error part {part_index}: {response.status_code} - {response.text[:500]}")
             return []
         except Exception as e:
             logger.error(f"Error in moments AI part {part_index}: {e}")
@@ -2395,15 +2407,10 @@ async def get_video_insight_endpoint(news_type: str, news_id: int, mode: str = "
         return {"error": "لم يتم العثور على ترجمة SRT لهذا الفيديو"}, 500
 
     # جلب مدة الفيديو للتأكد من دقة التوقيتات
-    duration = 0
-    try:
-        ydl_opts = {"quiet": True, "no_warnings": True, "extract_flat": True}
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            meta = ydl.extract_info(news_item.link, download=False)
-            duration = meta.get("duration") or 0
-    except: pass
-
-    results = await analyze_video_highlights_ai(srt, duration, news_item.title or "", mode=mode)
+    # The analyzer derives duration from the final SRT cue. Avoid calling
+    # YouTube again here because it can trigger bot-check failures after the
+    # transcript was already fetched and saved.
+    results = await analyze_video_highlights_ai(srt, 0, news_item.title or "", mode=mode)
     
     if results:
         try:
