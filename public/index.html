@@ -1468,6 +1468,10 @@
                     class="p-2 hover:text-neon-blue transition-colors text-neutral-500" title="تحديثات ملخصات الفيديو">
                     <i data-lucide="radio" class="w-4 h-4"></i>
                 </button>
+                <button id="tab-youtube-research" onclick="switchTab('youtube-research')"
+                    class="p-2 hover:text-red-500 transition-colors text-neutral-500" title="وكيل بحث YouTube">
+                    <i data-lucide="youtube" class="w-4 h-4"></i>
+                </button>
                 <button id="tab-yemen" onclick="switchTab('yemen')"
                     class="p-2 hover:text-neon-blue transition-colors text-neutral-500" title="أخبار اليمن">
                     <i data-lucide="map-pin" class="w-4 h-4"></i>
@@ -1823,6 +1827,37 @@
                 </div>
                 <div id="video-updates-status" class="mb-5 text-xs font-mono text-neutral-500">READY</div>
                 <div id="video-updates-list" class="space-y-4"></div>
+            </section>
+        </div>
+
+        <!-- On-demand YouTube Research View -->
+        <div id="youtube-research-view" class="hidden" dir="rtl">
+            <section class="max-w-6xl mx-auto">
+                <div class="relative overflow-hidden rounded-3xl border border-red-500/20 bg-gradient-to-br from-red-950/40 via-neutral-950 to-neutral-950 p-6 md:p-10 mb-8">
+                    <div class="absolute -top-20 -left-20 w-64 h-64 rounded-full bg-red-600/10 blur-3xl"></div>
+                    <div class="relative">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="w-12 h-12 rounded-2xl bg-red-600 flex items-center justify-center shadow-lg shadow-red-600/20"><i data-lucide="youtube" class="w-6 h-6 text-white"></i></span>
+                            <div>
+                                <p class="text-[10px] font-mono tracking-[0.25em] text-red-400 uppercase">On-demand intelligence</p>
+                                <h2 class="font-serif text-3xl md:text-5xl text-white">YouTube Research Agent</h2>
+                            </div>
+                        </div>
+                        <p class="text-sm text-neutral-400 max-w-3xl leading-7 mb-6">الصق أي خبر أو مقال أو سؤال. سيحوّله النظام إلى خطة بحث متعددة الزوايا، يفحص النتائج وبياناتها، يزيل التكرار، ثم يبني سلسلة فيديوهات موثقة ومترابطة. يبدأ فقط عند طلبك.</p>
+                        <form id="youtube-research-form" class="space-y-4">
+                            <textarea id="youtube-research-prompt" rows="9" required minlength="8"
+                                class="w-full rounded-2xl border border-white/10 bg-black/30 p-5 text-sm text-white placeholder:text-neutral-600 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none resize-y leading-7"
+                                placeholder="@Youtube&#10;&#10;الصق البرومبت أو الخبر أو المقال هنا، وحدد عدد الفيديوهات واللغة والنطاق الزمني إن رغبت..."></textarea>
+                            <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                                <p id="youtube-research-status" class="text-xs font-mono text-neutral-500">جاهز لجلسة بحث جديدة</p>
+                                <button id="youtube-research-submit" type="submit" class="px-6 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-600/20">
+                                    <i data-lucide="search" class="w-4 h-4"></i><span>ابدأ البحث</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <div id="youtube-research-results" class="hidden space-y-6"></div>
             </section>
         </div>
 
@@ -3704,7 +3739,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                 instantVideoListening = false;
                 stopSummaryAudio();
             }
-            const tabs = ['world', 'video-updates', 'yemen', 'newspaper', 'dubbed', 'recommended', 'clusters', 'heatmap'];
+            const tabs = ['world', 'video-updates', 'youtube-research', 'yemen', 'newspaper', 'dubbed', 'recommended', 'clusters', 'heatmap'];
             tabs.forEach(t => {
                 const el = document.getElementById(`tab-${t}`);
                 if (el) {
@@ -3722,6 +3757,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             const heatmapView = document.getElementById('heatmap-view');
             const clustersView = document.getElementById('clusters-view');
             const videoUpdatesView = document.getElementById('video-updates-view');
+            const youtubeResearchView = document.getElementById('youtube-research-view');
             const loader = document.getElementById('loading-state');
 
             if (tab === 'heatmap') {
@@ -3729,6 +3765,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                 if (heatmapView) heatmapView.classList.remove('hidden');
                 if (clustersView) clustersView.classList.add('hidden');
                 if (videoUpdatesView) videoUpdatesView.classList.add('hidden');
+                if (youtubeResearchView) youtubeResearchView.classList.add('hidden');
                 if (loader) loader.classList.add('hidden');
                 initHeatmap();
                 return;
@@ -3739,6 +3776,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                 if (heatmapView) heatmapView.classList.add('hidden');
                 if (clustersView) clustersView.classList.remove('hidden');
                 if (videoUpdatesView) videoUpdatesView.classList.add('hidden');
+                if (youtubeResearchView) youtubeResearchView.classList.add('hidden');
                 if (loader) loader.classList.add('hidden');
                 fetchClusters();
                 if (pendingClusterUpdates.length > 0) {
@@ -3752,9 +3790,22 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                 if (newsContent) newsContent.classList.add('hidden');
                 if (heatmapView) heatmapView.classList.add('hidden');
                 if (clustersView) clustersView.classList.add('hidden');
+                if (youtubeResearchView) youtubeResearchView.classList.add('hidden');
                 if (videoUpdatesView) videoUpdatesView.classList.remove('hidden');
                 if (loader) loader.classList.add('hidden');
                 fetchVideoSummaryUpdates();
+                return;
+            }
+
+            if (tab === 'youtube-research') {
+                hideClusterBanner();
+                if (newsContent) newsContent.classList.add('hidden');
+                if (heatmapView) heatmapView.classList.add('hidden');
+                if (clustersView) clustersView.classList.add('hidden');
+                if (videoUpdatesView) videoUpdatesView.classList.add('hidden');
+                if (youtubeResearchView) youtubeResearchView.classList.remove('hidden');
+                if (loader) loader.classList.add('hidden');
+                lucide.createIcons();
                 return;
             }
 
@@ -3764,6 +3815,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             if (heatmapView) heatmapView.classList.add('hidden');
             if (clustersView) clustersView.classList.add('hidden');
             if (videoUpdatesView) videoUpdatesView.classList.add('hidden');
+            if (youtubeResearchView) youtubeResearchView.classList.add('hidden');
             if (newsContent) newsContent.classList.remove('hidden');
 
             const labels = {
@@ -3786,6 +3838,98 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             else fetchRecommendedNews(recommendedCurrentPage);
         }
 
+        function escapeResearchHtml(value) {
+            return String(value ?? '').replace(/[&<>'"]/g, char => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            })[char]);
+        }
+
+        function researchDate(value) {
+            if (!value) return 'غير متاح';
+            if (/^\d{8}$/.test(String(value))) return `${String(value).slice(0, 4)}-${String(value).slice(4, 6)}-${String(value).slice(6, 8)}`;
+            return String(value);
+        }
+
+        function renderYouTubeResearch(report) {
+            const container = document.getElementById('youtube-research-results');
+            if (!container) return;
+            const stats = report.stats || {};
+            const warnings = (report.warnings || []).map(w => `<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">${escapeResearchHtml(w)}</div>`).join('');
+            const videos = (report.videos || []).map((video, index) => `
+                <article class="group overflow-hidden rounded-2xl border border-white/10 bg-neutral-950/70 hover:border-red-500/40 transition-all">
+                    <div class="grid md:grid-cols-[260px_1fr]">
+                        <a href="${escapeResearchHtml(video.webpage_url)}" target="_blank" rel="noopener" class="relative min-h-48 overflow-hidden bg-black">
+                            <img src="${escapeResearchHtml(video.thumbnail)}" alt="" class="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-500" onerror="this.src='https://img.youtube.com/vi/${escapeResearchHtml(video.video_id)}/hqdefault.jpg'">
+                            <span class="absolute top-4 right-4 w-9 h-9 rounded-full bg-red-600 text-white font-black flex items-center justify-center">${index + 1}</span>
+                        </a>
+                        <div class="p-5 md:p-6">
+                            <div class="flex flex-wrap items-center gap-2 text-[10px] font-mono text-neutral-500 mb-3">
+                                <span>${escapeResearchHtml(video.channel || 'قناة غير معروفة')}</span><span>•</span>
+                                <span>${escapeResearchHtml(researchDate(video.upload_date))}</span><span>•</span>
+                                <span class="text-red-400">${escapeResearchHtml(video.angle || 'عام')}</span>
+                            </div>
+                            <h3 class="text-lg md:text-xl font-bold text-white leading-8 mb-3">${escapeResearchHtml(video.title)}</h3>
+                            <p class="text-sm text-neutral-400 leading-7 mb-4">${escapeResearchHtml(video.summary || '')}</p>
+                            <div class="grid sm:grid-cols-2 gap-3 mb-4 text-xs">
+                                <div class="rounded-xl bg-white/5 p-3"><span class="text-neutral-500">الصلة</span><strong class="float-left text-white">${escapeResearchHtml(video.relevance_score)}/10</strong></div>
+                                <div class="rounded-xl bg-white/5 p-3"><span class="text-neutral-500">قوة النقاش</span><strong class="float-left text-white">${escapeResearchHtml(video.discussion_strength)}/10</strong></div>
+                            </div>
+                            <p class="text-xs text-neutral-500 mb-4"><strong class="text-neutral-300">ما الذي يضيفه؟</strong> ${escapeResearchHtml(video.adds_to_previous || '')}</p>
+                            <a href="${escapeResearchHtml(video.webpage_url)}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 text-sm font-bold text-red-400 hover:text-red-300"><i data-lucide="external-link" class="w-4 h-4"></i> فتح في YouTube</a>
+                        </div>
+                    </div>
+                </article>`).join('');
+            const queries = (report.search_plan || []).map(q => `<span class="inline-flex rounded-full border border-white/10 px-3 py-1.5 text-[11px] text-neutral-400">${escapeResearchHtml(q.query)}</span>`).join('');
+            const contradictions = (report.contradictions || []).map(c => `<li>${escapeResearchHtml(typeof c.conflict === 'string' ? c.conflict : JSON.stringify(c.conflict))}</li>`).join('');
+            const latest = report.latest_development ? `<div class="rounded-2xl border border-neon-blue/20 bg-neon-blue/5 p-5"><p class="text-[10px] font-mono text-neon-blue mb-2">أحدث تطور مرتبط بالقضية</p><a class="font-bold text-white hover:text-neon-blue" target="_blank" rel="noopener" href="${escapeResearchHtml(report.latest_development.url)}">${escapeResearchHtml(report.latest_development.title)}</a><p class="text-xs text-neutral-500 mt-2">${escapeResearchHtml(report.latest_development.source)} — ${escapeResearchHtml(report.latest_development.published)}</p></div>` : '';
+            container.innerHTML = `
+                ${warnings}
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    ${[['الاستعلامات', stats.queries], ['المكتشف', stats.discovered], ['بدون تكرار', stats.unique], ['تم فحصه', stats.metadata_checked], ['المختار', stats.selected]].map(([label, value]) => `<div class="rounded-2xl border border-white/10 bg-white/5 p-4"><strong class="block text-2xl text-white">${escapeResearchHtml(value ?? 0)}</strong><span class="text-[10px] font-mono text-neutral-500">${label}</span></div>`).join('')}
+                </div>
+                <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h3 class="font-bold text-white mb-3">خطة البحث</h3><div class="flex flex-wrap gap-2">${queries}</div><p class="mt-4 text-xs text-neutral-500">السياسة الزمنية: ${escapeResearchHtml(stats.date_policy_applied || 'غير محددة')} — استغرقت الجلسة ${escapeResearchHtml(stats.duration_seconds || 0)} ثانية</p></div>
+                <div class="space-y-4">${videos || '<div class="p-10 text-center text-neutral-500">لم تصل نتائج موثقة إلى الحد المطلوب.</div>'}</div>
+                ${contradictions ? `<div class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5"><h3 class="font-bold text-amber-300 mb-3">التناقضات بين الفيديوهات</h3><ul class="list-disc pr-5 text-sm text-neutral-300 space-y-2">${contradictions}</ul></div>` : ''}
+                ${latest}`;
+            container.classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        async function submitYouTubeResearch(event) {
+            event.preventDefault();
+            const input = document.getElementById('youtube-research-prompt');
+            const button = document.getElementById('youtube-research-submit');
+            const status = document.getElementById('youtube-research-status');
+            const results = document.getElementById('youtube-research-results');
+            const prompt = input?.value?.trim();
+            if (!prompt || prompt.length < 8) return;
+            button.disabled = true;
+            button.classList.add('opacity-60', 'cursor-wait');
+            button.querySelector('span').textContent = 'جاري البحث والتحقق...';
+            status.textContent = 'إنشاء خطة بحث متعددة الزوايا ثم فحص نتائج YouTube...';
+            if (results) results.classList.add('hidden');
+            try {
+                const response = await fetch(`${API_URL}/youtube-research`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt })
+                });
+                const payload = await response.json();
+                if (!response.ok) throw new Error(payload.detail || 'فشل البحث');
+                renderYouTubeResearch(payload);
+                status.textContent = `اكتملت الجلسة: ${payload.stats?.selected || 0} فيديو موثق`;
+            } catch (error) {
+                status.textContent = error.message || 'تعذر إكمال البحث';
+                if (results) {
+                    results.innerHTML = `<div class="rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-red-200">${escapeResearchHtml(error.message || 'تعذر إكمال البحث')}</div>`;
+                    results.classList.remove('hidden');
+                }
+            } finally {
+                button.disabled = false;
+                button.classList.remove('opacity-60', 'cursor-wait');
+                button.querySelector('span').textContent = 'ابدأ بحثًا جديدًا';
+                lucide.createIcons();
+            }
+        }
+
         async function fetchNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/news?page=${p}&limit=20`); const d = await r.json(); allNews = d.items; totalItems = d.total; currentPage = d.page; renderUI(allNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
         async function fetchYemenNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/yemen-news?page=${p}&limit=20`); const d = await r.json(); yemenNews = d.items; yemenTotalItems = d.total; yemenCurrentPage = d.page; renderUI(yemenNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
         async function fetchNewspaperNews(p = 1) { setLoading(true); try { const r = await fetch(`${API_URL}/newspaper-news?page=${p}&limit=20`); const d = await r.json(); newspaperNews = d.items; newspaperTotalItems = d.total; newspaperCurrentPage = d.page; renderUI(newspaperNews); } catch (e) { console.error(e); } finally { setLoading(false); } }
@@ -3796,7 +3940,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             const loader = document.getElementById('loading-state');
             const content = document.getElementById('news-content');
             if (loader) loader.classList.toggle('hidden', !l);
-            if (activeTab !== 'heatmap' && activeTab !== 'clusters' && activeTab !== 'video-updates') {
+            if (activeTab !== 'heatmap' && activeTab !== 'clusters' && activeTab !== 'video-updates' && activeTab !== 'youtube-research') {
                 if (content) content.classList.toggle('hidden', l);
             }
             if (!l) lucide.createIcons();
@@ -4894,6 +5038,9 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                     await runDeepSearch();
                 });
             }
+
+            const youtubeResearchForm = document.getElementById('youtube-research-form');
+            if (youtubeResearchForm) youtubeResearchForm.addEventListener('submit', submitYouTubeResearch);
 
             const deepSearchCloseBtn = document.getElementById('deep-search-close-btn');
             if (deepSearchCloseBtn) deepSearchCloseBtn.addEventListener('click', closeDeepSearchModal);

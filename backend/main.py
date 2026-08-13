@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Set, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, desc
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
@@ -28,6 +29,10 @@ import requests
 import json
 import re
 from fastapi import Form
+try:
+    from .youtube_research import research_youtube
+except ImportError:  # Local start.bat runs ``uvicorn main:app`` from backend/.
+    from youtube_research import research_youtube
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)
@@ -4585,6 +4590,28 @@ def _score_search_item(item: Dict[str, Any], terms: List[str], topic_tokens: Lis
             score += 1
 
     return score
+
+
+class YouTubeResearchRequest(BaseModel):
+    prompt: str = Field(min_length=8, max_length=20000)
+
+
+@app.post("/api/youtube-research")
+async def run_youtube_research(request: YouTubeResearchRequest):
+    """Run one independent, on-demand research session inside this app."""
+    try:
+        return await research_youtube(
+            request.prompt,
+            api_key=OPENAI_API_KEY,
+            transcript_fetcher=lambda url: fetch_youtube_subs_downsub(url, formats=["txt"]),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.exception("YouTube Research session failed")
+        raise HTTPException(status_code=500, detail=f"تعذر إكمال جلسة البحث: {exc}")
 
 
 @app.get("/api/deep-search")
