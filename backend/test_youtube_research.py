@@ -6,10 +6,84 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import youtube_research as youtube_research_module
-from youtube_research import _enrich_transcripts, _extract_count, _extract_date_policy, analyze_prompt, research_youtube, verify_video
+from youtube_research import _enrich_transcripts, _extract_count, _extract_date_policy, _latest_web_development, analyze_prompt, research_youtube, verify_video
 
 
 class YouTubeResearchTests(unittest.TestCase):
+    def test_advanced_date_range_never_backfills_old_videos(self):
+        now = datetime.now(timezone.utc)
+
+        def search(query, limit):
+            return [
+                {
+                    "video_id": f"daterange{i:02d}",
+                    "title": f"موضوع حديث perspective{i:02d} evidence{i:02d}",
+                    "channel": f"قناة {i}",
+                    "url": "x",
+                }
+                for i in range(12)
+            ]
+
+        def metadata(video_id):
+            index = int(video_id[-2:])
+            published = now - timedelta(days=index if index < 4 else 365 + index)
+            return {
+                "video_id": video_id,
+                "title": f"موضوع حديث perspective{index:02d} evidence{index:02d}",
+                "channel": f"قناة {index}",
+                "channel_id": f"channel-{index}",
+                "uploader": f"قناة {index}",
+                "upload_date": published.strftime("%Y%m%d"),
+                "timestamp": published.timestamp(),
+                "duration": 1200,
+                "description": f"شرح الموضوع angle{index:02d}",
+                "view_count": 10000 + index,
+                "live_status": "not_live",
+                "original_url": f"https://youtube.com/watch?v={video_id}",
+                "webpage_url": f"https://youtube.com/watch?v={video_id}",
+                "language": "ar",
+                "availability": "public",
+            }
+
+        report = asyncio.run(research_youtube(
+            "@Youtube أريد 7 فيديوهات عن موضوع حديث",
+            api_key="", search_fn=search, metadata_fn=metadata,
+            filters={
+                "date_from": (now - timedelta(days=7)).strftime("%Y-%m-%d"),
+                "date_to": now.strftime("%Y-%m-%d"),
+                "strict_filters": False,
+                "require_transcript": False,
+            },
+        ))
+
+        self.assertEqual(report["stats"]["selected"], 4)
+        self.assertTrue(all((now - _published).days <= 7 for _published in [
+            datetime.fromtimestamp(video["timestamp"], tz=timezone.utc) for video in report["videos"]
+        ]))
+        self.assertTrue(any("قيد قطعي" in warning for warning in report["warnings"]))
+
+    def test_latest_development_uses_builtin_xml_parser(self):
+        class Response:
+            content = b"""<?xml version="1.0" encoding="UTF-8"?>
+                <rss><channel><item>
+                    <title>Latest verified development</title>
+                    <link>https://example.com/story</link>
+                    <source>Example News</source>
+                    <pubDate>Fri, 14 Aug 2026 08:00:00 GMT</pubDate>
+                </item></channel></rss>"""
+
+            @staticmethod
+            def raise_for_status():
+                return None
+
+        with patch.object(youtube_research_module.requests, "get", return_value=Response()):
+            result = _latest_web_development("test topic")
+
+        self.assertEqual(result["title"], "Latest verified development")
+        self.assertEqual(result["url"], "https://example.com/story")
+        self.assertEqual(result["source"], "Example News")
+        self.assertEqual(result["published"], "Fri, 14 Aug 2026 08:00:00 GMT")
+
     def test_ai_cannot_invent_hidden_date_or_language_filters(self):
         invented = {
             "date_policy": [{"days": 7, "label": "last week", "expand_if_needed": False}],
@@ -47,7 +121,7 @@ class YouTubeResearchTests(unittest.TestCase):
         previous_limit = youtube_research_module._youtube_rate_limit_until
         youtube_research_module._youtube_rate_limit_until = 0.0
         try:
-            with patch.object(youtube_research_module, "fetch_video_metadata", return_value=None):
+            with patch.object(youtube_research_module, "fetch_video_metadata", return_value=None) as metadata_fetch:
                 report = asyncio.run(research_youtube(
                     "@Youtube حسن الظن بالله أريد 8 فيديوهات",
                     api_key="", search_fn=search, metadata_fn=verify_video,
@@ -61,6 +135,7 @@ class YouTubeResearchTests(unittest.TestCase):
         self.assertEqual(report["filters"]["min_discussion_score"], 0)
         self.assertEqual(report["filters"]["min_reliability"], 0)
         self.assertFalse(report["filters"]["strict_filters"])
+        metadata_fetch.assert_not_called()
         self.assertGreaterEqual(report["stats"]["metadata_checked"], 8)
         self.assertEqual(report["stats"]["selected"], 8)
 

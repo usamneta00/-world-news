@@ -18,10 +18,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 from urllib.parse import quote_plus
+from xml.etree import ElementTree
 
 import requests
 import yt_dlp
-from bs4 import BeautifulSoup
 
 
 logger = logging.getLogger(__name__)
@@ -435,11 +435,11 @@ def verify_video(video_id: str) -> Optional[Dict[str, Any]]:
 
 
 def _metadata_from_search_result(candidate: Dict[str, Any]) -> Dict[str, Any]:
-    """Keep the session useful when YouTube temporarily blocks detail pages.
+    """Build discovery metadata without reopening every YouTube watch page.
 
-    yt-dlp already validated the video id while producing the search result.
-    These limited fields are therefore safer than issuing dozens of immediate
-    retries against the watch page from a shared cloud IP.
+    yt-dlp has already resolved the video while producing the search result.
+    Reusing those fields avoids a second burst of dozens of watch-page requests;
+    expensive extraction is reserved for the final 7-10 transcript targets.
     """
     video_id = str(candidate.get("video_id") or "")
     timestamp = candidate.get("timestamp")
@@ -554,6 +554,24 @@ def _discussion_format(item: Dict[str, Any]) -> Tuple[str, float]:
     if item.get("channel_id") and _infer_channel_type(item) in {"official", "news"}:
         score += 0.5
     return detected, round(min(10.0, score), 1)
+
+
+def _matches_explicit_date_range(item: Dict[str, Any], filters: Dict[str, Any]) -> bool:
+    """Treat dates selected in the advanced UI as non-relaxable boundaries."""
+    if not filters.get("date_from") and not filters.get("date_to"):
+        return True
+    published = _published_at(item)
+    if not published:
+        return False
+    if filters.get("date_from"):
+        start = datetime.strptime(filters["date_from"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        if published < start:
+            return False
+    if filters.get("date_to"):
+        end = datetime.strptime(filters["date_to"], "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
+        if published >= end:
+            return False
+    return True
 
 
 def _filter_failures(item: Dict[str, Any], filters: Dict[str, Any], language_match: bool) -> List[str]:
@@ -1072,16 +1090,22 @@ def _latest_web_development(topic: str) -> Optional[Dict[str, str]]:
         url = f"https://news.google.com/rss/search?q={quote_plus(topic)}&hl=ar&gl=SA&ceid=SA:ar"
         response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
         response.raise_for_status()
-        soup = BeautifulSoup(response.content, "xml")
-        item = soup.find("item")
-        if not item:
+        # RSS is XML, but BeautifulSoup's optional XML backend requires lxml.
+        # ElementTree is part of Python and keeps this lookup portable on
+        # minimal Railway images without adding another parser dependency.
+        root = ElementTree.fromstring(response.content)
+        item = root.find(".//item")
+        if item is None:
             return None
-        source = item.find("source")
+        def value(tag: str) -> str:
+            node = item.find(tag)
+            return (node.text or "").strip() if node is not None else ""
+
         return {
-            "title": item.title.get_text(strip=True) if item.title else "",
-            "url": item.link.get_text(strip=True) if item.link else "",
-            "source": source.get_text(strip=True) if source else "Google News",
-            "published": item.pubDate.get_text(strip=True) if item.pubDate else "",
+            "title": value("title"),
+            "url": value("link"),
+            "source": value("source") or "Google News",
+            "published": value("pubDate"),
         }
     except Exception as exc:
         logger.info("Latest-development lookup skipped: %s", exc)
@@ -1208,7 +1232,15 @@ async def research_youtube(
     # explicit exclusions leave too few candidates for the requested sequence.
     while checked < deep_limit:
         batch = ranked_discovery[checked:min(checked + 20, deep_limit)]
-        metadata = await _map_limited(metadata_fn, [item["video_id"] for item in batch])
+        # The production search already returns usable flat metadata. Do not
+        # immediately reopen up to 80 watch pages: that burst is what triggers
+        # HTTP 429 on shared cloud IPs. Custom metadata functions remain useful
+        # for tests/integrations and retain the original verification behavior.
+        metadata = (
+            []
+            if metadata_fn is verify_video
+            else await _map_limited(metadata_fn, [item["video_id"] for item in batch])
+        )
         metadata_by_id = {item["video_id"]: item for item in metadata if item}
         for item in batch:
             full = metadata_by_id.get(item["video_id"])
@@ -1241,6 +1273,15 @@ async def research_youtube(
     if not brief.date_policy:
         eligible = [item for item in enriched if item["accepted"]]
     ranked, tier_counts = _selection_pool(enriched, dated if brief.date_policy else enriched)
+    explicit_date_range = bool(applied_filters["date_from"] or applied_filters["date_to"])
+    if explicit_date_range:
+        # A date entered in the advanced filters is a factual boundary, not a
+        # quality preference. Never pull old videos from best_available merely
+        # to reach seven results when the user explicitly chose a date range.
+        ranked = [item for item in ranked if _matches_explicit_date_range(item, applied_filters)]
+        tier_counts["outside_explicit_date_removed"] = len(enriched) - len([
+            item for item in enriched if _matches_explicit_date_range(item, applied_filters)
+        ])
     provisional_rate_limit_mode = False
     if applied_filters["strict_filters"]:
         ranked = [item for item in ranked if item.get("selection_tier") == "strict_match"]
@@ -1249,6 +1290,7 @@ async def research_youtube(
             provisional = [
                 dict(item) for item in enriched
                 if item.get("metadata_limited") and item.get("title")
+                and _matches_explicit_date_range(item, applied_filters)
                 and item.get("rejection_reason") != "محتوى مستبعد حسب طلب المستخدم"
             ]
             for item in provisional:
@@ -1339,10 +1381,10 @@ async def research_youtube(
                if transcript_stats["attempted"] and transcript_stats["available"] < transcript_stats["attempted"] else [])
             + ([f"فعّل YouTube حد الطلبات مؤقتًا؛ استُخدمت بيانات نتائج البحث الأولية لـ{limited_metadata_count} فيديو بدل تكرار الطلبات المحجوبة، وأُجّل استخراج {transcript_stats['skipped_rate_limit']} نصًا حتى انتهاء فترة التهدئة."]
                if youtube_rate_limited_now and (limited_metadata_count or transcript_stats["skipped_rate_limit"]) else [])
-            + ([f"تعذر جلب صفحة التفاصيل لـ{limited_metadata_count} نتيجة؛ لذلك فُحصت بيانات نتيجة بحث YouTube الأولية ولم تُسقط الفيديوهات من القائمة."]
-               if limited_metadata_count and not youtube_rate_limited_now else [])
             + ([f"الشروط الصارمة أعادت {len(selected)} فقط من أصل {brief.desired_video_count['min']} مطلوبة. لم يضف الوكيل فيديوهات خارج التاريخ أو نوع القناة أو صيغة النقاش أو من دون نص مستخرج لمجرد إكمال العدد."]
                if applied_filters["strict_filters"] and len(selected) < brief.desired_video_count["min"] else [])
+            + ([f"نطاق التاريخ المحدد يدويًا قيد قطعي؛ عُرضت {len(selected)} نتائج داخله فقط، ولم تُضف فيديوهات أقدم لإكمال العدد المطلوب."]
+               if explicit_date_range and len(selected) < brief.desired_video_count["min"] else [])
             + (["لم يجد YouTube نتائج جديدة مختلفة بعد تطبيق شروطك؛ لذلك أعاد الوكيل فحص أفضل نتائج الجلسة السابقة بدل ترك الصفحة فارغة."]
                if reused_previous_results else [])
             + ([f"يعرض الوكيل {len(selected)} مرشحين ظاهرين فعلًا في YouTube بتحقق جزئي. لم يدّعِ مطابقة تاريخهم أو وجود نقاش متعدد الأطراف لأن YouTube حجب صفحات التفاصيل والنصوص مؤقتًا."]
