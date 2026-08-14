@@ -1222,6 +1222,22 @@ def _fallback_stage(item: Dict[str, Any]) -> Tuple[int, str]:
 
 
 async def _analyze_finalists(items: List[Dict[str, Any]], brief: ResearchBrief, api_key: str) -> None:
+    # Keep sequencing deterministic and local. No model call is made here: the
+    # user only needs the ordered titles, metadata and transcript.
+    del brief, api_key
+    for index, item in enumerate(items):
+        fallback_rank, fallback_label = _fallback_stage(item)
+        item["angle"] = str((item.get("matched_angles") or ["general"])[0])
+        item["narrative_stage"] = fallback_label
+        item["contradictions"] = []
+        item["event_claims"] = []
+        item["sequence_position"] = fallback_rank * 100 + index + 1
+    items.sort(key=lambda item: item.get("sequence_position", 999))
+    for index, item in enumerate(items, start=1):
+        item["sequence_position"] = index
+        item["sequence_value"] = round(max(1.0, 10.0 - (index - 1) * 0.3), 1)
+    return
+
     compact = [{
         "video_id": item["video_id"], "title": item["title"], "channel": item["channel"],
         "description": item.get("description", "")[:1800], "angle": (item.get("matched_angles") or ["general"])[0],

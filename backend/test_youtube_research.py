@@ -47,6 +47,7 @@ class YouTubeResearchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as cache_dir, patch.dict(os.environ, {
             "YOUTUBE_RESEARCH_WEB_CACHE_DIR": cache_dir,
             "YOUTUBE_RESEARCH_WEB_MAX_CALLS": "11",
+            "YOUTUBE_RESEARCH_ECONOMY_MAX_CALLS": "2",
         }, clear=False), patch.object(youtube_research_module.requests, "post", side_effect=fake_post):
             first = asyncio.run(youtube_research_module._openai_web_research(
                 "cost test", brief, filters, "test-key", "economy"
@@ -425,8 +426,10 @@ class YouTubeResearchTests(unittest.TestCase):
         self.assertTrue(all(video["selection_tier"] == "strict_match" for video in report["videos"]))
         self.assertTrue(all(video["transcript_available"] for video in report["videos"]))
         self.assertEqual([video["sequence_position"] for video in report["videos"]], list(range(1, 8)))
-        self.assertTrue(all(video["ordering_reason"] for video in report["videos"]))
-        self.assertTrue(all(video["strengths"] and video["weaknesses"] for video in report["videos"]))
+        self.assertTrue(all("summary" not in video for video in report["videos"]))
+        self.assertTrue(all("ordering_reason" not in video for video in report["videos"]))
+        self.assertTrue(all("strengths" not in video and "weaknesses" not in video for video in report["videos"]))
+        self.assertTrue(all("participants" not in video for video in report["videos"]))
         self.assertTrue(report["timeline"]["items"])
         self.assertTrue(all(item["video_id"] for item in report["timeline"]["items"]))
 
