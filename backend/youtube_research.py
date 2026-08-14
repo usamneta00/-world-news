@@ -25,6 +25,7 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 YOUTUBE_URL = "https://www.youtube.com/watch?v={}"
+MIN_FINAL_VIDEOS = 7
 
 
 @dataclass
@@ -36,7 +37,7 @@ class ResearchBrief:
     organizations: List[str] = field(default_factory=list)
     events: List[str] = field(default_factory=list)
     subtopics: List[str] = field(default_factory=list)
-    desired_video_count: Dict[str, int] = field(default_factory=lambda: {"min": 5, "max": 10})
+    desired_video_count: Dict[str, int] = field(default_factory=lambda: {"min": MIN_FINAL_VIDEOS, "max": 10})
     preferred_languages: List[str] = field(default_factory=list)
     preferred_sources: List[str] = field(default_factory=list)
     date_policy: List[Dict[str, Any]] = field(default_factory=list)
@@ -115,12 +116,12 @@ def _extract_count(prompt: str) -> Dict[str, int]:
     if pairs:
         low, high = map(int, pairs[-1])
         low, high = min(low, high), max(low, high)
-        return {"min": max(1, min(low, 20)), "max": max(1, min(high, 20))}
+        return {"min": max(MIN_FINAL_VIDEOS, min(low, 20)), "max": max(MIN_FINAL_VIDEOS, min(high, 20))}
     match = re.search(r"(\d{1,2})\s*(?:فيديو|فيديوهات|videos?)", prompt, re.I)
     if match:
         count = max(1, min(int(match.group(1)), 20))
-        return {"min": count, "max": count}
-    return {"min": 5, "max": 10}
+        return {"min": max(MIN_FINAL_VIDEOS, count), "max": max(MIN_FINAL_VIDEOS, count)}
+    return {"min": MIN_FINAL_VIDEOS, "max": 10}
 
 
 def _extract_date_policy(prompt: str) -> List[Dict[str, Any]]:
@@ -162,8 +163,8 @@ async def analyze_prompt(user_prompt: str, api_key: str = "") -> ResearchBrief:
     values["main_topic"] = str(values.get("main_topic") or cleaned)
     counts = values.get("desired_video_count") or fallback.desired_video_count
     values["desired_video_count"] = {
-        "min": max(1, min(int(counts.get("min", fallback.desired_video_count["min"])), 20)),
-        "max": max(1, min(int(counts.get("max", fallback.desired_video_count["max"])), 20)),
+        "min": max(MIN_FINAL_VIDEOS, min(int(counts.get("min", fallback.desired_video_count["min"])), 20)),
+        "max": max(MIN_FINAL_VIDEOS, min(int(counts.get("max", fallback.desired_video_count["max"])), 20)),
     }
     if values["desired_video_count"]["max"] < values["desired_video_count"]["min"]:
         values["desired_video_count"]["max"] = values["desired_video_count"]["min"]
@@ -422,7 +423,9 @@ def _date_filter(items: Sequence[Dict[str, Any]], policies: Sequence[Dict[str, A
 
 def _score_candidate(item: Dict[str, Any], brief: ResearchBrief) -> Dict[str, Any]:
     body = f"{item.get('title', '')} {item.get('description', '')[:2500]}"
-    relevance = min(10.0, 2.5 + 12 * _overlap(brief.main_topic, body))
+    topic_overlap = _overlap(brief.main_topic, body)
+    query_overlap = max((_overlap(query, body) for query in item.get("matched_queries") or []), default=0.0)
+    relevance = min(10.0, 2.5 + 12 * max(topic_overlap, query_overlap * 0.8))
     duration = float(item.get("duration") or 0)
     depth = min(10.0, 3 + math.log1p(duration / 60)) if duration else 3.0
     analysis_terms = "تحليل مقابلة نقاش وثائقي خبير analysis interview documentary discussion explained"
@@ -461,7 +464,8 @@ def _score_candidate(item: Dict[str, Any], brief: ResearchBrief) -> Dict[str, An
             None if relevance >= 3.5 else "صلة ضعيفة بموضوع البحث"
         ),
     })
-    item["total_score"] = round(relevance * 0.32 + discussion * 0.2 + depth * 0.14 + source * 0.14 + freshness * 0.12 + 0.8 + (0.7 if preferred_source else 0), 2)
+    item["query_match_score"] = round(min(10.0, query_overlap * 10), 1)
+    item["total_score"] = round(relevance * 0.34 + discussion * 0.2 + depth * 0.14 + source * 0.14 + freshness * 0.1 + item["query_match_score"] * 0.08 + (0.7 if preferred_source else 0), 2)
     return item
 
 
@@ -483,6 +487,31 @@ def _deduplicate(candidates: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return list(unique.values())
 
 
+def _balanced_discovery_order(candidates: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Round-robin strong candidates across research angles.
+
+    A global top-N often over-represents one popular query. Balancing first by
+    angle makes the later metadata comparison cover the whole research plan.
+    """
+    buckets: Dict[str, List[Dict[str, Any]]] = {}
+    for candidate in candidates:
+        angle = str((candidate.get("matched_angles") or ["general"])[0])
+        buckets.setdefault(angle, []).append(candidate)
+    for bucket in buckets.values():
+        bucket.sort(key=lambda item: item.get("discovery_score", 0), reverse=True)
+    ordered: List[Dict[str, Any]] = []
+    bucket_names = sorted(buckets, key=lambda name: buckets[name][0].get("discovery_score", 0), reverse=True)
+    while bucket_names:
+        next_names = []
+        for name in bucket_names:
+            if buckets[name]:
+                ordered.append(buckets[name].pop(0))
+            if buckets[name]:
+                next_names.append(name)
+        bucket_names = next_names
+    return ordered
+
+
 def _deduplicate_reuploads(candidates: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Collapse likely reuploads while retaining the strongest/original-looking item."""
     groups: List[List[Dict[str, Any]]] = []
@@ -501,7 +530,7 @@ def _deduplicate_reuploads(candidates: Sequence[Dict[str, Any]]) -> List[Dict[st
     return unique
 
 
-async def _map_limited(func: Callable[[str], Any], ids: Sequence[str], concurrency: int = 2) -> List[Any]:
+async def _map_limited(func: Callable[[str], Any], ids: Sequence[str], concurrency: int = 4) -> List[Any]:
     semaphore = asyncio.Semaphore(concurrency)
 
     async def one(video_id: str) -> Any:
@@ -540,7 +569,7 @@ def _select_diverse(items: Sequence[Dict[str, Any]], maximum: int) -> List[Dict[
         def adjusted(item: Dict[str, Any]) -> float:
             channel = str(item.get("channel") or "").casefold()
             angle = str((item.get("matched_angles") or ["general"])[0])
-            return float(item.get("total_score") or 0) - channels.get(channel, 0) * 1.8 - angles.get(angle, 0) * 0.7
+            return float(item.get("selection_score") or item.get("total_score") or 0) - channels.get(channel, 0) * 1.8 - angles.get(angle, 0) * 0.7
 
         best = max(remaining, key=adjusted)
         remaining.remove(best)
@@ -551,6 +580,52 @@ def _select_diverse(items: Sequence[Dict[str, Any]], maximum: int) -> List[Dict[
         best["novelty_score"] = round(max(1.0, 10 - (channels[channel] - 1) * 3 - (angles[angle] - 1)), 1)
         selected.append(best)
     return selected
+
+
+def _selection_pool(
+    enriched: Sequence[Dict[str, Any]],
+    dated: Sequence[Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+    """Prefer strict matches, then expand constraints without returning too few.
+
+    Explicitly excluded content remains excluded. Date, language, and the soft
+    relevance threshold may be relaxed, but the relaxation is visible in the
+    final report on every affected video.
+    """
+    dated_ids = {item["video_id"] for item in dated}
+    tiers: Dict[str, List[Dict[str, Any]]] = {
+        "strict_match": [],
+        "expanded_date": [],
+        "best_available": [],
+    }
+    for item in enriched:
+        reason = str(item.get("rejection_reason") or "")
+        if reason == "محتوى مستبعد حسب طلب المستخدم":
+            continue
+        candidate = dict(item)
+        if candidate["video_id"] in dated_ids and candidate.get("accepted"):
+            candidate["selection_tier"] = "strict_match"
+            candidate["selection_note"] = "مطابق للموضوع والقيود المطلوبة."
+            tier_bonus = 100
+        elif candidate.get("accepted"):
+            candidate["selection_tier"] = "expanded_date"
+            candidate["selection_note"] = "اختيار قوي مطابق للموضوع بعد توسيع النطاق الزمني."
+            tier_bonus = 50
+        else:
+            candidate["selection_tier"] = "best_available"
+            candidate["selection_note"] = "أفضل خيار موثق متاح لإكمال السلسلة بعد تخفيف شرط الصلة أو اللغة."
+            candidate["total_score"] = round(float(candidate.get("total_score") or 0) - 1.25, 2)
+            tier_bonus = 0
+        candidate["selection_score"] = round(
+            tier_bonus + float(candidate.get("total_score") or 0) + float(candidate.get("relevance_score") or 0) * 0.4,
+            2,
+        )
+        tiers[candidate["selection_tier"]].append(candidate)
+
+    ordered: List[Dict[str, Any]] = []
+    for tier in ("strict_match", "expanded_date", "best_available"):
+        ordered.extend(sorted(tiers[tier], key=lambda item: item.get("total_score", 0), reverse=True))
+    return ordered, {tier: len(items) for tier, items in tiers.items()}
 
 
 async def _analyze_finalists(items: List[Dict[str, Any]], brief: ResearchBrief, api_key: str) -> None:
@@ -658,26 +733,44 @@ async def research_youtube(
 
     for item in unique:
         item["discovery_score"] = _overlap(brief.main_topic, item.get("title", "")) * 10 + float(item.get("query_priority") or 0)
-    deep_limit = min(20, max(12, brief.desired_video_count["max"] * 4))
-    shortlist = sorted(unique, key=lambda item: item["discovery_score"], reverse=True)[: min(deep_limit, len(unique))]
-    metadata = await _map_limited(metadata_fn, [item["video_id"] for item in shortlist])
-    metadata_by_id = {item["video_id"]: item for item in metadata if item}
-    enriched = []
-    for item in shortlist:
-        full = metadata_by_id.get(item["video_id"])
-        if not full:
-            continue
-        full["matched_queries"] = item.get("matched_queries", [])
-        full["matched_angles"] = item.get("matched_angles", [])
-        enriched.append(_score_candidate(full, brief))
+    ranked_discovery = _balanced_discovery_order(unique)
+    # If strict matches remain scarce, inspect a much wider pool before
+    # relaxing constraints. This favors the strongest videos across all query
+    # angles instead of merely filling the requested count from the first page.
+    deep_limit = min(len(ranked_discovery), max(80, brief.desired_video_count["max"] * 8))
+    enriched: List[Dict[str, Any]] = []
+    checked = 0
+    # Inspect in batches. Continue beyond the first twenty when verification or
+    # explicit exclusions leave too few candidates for the requested sequence.
+    while checked < deep_limit:
+        batch = ranked_discovery[checked:min(checked + 20, deep_limit)]
+        metadata = await _map_limited(metadata_fn, [item["video_id"] for item in batch])
+        metadata_by_id = {item["video_id"]: item for item in metadata if item}
+        for item in batch:
+            full = metadata_by_id.get(item["video_id"])
+            if not full:
+                continue
+            full["matched_queries"] = item.get("matched_queries", [])
+            full["matched_angles"] = item.get("matched_angles", [])
+            full["discovery_score"] = item.get("discovery_score", 0)
+            enriched.append(_score_candidate(full, brief))
+        checked += len(batch)
+        usable = [item for item in enriched if item.get("rejection_reason") != "محتوى مستبعد حسب طلب المستخدم"]
+        snapshot = _deduplicate_reuploads(enriched)
+        snapshot_dated, _ = _date_filter(snapshot, brief.date_policy, brief.desired_video_count["min"])
+        strict_count = len([item for item in (snapshot_dated if brief.date_policy else snapshot) if item.get("accepted")])
+        if checked >= 40 and strict_count >= brief.desired_video_count["min"]:
+            break
+        if checked >= deep_limit and len(usable) >= MIN_FINAL_VIDEOS:
+            break
 
     enriched = _deduplicate_reuploads(enriched)
     dated, applied_date_policy = _date_filter(enriched, brief.date_policy, brief.desired_video_count["min"])
     eligible = [item for item in dated if item["accepted"]]
     if not brief.date_policy:
         eligible = [item for item in enriched if item["accepted"]]
-    ranked = sorted(eligible, key=lambda item: item["total_score"], reverse=True)
-    finalist_pool = ranked[: max(brief.desired_video_count["max"] * 3, 15)]
+    ranked, tier_counts = _selection_pool(enriched, dated if brief.date_policy else enriched)
+    finalist_pool = ranked[: max(brief.desired_video_count["max"] * 4, 28)]
     selected = _select_diverse(finalist_pool, brief.desired_video_count["max"])
 
     if transcript_fetcher and selected:
@@ -711,8 +804,11 @@ async def research_youtube(
             "discovered": len(discovered),
             "unique": len(unique),
             "metadata_checked": len(enriched),
+            "discovery_pool_examined": checked,
             "eligible": len(eligible),
             "selected": len(selected),
+            "selection_tiers": tier_counts,
+            "selection_strategy": "strict_then_expanded_best_across_angles",
             "date_policy_applied": applied_date_policy,
             "duration_seconds": round((finished - started).total_seconds(), 2),
         },
@@ -720,8 +816,11 @@ async def research_youtube(
         "contradictions": contradictions,
         "latest_development": latest,
         "search_terms": _search_terms(plan),
-        "warnings": [] if len(selected) >= brief.desired_video_count["min"] else [
-            f"تم التحقق من {len(selected)} فيديو فقط ضمن القيود، وهو أقل من الحد المطلوب {brief.desired_video_count['min']}."
-        ],
+        "warnings": (
+            ([f"تم توسيع بعض القيود لاختيار أفضل {len(selected)} فيديوهات موثقة بدل الاكتفاء بالنتائج المطابقة حرفيًا."]
+             if any(item.get("selection_tier") != "strict_match" for item in selected) else [])
+            + ([f"لم يتوفر سوى {len(selected)} فيديوهات قابلة للتحقق، رغم فحص نتائج إضافية؛ الحد المستهدف {brief.desired_video_count['min']}." ]
+               if len(selected) < brief.desired_video_count["min"] else [])
+        ),
         "generated_at": finished.isoformat(),
     }
