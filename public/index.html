@@ -3954,6 +3954,21 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             return values.length ? values.map(item => `<li>${escapeResearchHtml(item)}</li>`).join('') : `<li>${escapeResearchHtml(emptyText)}</li>`;
         }
 
+        async function parseYouTubeResearchResponse(response) {
+            const raw = await response.text();
+            if (!raw.trim()) {
+                throw new Error(`أعاد الخادم ردًا فارغًا (${response.status}). أعد المحاولة بعد لحظات.`);
+            }
+            try {
+                return JSON.parse(raw);
+            } catch (_) {
+                const gatewayError = [502, 503, 504].includes(response.status);
+                throw new Error(gatewayError
+                    ? 'انتهت مهلة الخادم أثناء البحث الويب. تم إيقاف الرد غير المكتمل؛ أعد المحاولة وسيستخدم الوكيل ميزانية بحث أقصر.'
+                    : `أعاد الخادم ردًا غير صالح بدل JSON (HTTP ${response.status}). راجع سجل الخادم لمعرفة الخطأ الأصلي.`);
+            }
+        }
+
         function renderYouTubeResearch(report) {
             const container = document.getElementById('youtube-research-results');
             if (!container) return;
@@ -4072,7 +4087,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             button.disabled = true;
             button.classList.add('opacity-60', 'cursor-wait');
             button.querySelector('span').textContent = 'جاري البحث والتحقق...';
-            status.textContent = 'إنشاء خطة بحث متعددة الزوايا ثم فحص نتائج YouTube...';
+            status.textContent = 'بدء بحث ويب متعدد المصادر، ثم التحقق من أفضل روابط YouTube...';
             if (results) results.classList.add('hidden');
             try {
                 const fieldValue = id => document.getElementById(id)?.value ?? '';
@@ -4109,7 +4124,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ prompt, exclude_video_ids: previousVideoIds, filters })
                 });
-                const payload = await response.json();
+                const payload = await parseYouTubeResearchResponse(response);
                 if (!response.ok) throw new Error(payload.detail || 'فشل البحث');
                 const currentVideoIds = (payload.videos || []).map(video => video.video_id).filter(Boolean);
                 localStorage.setItem('youtubeResearchPreviousVideoIds', JSON.stringify({ signature: searchSignature, ids: currentVideoIds }));

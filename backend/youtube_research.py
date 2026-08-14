@@ -334,11 +334,11 @@ async def _openai_web_research(
                 "model": os.environ.get("YOUTUBE_RESEARCH_WEB_MODEL", "gpt-5.6"),
                 "tools": [{"type": "web_search", "search_context_size": "high"}],
                 "tool_choice": "required",
-                "max_tool_calls": max(4, int(os.environ.get("YOUTUBE_RESEARCH_WEB_MAX_CALLS", "12"))),
+                "max_tool_calls": max(4, min(12, int(os.environ.get("YOUTUBE_RESEARCH_WEB_MAX_CALLS", "8")))),
                 "max_output_tokens": 12000,
                 "input": prompt,
             },
-            timeout=max(120, int(os.environ.get("YOUTUBE_RESEARCH_WEB_TIMEOUT", "300"))),
+            timeout=max(45, min(180, int(os.environ.get("YOUTUBE_RESEARCH_WEB_TIMEOUT", "75")))),
         )
         response.raise_for_status()
         payload = response.json()
