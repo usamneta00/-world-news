@@ -4653,6 +4653,7 @@ class YouTubeResearchRequest(BaseModel):
     prompt: str = Field(min_length=8, max_length=20000)
     exclude_video_ids: List[str] = Field(default_factory=list)
     filters: YouTubeResearchFilters = Field(default_factory=YouTubeResearchFilters)
+    research_mode: str = Field(default="economy", pattern="^(economy|local)$")
 
 
 _youtube_research_jobs: Dict[str, Dict[str, Any]] = {}
@@ -4671,6 +4672,7 @@ def _youtube_research_arguments(request: YouTubeResearchRequest) -> Dict[str, An
         "transcript_delay_seconds": YOUTUBE_TRANSCRIPT_DELAY_SECONDS,
         "transcript_cache_dir": YOUTUBE_TRANSCRIPT_CACHE_DIR,
         "filters": request.filters.model_dump() if hasattr(request.filters, "model_dump") else request.filters.dict(),
+        "research_mode": request.research_mode,
     }
 
 

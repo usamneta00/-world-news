@@ -1,4 +1,6 @@
 import asyncio
+import json
+import os
 import tempfile
 import time
 import unittest
@@ -10,6 +12,60 @@ from youtube_research import _enrich_transcripts, _extract_count, _extract_date_
 
 
 class YouTubeResearchTests(unittest.TestCase):
+    def test_economy_web_research_caps_cost_and_reuses_cache(self):
+        captured_payloads = []
+
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                result = {
+                    "overview": "Verified overview",
+                    "videos": [{
+                        "youtube_url": "https://www.youtube.com/watch?v=costmode001",
+                        "title": "Verified video",
+                        "channel": "Verified channel",
+                        "published_date": "2026-08-14",
+                        "why_relevant": "Directly relevant",
+                    }],
+                }
+                return {
+                    "output": [
+                        {"type": "web_search_call", "id": "search-1"},
+                        {"type": "message", "content": [{"type": "output_text", "text": json.dumps(result)}]},
+                    ],
+                    "usage": {"input_tokens": 321, "output_tokens": 123},
+                }
+
+        def fake_post(url, **kwargs):
+            captured_payloads.append(kwargs["json"])
+            return FakeResponse()
+
+        brief = youtube_research_module.ResearchBrief(main_topic="cost test")
+        filters = youtube_research_module._normalise_filters(None)
+        with tempfile.TemporaryDirectory() as cache_dir, patch.dict(os.environ, {
+            "YOUTUBE_RESEARCH_WEB_CACHE_DIR": cache_dir,
+            "YOUTUBE_RESEARCH_WEB_MAX_CALLS": "11",
+        }, clear=False), patch.object(youtube_research_module.requests, "post", side_effect=fake_post):
+            first = asyncio.run(youtube_research_module._openai_web_research(
+                "cost test", brief, filters, "test-key", "economy"
+            ))
+            second = asyncio.run(youtube_research_module._openai_web_research(
+                "cost test", brief, filters, "test-key", "economy"
+            ))
+
+        self.assertEqual(len(captured_payloads), 1)
+        self.assertEqual(captured_payloads[0]["model"], "gpt-5.6-luna")
+        self.assertEqual(captured_payloads[0]["max_tool_calls"], 2)
+        self.assertEqual(captured_payloads[0]["max_output_tokens"], 5000)
+        self.assertEqual(captured_payloads[0]["tools"][0]["search_context_size"], "low")
+        self.assertEqual(captured_payloads[0]["reasoning"], {"effort": "none"})
+        self.assertEqual(first["_usage"]["web_search_calls"], 1)
+        self.assertEqual(first["_usage"]["input_tokens"], 321)
+        self.assertTrue(second["_usage"]["cache_hit"])
+        self.assertEqual(second["_usage"]["web_search_calls"], 0)
+
     def test_background_job_returns_result_without_long_http_request(self):
         import main as main_module
 

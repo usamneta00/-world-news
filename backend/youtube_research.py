@@ -8,6 +8,7 @@ each call is an independent research session derived from the supplied prompt.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import math
@@ -27,6 +28,7 @@ import yt_dlp
 logger = logging.getLogger(__name__)
 YOUTUBE_URL = "https://www.youtube.com/watch?v={}"
 MIN_FINAL_VIDEOS = 7
+YOUTUBE_RESEARCH_OPENAI_MODEL = "gpt-5.6-luna"
 try:
     YOUTUBE_RATE_LIMIT_COOLDOWN_SECONDS = max(60, int(os.environ.get("YOUTUBE_RATE_LIMIT_COOLDOWN", "900")))
 except ValueError:
@@ -143,7 +145,7 @@ async def _openai_json(system: str, prompt: str, api_key: str, max_tokens: int =
             "https://api.openai.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json={
-                "model": os.environ.get("YOUTUBE_RESEARCH_MODEL", "gpt-4o-mini"),
+                "model": YOUTUBE_RESEARCH_OPENAI_MODEL,
                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
                 "temperature": 0.2,
                 "response_format": {"type": "json_object"},
@@ -282,9 +284,33 @@ async def _openai_web_research(
     brief: "ResearchBrief",
     filters: Dict[str, Any],
     api_key: str,
+    research_mode: str = "economy",
 ) -> Optional[Dict[str, Any]]:
-    if not api_key or str(os.environ.get("YOUTUBE_RESEARCH_WEB_ENABLED", "true")).casefold() in {"0", "false", "no"}:
+    research_mode = research_mode if research_mode in {"economy", "local"} else "economy"
+    if research_mode == "local" or not api_key or str(os.environ.get("YOUTUBE_RESEARCH_WEB_ENABLED", "true")).casefold() in {"0", "false", "no"}:
         return None
+
+    model = YOUTUBE_RESEARCH_OPENAI_MODEL
+    cache_root = os.environ.get(
+        "YOUTUBE_RESEARCH_WEB_CACHE_DIR",
+        os.path.join("/data" if os.path.exists("/data") else ".", "youtube_web_research_cache"),
+    )
+    cache_signature = json.dumps(
+        {"prompt": _clean_prompt(user_prompt).casefold(), "filters": filters, "mode": research_mode, "model": model},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    cache_path = os.path.join(cache_root, f"{hashlib.sha256(cache_signature.encode('utf-8')).hexdigest()}.json")
+    try:
+        cache_ttl = max(300, int(os.environ.get("YOUTUBE_RESEARCH_WEB_CACHE_TTL_SECONDS", "21600")))
+        if os.path.exists(cache_path) and time.time() - os.path.getmtime(cache_path) <= cache_ttl:
+            with open(cache_path, "r", encoding="utf-8") as cache_file:
+                cached = json.load(cache_file)
+            if isinstance(cached, dict) and cached.get("videos"):
+                cached["_usage"] = {**(cached.get("_usage") or {}), "cache_hit": True, "web_search_calls": 0}
+                return cached
+    except (OSError, ValueError, TypeError) as exc:
+        logger.info("Ignoring unavailable web research cache: %s", exc)
 
     date_requirement = (
         f"النطاق اليدوي القطعي من {filters.get('date_from') or 'البداية'} إلى {filters.get('date_to') or 'الآن'}."
@@ -327,26 +353,53 @@ async def _openai_web_research(
 """.strip()
 
     def call() -> Optional[Dict[str, Any]]:
+        # Keep the low-cost budget isolated from every legacy/deep setting.
+        maximum_calls = max(1, min(3, int(os.environ.get("YOUTUBE_RESEARCH_ECONOMY_MAX_CALLS", "2"))))
+        maximum_output = 5000
         response = requests.post(
             "https://api.openai.com/v1/responses",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json={
-                "model": os.environ.get("YOUTUBE_RESEARCH_WEB_MODEL", "gpt-5.6"),
-                "tools": [{"type": "web_search", "search_context_size": "high"}],
+                "model": model,
+                "tools": [{"type": "web_search", "search_context_size": "low"}],
                 "tool_choice": "required",
-                "max_tool_calls": max(4, min(12, int(os.environ.get("YOUTUBE_RESEARCH_WEB_MAX_CALLS", "8")))),
-                "max_output_tokens": 12000,
+                "max_tool_calls": maximum_calls,
+                "max_output_tokens": maximum_output,
+                "reasoning": {"effort": "none"},
                 "input": prompt,
             },
-            timeout=max(45, min(180, int(os.environ.get("YOUTUBE_RESEARCH_WEB_TIMEOUT", "75")))),
+            timeout=max(30, min(180, int(os.environ.get("YOUTUBE_RESEARCH_WEB_TIMEOUT", "45")))),
         )
         response.raise_for_status()
         payload = response.json()
-        return _normalise_web_research(_json_from_text(_responses_output_text(payload)))
+        result = _normalise_web_research(_json_from_text(_responses_output_text(payload)))
+        if result:
+            usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else {}
+            result["_usage"] = {
+                "model": model,
+                "web_search_calls": len([
+                    item for item in payload.get("output") or []
+                    if isinstance(item, dict) and item.get("type") == "web_search_call"
+                ]),
+                "input_tokens": int(usage.get("input_tokens") or 0),
+                "output_tokens": int(usage.get("output_tokens") or 0),
+                "cache_hit": False,
+            }
+        return result
 
     try:
         result = await asyncio.to_thread(call)
-        return result if result and result.get("videos") else None
+        if result and result.get("videos"):
+            try:
+                os.makedirs(cache_root, exist_ok=True)
+                temp_path = f"{cache_path}.{os.getpid()}.tmp"
+                with open(temp_path, "w", encoding="utf-8") as cache_file:
+                    json.dump(result, cache_file, ensure_ascii=False)
+                os.replace(temp_path, cache_path)
+            except OSError as exc:
+                logger.info("Could not persist web research cache: %s", exc)
+            return result
+        return None
     except Exception as exc:
         logger.warning("ChatGPT-style web research discovery failed; using YouTube fallback: %s", exc)
         return None
@@ -1339,17 +1392,22 @@ async def research_youtube(
     transcript_cache_dir: str = "",
     exclude_video_ids: Sequence[str] = (),
     filters: Optional[Dict[str, Any]] = None,
+    research_mode: str = "economy",
 ) -> Dict[str, Any]:
     """Run one complete on-demand research session and return a final report."""
     if not user_prompt or len(user_prompt.strip()) < 8:
         raise ValueError("يرجى إدخال موضوع بحث واضح ومفصل.")
     api_key = api_key if api_key is not None else os.environ.get("OPENAI_API_KEY", "")
+    research_mode = research_mode if research_mode in {"economy", "local"} else "economy"
+    # One economical Responses call is enough. The former deep mode used three
+    # additional planning/analysis calls and is intentionally disabled.
+    planning_api_key = ""
     started = datetime.now(timezone.utc)
     applied_filters = _normalise_filters(filters)
-    brief = await analyze_prompt(user_prompt, api_key)
-    web_research = await _openai_web_research(user_prompt, brief, applied_filters, api_key)
+    brief = await analyze_prompt(user_prompt, planning_api_key)
+    web_research = await _openai_web_research(user_prompt, brief, applied_filters, api_key, research_mode)
     web_candidates = list((web_research or {}).get("videos") or [])
-    base_plan = await build_search_plan(brief, api_key)
+    base_plan = await build_search_plan(brief, planning_api_key)
     content_contexts = {
         "panel_discussion": ("نقاش محللون خبراء", "panel discussion analysts"),
         "debate": ("مناظرة رأي مقابل", "debate opposing views"),
@@ -1539,7 +1597,7 @@ async def research_youtube(
     finalist_pool.sort(key=lambda item: item.get("selection_score", 0), reverse=True)
     selected = _select_diverse(finalist_pool, final_video_limit)
 
-    await _analyze_finalists(selected, brief, api_key)
+    await _analyze_finalists(selected, brief, planning_api_key)
     timeline = _build_event_timeline(selected)
     contradictions = []
     for item in selected:
@@ -1556,6 +1614,7 @@ async def research_youtube(
         "topic": brief.main_topic,
         "brief": brief.as_dict(),
         "filters": applied_filters,
+        "research_mode": research_mode,
         "search_plan": plan,
         "stats": {
             "queries": len(plan),
@@ -1577,6 +1636,11 @@ async def research_youtube(
             ),
             "web_research_used": bool(web_candidates),
             "web_research_candidates": len(web_candidates),
+            "web_research_model": ((web_research or {}).get("_usage") or {}).get("model", ""),
+            "web_search_calls": int(((web_research or {}).get("_usage") or {}).get("web_search_calls") or 0),
+            "openai_input_tokens": int(((web_research or {}).get("_usage") or {}).get("input_tokens") or 0),
+            "openai_output_tokens": int(((web_research or {}).get("_usage") or {}).get("output_tokens") or 0),
+            "web_research_cache_hit": bool(((web_research or {}).get("_usage") or {}).get("cache_hit")),
             "strict_filters_applied": applied_filters["strict_filters"],
             "provisional_rate_limit_mode": provisional_rate_limit_mode,
             "transcripts_attempted": transcript_stats["attempted"],
@@ -1617,7 +1681,7 @@ async def research_youtube(
             + ([f"يعرض الوكيل {len(selected)} مرشحين ظاهرين فعلًا في YouTube بتحقق جزئي. لم يدّعِ مطابقة تاريخهم أو وجود نقاش متعدد الأطراف لأن YouTube حجب صفحات التفاصيل والنصوص مؤقتًا."]
                if provisional_rate_limit_mode and selected else [])
             + (["تعذر مسار البحث الويب التحقيقي؛ استُخدم بحث YouTube المحلي الاحتياطي، وقد تكون قدرته على التحقق من السياق الخارجي أقل من ChatGPT Work."]
-               if api_key and not web_candidates else [])
+               if research_mode != "local" and api_key and not web_candidates else [])
         ),
         "generated_at": finished.isoformat(),
     }
