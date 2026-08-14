@@ -996,12 +996,17 @@ async def _analyze_finalists(items: List[Dict[str, Any]], brief: ResearchBrief, 
         item["adds_to_previous"] = str(analysis.get("adds_to_previous") or ("يمهد لفهم القضية." if index == 0 else "يضيف زاوية مختلفة إلى ما سبق."))
         fallback_rank, fallback_label = _fallback_stage(item)
         item["narrative_stage"] = str(analysis.get("narrative_stage") or fallback_label)
-        item["ordering_reason"] = str(analysis.get("ordering_reason") or (
+        fallback_ordering_reason = (
+            "ترتيب مؤقت حسب صلة العنوان بعبارات البحث؛ تعذر التحقق من التاريخ والنص بسبب حظر YouTube المؤقت."
+            if item.get("verification_status") == "partial_due_to_youtube_rate_limit" else
             f"ترتيب آلي في مرحلة «{fallback_label}» اعتمادًا على زاوية البحث وتاريخ النشر والبيانات المتحققة."
-        ))
+        )
+        item["ordering_reason"] = str(analysis.get("ordering_reason") or fallback_ordering_reason)
         item["strengths"] = analysis.get("strengths") if isinstance(analysis.get("strengths"), list) else [
             "يتوافق عنوان الفيديو وبياناته مع موضوع البحث وشروط المناقشة.",
-            "استخُرج النص وأُدخل في قياس قوة المناقشة." if item.get("transcript_available") else "تم التحقق من بيانات الفيديو المتاحة.",
+            "استخُرج النص وأُدخل في قياس قوة المناقشة." if item.get("transcript_available") else
+            "الفيديو ظاهر فعليًا في نتائج بحث YouTube، لكن تحقق التفاصيل مؤجل." if item.get("verification_status") == "partial_due_to_youtube_rate_limit" else
+            "تم التحقق من بيانات الفيديو المتاحة.",
         ]
         item["weaknesses"] = analysis.get("weaknesses") if isinstance(analysis.get("weaknesses"), list) else ([
             "لا تتوفر ترجمة قابلة للاستخراج؛ التحليل مبني على العنوان والوصف."
@@ -1011,7 +1016,9 @@ async def _analyze_finalists(items: List[Dict[str, Any]], brief: ResearchBrief, 
         item["discussion_dynamics"] = str(analysis.get("discussion_dynamics") or "لم يسمِّ التحليل الآلي أطرافًا غير مثبتة في النص.")
         item["exclusive_value"] = str(analysis.get("exclusive_value") or "لا توجد دعوى حصرية غير مثبتة؛ التقييم مبني على النص والبيانات المتاحة فقط.")
         item["analysis_basis"] = str(analysis.get("analysis_basis") or (
-            "النص الكامل المستخرج وبيانات الفيديو." if item.get("transcript_available") else "بيانات الفيديو الوصفية فقط."
+            "النص الكامل المستخرج وبيانات الفيديو." if item.get("transcript_available") else
+            "عنوان ورابط نتيجة بحث YouTube فقط؛ التحقق التفصيلي مؤجل بسبب الحظر." if item.get("verification_status") == "partial_due_to_youtube_rate_limit" else
+            "بيانات الفيديو الوصفية فقط."
         ))
         claims = analysis.get("event_claims")
         item["event_claims"] = [claim for claim in claims if isinstance(claim, dict)] if isinstance(claims, list) else []
@@ -1246,10 +1253,29 @@ async def research_youtube(
     if not brief.date_policy:
         eligible = [item for item in enriched if item["accepted"]]
     ranked, tier_counts = _selection_pool(enriched, dated if brief.date_policy else enriched)
+    provisional_rate_limit_mode = False
     if applied_filters["strict_filters"]:
         ranked = [item for item in ranked if item.get("selection_tier") == "strict_match"]
+        if not ranked and _youtube_rate_limited():
+            provisional_rate_limit_mode = True
+            provisional = [
+                dict(item) for item in enriched
+                if item.get("metadata_limited") and item.get("title")
+                and item.get("rejection_reason") != "محتوى مستبعد حسب طلب المستخدم"
+            ]
+            for item in provisional:
+                item["selection_tier"] = "provisional_rate_limit"
+                item["verification_status"] = "partial_due_to_youtube_rate_limit"
+                item["selection_note"] = (
+                    "مرشح ظاهر في نتائج YouTube، لكن تعذر التحقق من التاريخ والمدة والنص بسبب الحظر المؤقت."
+                )
+                item["selection_score"] = round(
+                    float(item.get("discovery_score") or 0) + float(item.get("relevance_score") or 0), 2
+                )
+            ranked = sorted(provisional, key=lambda item: item.get("selection_score", 0), reverse=True)
+            tier_counts["provisional_rate_limit"] = len(ranked)
     finalist_pool = ranked[: max(brief.desired_video_count["max"] * 4, 28)]
-    if applied_filters["strict_filters"] and applied_filters["require_transcript"]:
+    if applied_filters["strict_filters"] and applied_filters["require_transcript"] and not provisional_rate_limit_mode:
         default_probe_count = max(
             brief.desired_video_count["max"],
             min(28, brief.desired_video_count["max"] * 3),
@@ -1269,7 +1295,7 @@ async def research_youtube(
         transcript_fetcher if applied_filters["require_transcript"] else None,
         probe_count,
     )
-    if applied_filters["strict_filters"] and applied_filters["require_transcript"]:
+    if applied_filters["strict_filters"] and applied_filters["require_transcript"] and not provisional_rate_limit_mode:
         finalist_pool = [
             item for item in finalist_pool
             if item.get("transcript_available")
@@ -1310,6 +1336,7 @@ async def research_youtube(
                 if applied_filters["strict_filters"] else "strict_then_expanded_best_across_angles"
             ),
             "strict_filters_applied": applied_filters["strict_filters"],
+            "provisional_rate_limit_mode": provisional_rate_limit_mode,
             "transcripts_attempted": transcript_stats["attempted"],
             "transcripts_available": transcript_stats["available"],
             "transcripts_skipped_rate_limit": transcript_stats["skipped_rate_limit"],
@@ -1325,7 +1352,7 @@ async def research_youtube(
         "search_terms": _search_terms(plan),
         "warnings": (
             ([f"تم توسيع بعض القيود لاختيار أفضل {len(selected)} فيديوهات موثقة بدل الاكتفاء بالنتائج المطابقة حرفيًا."]
-             if any(item.get("selection_tier") != "strict_match" for item in selected) else [])
+             if any(item.get("selection_tier") in {"expanded_date", "best_available"} for item in selected) else [])
             + ([f"لم يتوفر سوى {len(selected)} فيديوهات قابلة للتحقق، رغم فحص نتائج إضافية؛ الحد المستهدف {brief.desired_video_count['min']}." ]
                if len(selected) < brief.desired_video_count["min"] else [])
             + ([f"تعذر استخراج ترجمة لبعض المرشحين: نجح {transcript_stats['available']} من {transcript_stats['attempted']}. تم توضيح ذلك داخل نقاط ضعف كل فيديو."]
@@ -1336,6 +1363,8 @@ async def research_youtube(
                if applied_filters["strict_filters"] and len(selected) < brief.desired_video_count["min"] else [])
             + (["لم يجد YouTube نتائج جديدة مختلفة بعد تطبيق شروطك؛ لذلك أعاد الوكيل فحص أفضل نتائج الجلسة السابقة بدل ترك الصفحة فارغة."]
                if reused_previous_results else [])
+            + ([f"يعرض الوكيل {len(selected)} مرشحين ظاهرين فعلًا في YouTube بتحقق جزئي. لم يدّعِ مطابقة تاريخهم أو وجود نقاش متعدد الأطراف لأن YouTube حجب صفحات التفاصيل والنصوص مؤقتًا."]
+               if provisional_rate_limit_mode and selected else [])
         ),
         "generated_at": finished.isoformat(),
     }

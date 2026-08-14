@@ -3960,6 +3960,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             const stats = report.stats || {};
             const warnings = (report.warnings || []).map(w => `<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">${escapeResearchHtml(w)}</div>`).join('');
             const videos = (report.videos || []).map((video, index) => {
+                const isProvisional = video.selection_tier === 'provisional_rate_limit';
                 const transcript = video.transcript_available ? `
                     <details class="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 overflow-hidden">
                         <summary class="cursor-pointer px-4 py-3 text-xs font-bold text-emerald-300 flex items-center justify-between gap-3"><span>النص المستخرج عبر yt-dlp</span><span class="font-mono text-[10px]">${escapeResearchHtml(video.transcript_chars || 0)} حرف · جودة ${escapeResearchHtml(video.transcript_quality || 0)}/10</span></summary>
@@ -3980,8 +3981,9 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                                 <span>${escapeResearchHtml(researchDate(video.upload_date))}</span><span>•</span>
                                 <span class="text-red-400">${escapeResearchHtml(video.angle || 'عام')}</span>
                                 <span class="rounded-full bg-red-500/10 px-2 py-1 text-red-300">${escapeResearchHtml(video.narrative_stage || 'مرحلة تحليلية')}</span>
-                                <span class="rounded-full px-2 py-1 ${video.selection_tier === 'strict_match' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-300'}">${video.selection_tier === 'strict_match' ? 'مطابق للقيود' : 'اختيار تكميلي قوي'}</span>
+                                <span class="rounded-full px-2 py-1 ${video.selection_tier === 'strict_match' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-300'}">${video.selection_tier === 'strict_match' ? 'مطابق ومتحقق' : isProvisional ? 'مرشح — تحقق جزئي' : 'اختيار تكميلي قوي'}</span>
                             </div>
+                            ${isProvisional ? '<div class="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-6 text-amber-200">هذا الفيديو ظاهر فعلًا في نتائج YouTube، لكن التاريخ والنص ونوع النقاش لم تُتحقق بسبب حظر الطلبات المؤقت.</div>' : ''}
                             <h3 class="text-lg md:text-xl font-bold text-white leading-8 mb-3">${escapeResearchHtml(video.title)}</h3>
                             <p class="text-sm text-neutral-400 leading-7 mb-4">${escapeResearchHtml(video.summary || '')}</p>
                             <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4 text-xs">
@@ -4029,7 +4031,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             container.innerHTML = `
                 ${warnings}
                 <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                    ${[['الاستعلامات', stats.queries], ['المكتشف', stats.discovered], ['بدون تكرار', stats.unique], ['تم فحصه', stats.metadata_checked], ['نصوص مفحوصة', stats.transcripts_attempted], ['نصوص متاحة', stats.transcripts_available], ['المختار', stats.selected]].map(([label, value]) => `<div class="rounded-2xl border border-white/10 bg-white/5 p-4"><strong class="block text-2xl text-white">${escapeResearchHtml(value ?? 0)}</strong><span class="text-[10px] font-mono text-neutral-500">${label}</span></div>`).join('')}
+                    ${[['الاستعلامات', stats.queries], ['المكتشف', stats.discovered], ['بدون تكرار', stats.unique], ['تم فحصه', stats.metadata_checked], ['نصوص مفحوصة', stats.transcripts_attempted], ['نصوص متاحة', stats.transcripts_available], [stats.provisional_rate_limit_mode ? 'معروض جزئيًا' : 'المختار', stats.selected]].map(([label, value]) => `<div class="rounded-2xl border border-white/10 bg-white/5 p-4"><strong class="block text-2xl text-white">${escapeResearchHtml(value ?? 0)}</strong><span class="text-[10px] font-mono text-neutral-500">${label}</span></div>`).join('')}
                 </div>
                 <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h3 class="font-bold text-white mb-3">خطة البحث</h3><div class="flex flex-wrap gap-2">${queries}</div><p class="mt-4 text-xs text-neutral-500">السياسة الزمنية: ${escapeResearchHtml(stats.date_policy_applied || 'غير محددة')} — استغرقت الجلسة ${escapeResearchHtml(stats.duration_seconds || 0)} ثانية</p></div>
                 <section class="rounded-2xl border border-red-500/20 bg-gradient-to-b from-red-950/20 to-neutral-950 p-5 md:p-6"><h3 class="font-bold text-white mb-1">مسار النقاش من البداية إلى النهاية</h3><p class="text-xs text-neutral-500 mb-5">شاهد الفيديوهات بالترتيب الموضح؛ كل حلقة تبني على ما قبلها وتضيف مرحلة جديدة.</p><div>${sequence}</div></section>
@@ -4096,7 +4098,10 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                 renderYouTubeResearch(payload);
                 const excludedCount = payload.stats?.excluded_from_previous_search || 0;
                 const reusedPrevious = Boolean(payload.stats?.reused_previous_results);
-                status.textContent = `اكتملت الجلسة: ${payload.stats?.selected || 0} فيديو موثق${reusedPrevious ? ' من أفضل النتائج المتاحة سابقًا' : ' جديد'} — توفرت نصوص ${payload.stats?.transcripts_available || 0} من ${payload.stats?.transcripts_attempted || 0}${excludedCount && !reusedPrevious ? ` — تم استبعاد ${excludedCount} من البحث السابق` : ''}`;
+                const provisionalMode = Boolean(payload.stats?.provisional_rate_limit_mode);
+                status.textContent = provisionalMode
+                    ? `اكتمل الاكتشاف: عُرض ${payload.stats?.selected || 0} مرشحين بتحقق جزئي لأن YouTube حجب صفحات التفاصيل مؤقتًا.`
+                    : `اكتملت الجلسة: ${payload.stats?.selected || 0} فيديو موثق${reusedPrevious ? ' من أفضل النتائج المتاحة سابقًا' : ' جديد'} — توفرت نصوص ${payload.stats?.transcripts_available || 0} من ${payload.stats?.transcripts_attempted || 0}${excludedCount && !reusedPrevious ? ` — تم استبعاد ${excludedCount} من البحث السابق` : ''}`;
             } catch (error) {
                 status.textContent = error.message || 'تعذر إكمال البحث';
                 if (results) {

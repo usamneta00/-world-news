@@ -308,6 +308,39 @@ class YouTubeResearchTests(unittest.TestCase):
         self.assertEqual(report["stats"]["selected"], 7)
         self.assertGreater(report["stats"]["discovered"], 0)
 
+    def test_strict_mode_displays_provisional_candidates_during_rate_limit(self):
+        def search(query, limit):
+            return [
+                {
+                    "video_id": f"blocked{i:04d}",
+                    "title": f"تطورات الرسوم الجمركية والطائرات المسيرة زاوية{i} محور{i}",
+                    "channel": f"قناة إخبارية {i}",
+                    "url": "x",
+                }
+                for i in range(32)
+            ]
+
+        previous_limit = youtube_research_module._youtube_rate_limit_until
+        youtube_research_module._youtube_rate_limit_until = time.monotonic() + 60
+        try:
+            report = asyncio.run(research_youtube(
+                "@Youtube أريد 7 فيديوهات حديثة عن الرسوم الجمركية والطائرات المسيرة",
+                api_key="", search_fn=search, metadata_fn=verify_video,
+                transcript_fetcher=lambda url: {"txt": "لن يعمل أثناء الحظر"},
+                filters={
+                    "channel_type": "official", "content_type": "panel_discussion",
+                    "min_discussion_score": 6, "min_reliability": 7,
+                    "require_transcript": True, "strict_filters": True,
+                },
+            ))
+        finally:
+            youtube_research_module._youtube_rate_limit_until = previous_limit
+
+        self.assertEqual(report["stats"]["selected"], 7)
+        self.assertTrue(report["stats"]["provisional_rate_limit_mode"])
+        self.assertTrue(all(video["selection_tier"] == "provisional_rate_limit" for video in report["videos"]))
+        self.assertGreaterEqual(report["stats"]["transcripts_skipped_rate_limit"], 7)
+
 
 if __name__ == "__main__":
     unittest.main()
