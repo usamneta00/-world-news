@@ -133,30 +133,30 @@
         }
 
         #tab-youtube-research {
-            width: 2.5rem;
-            height: 2.5rem;
+            width: auto;
+            height: auto;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            color: #ffffff;
-            background: #dc2626;
+            color: #ef4444;
+            background: transparent;
             border: 0;
-            border-radius: 9999px;
-            box-shadow: 0 4px 16px rgba(220, 38, 38, 0.28);
+            border-radius: 0.5rem;
+            box-shadow: none;
         }
 
         #tab-youtube-research:hover,
         #tab-youtube-research.active {
-            color: #ffffff;
-            background: #ef4444;
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.38);
+            color: #f87171;
+            background: rgba(239, 68, 68, 0.08);
+            transform: none;
+            box-shadow: none;
         }
 
         #tab-youtube-research svg {
-            width: 1.25rem;
-            height: 1.25rem;
-            stroke-width: 2.4;
+            width: 1rem;
+            height: 1rem;
+            stroke-width: 2;
         }
 
         /* Custom Scrollbar */
@@ -1508,8 +1508,8 @@
                     <i data-lucide="radio" class="w-4 h-4"></i>
                 </button>
                 <button id="tab-youtube-research" onclick="switchTab('youtube-research')"
-                    class="shrink-0 transition-all" title="وكيل بحث YouTube" aria-label="وكيل بحث YouTube">
-                    <i data-lucide="youtube" class="w-5 h-5"></i>
+                    class="shrink-0 p-2 transition-colors" title="وكيل بحث YouTube" aria-label="وكيل بحث YouTube">
+                    <i data-lucide="youtube" class="w-4 h-4"></i>
                 </button>
                 <button id="tab-yemen" onclick="switchTab('yemen')"
                     class="p-2 hover:text-neon-blue transition-colors text-neutral-500" title="أخبار اليمن">
@@ -3965,13 +3965,23 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             status.textContent = 'إنشاء خطة بحث متعددة الزوايا ثم فحص نتائج YouTube...';
             if (results) results.classList.add('hidden');
             try {
+                let previousVideoIds = [];
+                try {
+                    const saved = JSON.parse(localStorage.getItem('youtubeResearchPreviousVideoIds') || '[]');
+                    if (Array.isArray(saved)) previousVideoIds = saved.filter(Boolean).slice(0, 100);
+                } catch (_) { previousVideoIds = []; }
                 const response = await fetch(`${API_URL}/youtube-research`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt })
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt, exclude_video_ids: previousVideoIds })
                 });
                 const payload = await response.json();
                 if (!response.ok) throw new Error(payload.detail || 'فشل البحث');
+                const currentVideoIds = (payload.videos || []).map(video => video.video_id).filter(Boolean);
+                localStorage.setItem('youtubeResearchPreviousVideoIds', JSON.stringify(currentVideoIds));
                 renderYouTubeResearch(payload);
-                status.textContent = `اكتملت الجلسة: ${payload.stats?.selected || 0} فيديو موثق`;
+                const excludedCount = payload.stats?.excluded_from_previous_search || 0;
+                status.textContent = `اكتملت الجلسة: ${payload.stats?.selected || 0} فيديو موثق جديد${excludedCount ? ` — تم استبعاد ${excludedCount} من البحث السابق` : ''}`;
             } catch (error) {
                 status.textContent = error.message || 'تعذر إكمال البحث';
                 if (results) {

@@ -705,6 +705,7 @@ async def research_youtube(
     search_fn: Callable[[str, int], List[Dict[str, Any]]] = search_youtube,
     metadata_fn: Callable[[str], Optional[Dict[str, Any]]] = verify_video,
     transcript_fetcher: Optional[Callable[[str], Dict[str, Any]]] = None,
+    exclude_video_ids: Sequence[str] = (),
 ) -> Dict[str, Any]:
     """Run one complete on-demand research session and return a final report."""
     if not user_prompt or len(user_prompt.strip()) < 8:
@@ -728,8 +729,12 @@ async def research_youtube(
             candidate["query_priority"] = query["priority"]
             discovered.append(candidate)
     unique = _deduplicate(discovered)
+    excluded_ids = {str(video_id).strip() for video_id in exclude_video_ids if str(video_id).strip()}
+    excluded_previous_count = len([item for item in unique if item.get("video_id") in excluded_ids])
+    if excluded_ids:
+        unique = [item for item in unique if item.get("video_id") not in excluded_ids]
     if not unique:
-        raise RuntimeError("لم يعثر YouTube على نتائج قابلة للفحص لهذا الطلب.")
+        raise RuntimeError("لم يعثر YouTube على نتائج جديدة مختلفة عن جلسة البحث السابقة لهذا الطلب.")
 
     for item in unique:
         item["discovery_score"] = _overlap(brief.main_topic, item.get("title", "")) * 10 + float(item.get("query_priority") or 0)
@@ -803,6 +808,7 @@ async def research_youtube(
             "queries": len(plan),
             "discovered": len(discovered),
             "unique": len(unique),
+            "excluded_from_previous_search": excluded_previous_count,
             "metadata_checked": len(enriched),
             "discovery_pool_examined": checked,
             "eligible": len(eligible),

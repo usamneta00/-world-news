@@ -49,7 +49,7 @@ class YouTubeResearchTests(unittest.TestCase):
         def search(query, limit):
             return [
                 {"video_id": f"fillvid{i:05d}", "title": f"إيران والولايات المتحدة تحليل الصراع محورتحليلي{i}", "channel": f"قناة {i}", "url": "x"}
-                for i in range(12)
+                for i in range(16)
             ]
 
         def metadata(video_id):
@@ -76,6 +76,16 @@ class YouTubeResearchTests(unittest.TestCase):
         self.assertEqual(report["videos"][0]["selection_tier"], "strict_match")
         self.assertTrue(any(v["selection_tier"] == "expanded_date" for v in report["videos"]))
         self.assertTrue(report["warnings"])
+
+        first_ids = {video["video_id"] for video in report["videos"]}
+        second_report = asyncio.run(research_youtube(
+            "@Youtube إيران والولايات المتحدة وتحليل الصراع، أريد 7 فيديوهات من آخر أسبوع",
+            api_key="", search_fn=search, metadata_fn=metadata, exclude_video_ids=first_ids,
+        ))
+        second_ids = {video["video_id"] for video in second_report["videos"]}
+        self.assertEqual(second_report["stats"]["selected"], 7)
+        self.assertTrue(first_ids.isdisjoint(second_ids))
+        self.assertEqual(second_report["stats"]["excluded_from_previous_search"], 7)
 
 
 if __name__ == "__main__":

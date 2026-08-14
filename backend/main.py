@@ -4594,6 +4594,7 @@ def _score_search_item(item: Dict[str, Any], terms: List[str], topic_tokens: Lis
 
 class YouTubeResearchRequest(BaseModel):
     prompt: str = Field(min_length=8, max_length=20000)
+    exclude_video_ids: List[str] = Field(default_factory=list)
 
 
 @app.post("/api/youtube-research")
@@ -4603,6 +4604,7 @@ async def run_youtube_research(request: YouTubeResearchRequest):
         return await research_youtube(
             request.prompt,
             api_key=OPENAI_API_KEY,
+            exclude_video_ids=request.exclude_video_ids[:300],
             transcript_fetcher=lambda url: fetch_youtube_subs_downsub(url, formats=["txt"]),
         )
     except ValueError as exc:
