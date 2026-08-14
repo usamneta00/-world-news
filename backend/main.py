@@ -4592,9 +4592,24 @@ def _score_search_item(item: Dict[str, Any], terms: List[str], topic_tokens: Lis
     return score
 
 
+class YouTubeResearchFilters(BaseModel):
+    min_duration_minutes: float = Field(default=0, ge=0, le=1440)
+    max_duration_minutes: float = Field(default=0, ge=0, le=1440)
+    date_from: Optional[str] = Field(default=None, max_length=10)
+    date_to: Optional[str] = Field(default=None, max_length=10)
+    language: str = Field(default="any", max_length=20)
+    country: str = Field(default="", max_length=100)
+    channel_type: str = Field(default="any", max_length=30)
+    min_views: int = Field(default=0, ge=0)
+    min_reliability: float = Field(default=0, ge=0, le=10)
+    live_status: str = Field(default="any", max_length=20)
+    require_transcript: bool = True
+
+
 class YouTubeResearchRequest(BaseModel):
     prompt: str = Field(min_length=8, max_length=20000)
     exclude_video_ids: List[str] = Field(default_factory=list)
+    filters: YouTubeResearchFilters = Field(default_factory=YouTubeResearchFilters)
 
 
 @app.post("/api/youtube-research")
@@ -4606,6 +4621,7 @@ async def run_youtube_research(request: YouTubeResearchRequest):
             api_key=OPENAI_API_KEY,
             exclude_video_ids=request.exclude_video_ids[:300],
             transcript_fetcher=lambda url: fetch_youtube_subs_downsub(url, formats=["txt"]),
+            filters=request.filters.model_dump() if hasattr(request.filters, "model_dump") else request.filters.dict(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))

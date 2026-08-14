@@ -1912,6 +1912,25 @@
                             <textarea id="youtube-research-prompt" rows="9" required minlength="8"
                                 class="w-full rounded-2xl border border-white/10 bg-black/30 p-5 text-sm text-white placeholder:text-neutral-600 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none resize-y leading-7"
                                 placeholder="@Youtube&#10;&#10;الصق البرومبت أو الخبر أو المقال هنا، وحدد عدد الفيديوهات واللغة والنطاق الزمني إن رغبت..."></textarea>
+                            <details class="rounded-2xl border border-white/10 bg-black/20 overflow-hidden">
+                                <summary class="cursor-pointer select-none px-5 py-4 flex items-center justify-between gap-3 text-sm font-bold text-white hover:bg-white/5">
+                                    <span class="flex items-center gap-2"><i data-lucide="sliders-horizontal" class="w-4 h-4 text-red-400"></i> الفلاتر المتقدمة</span>
+                                    <span class="text-[10px] font-mono text-neutral-500">المدة · التاريخ · اللغة · البلد · القناة · المشاهدات · الموثوقية · البث</span>
+                                </summary>
+                                <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 border-t border-white/10 p-5 text-xs">
+                                    <label class="space-y-2"><span class="text-neutral-400">المدة الدنيا (دقيقة)</span><input id="yt-filter-min-duration" type="number" min="0" max="1440" value="0" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"></label>
+                                    <label class="space-y-2"><span class="text-neutral-400">المدة القصوى (دقيقة)</span><input id="yt-filter-max-duration" type="number" min="0" max="1440" value="0" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"></label>
+                                    <label class="space-y-2"><span class="text-neutral-400">من تاريخ</span><input id="yt-filter-date-from" type="date" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"></label>
+                                    <label class="space-y-2"><span class="text-neutral-400">إلى تاريخ</span><input id="yt-filter-date-to" type="date" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"></label>
+                                    <label class="space-y-2"><span class="text-neutral-400">اللغة</span><select id="yt-filter-language" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"><option value="any">كل اللغات</option><option value="ar">العربية</option><option value="en">الإنجليزية</option><option value="fr">الفرنسية</option><option value="es">الإسبانية</option></select></label>
+                                    <label class="space-y-2"><span class="text-neutral-400">البلد أو المنطقة</span><input id="yt-filter-country" type="text" maxlength="100" placeholder="مثال: اليمن" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white placeholder:text-neutral-700 outline-none focus:border-red-500"></label>
+                                    <label class="space-y-2"><span class="text-neutral-400">نوع القناة</span><select id="yt-filter-channel-type" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"><option value="any">كل القنوات</option><option value="news">إخبارية</option><option value="official">رسمية</option><option value="independent">مستقلة</option><option value="educational">تعليمية</option><option value="interview">مقابلات وحوارات</option><option value="documentary">وثائقية</option></select></label>
+                                    <label class="space-y-2"><span class="text-neutral-400">أقل عدد مشاهدات</span><input id="yt-filter-min-views" type="number" min="0" value="0" step="1000" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"></label>
+                                    <label class="space-y-2"><span class="text-neutral-400">أدنى موثوقية</span><select id="yt-filter-reliability" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"><option value="0">دون حد</option><option value="5">5/10 فأعلى</option><option value="6">6/10 فأعلى</option><option value="7">7/10 فأعلى</option><option value="8">8/10 فأعلى</option></select></label>
+                                    <label class="space-y-2"><span class="text-neutral-400">حالة البث</span><select id="yt-filter-live" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"><option value="any">الكل</option><option value="not_live">فيديوهات مسجلة</option><option value="live">مباشر الآن</option><option value="upcoming">بث قادم</option></select></label>
+                                    <label class="sm:col-span-2 flex items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 cursor-pointer"><input id="yt-filter-transcript" type="checkbox" checked class="accent-red-600 w-4 h-4"><span><strong class="block text-white">استخراج النص قبل الاختيار</strong><small class="text-neutral-500">يستخدم yt-dlp لفحص أقوى المرشحين وترجيح الفيديوهات ذات المحتوى والأدلة الأفضل.</small></span></label>
+                                </div>
+                            </details>
                             <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                                 <p id="youtube-research-status" class="text-xs font-mono text-neutral-500">جاهز لجلسة بحث جديدة</p>
                                 <button id="youtube-research-submit" type="submit" class="px-6 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-600/20">
@@ -3914,12 +3933,37 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             return String(value);
         }
 
+        function researchDuration(seconds) {
+            const total = Number(seconds || 0);
+            if (!total) return 'غير متاحة';
+            const hours = Math.floor(total / 3600);
+            const minutes = Math.round((total % 3600) / 60);
+            return hours ? `${hours}س ${minutes}د` : `${minutes} دقيقة`;
+        }
+
+        function researchViews(value) {
+            const count = Number(value || 0);
+            return count ? new Intl.NumberFormat('ar').format(count) : 'غير متاح';
+        }
+
+        function researchPoints(items, emptyText) {
+            const values = Array.isArray(items) ? items.filter(Boolean) : [];
+            return values.length ? values.map(item => `<li>${escapeResearchHtml(item)}</li>`).join('') : `<li>${escapeResearchHtml(emptyText)}</li>`;
+        }
+
         function renderYouTubeResearch(report) {
             const container = document.getElementById('youtube-research-results');
             if (!container) return;
             const stats = report.stats || {};
             const warnings = (report.warnings || []).map(w => `<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">${escapeResearchHtml(w)}</div>`).join('');
-            const videos = (report.videos || []).map((video, index) => `
+            const videos = (report.videos || []).map((video, index) => {
+                const transcript = video.transcript_available ? `
+                    <details class="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 overflow-hidden">
+                        <summary class="cursor-pointer px-4 py-3 text-xs font-bold text-emerald-300 flex items-center justify-between gap-3"><span>النص المستخرج عبر yt-dlp</span><span class="font-mono text-[10px]">${escapeResearchHtml(video.transcript_chars || 0)} حرف · جودة ${escapeResearchHtml(video.transcript_quality || 0)}/10</span></summary>
+                        <div class="max-h-96 overflow-y-auto whitespace-pre-wrap border-t border-emerald-500/10 p-4 text-xs leading-7 text-neutral-300">${escapeResearchHtml(video.transcript || '')}</div>
+                    </details>` : `<div class="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-200">لم تتوفر ترجمة قابلة للاستخراج لهذا الفيديو${video.transcript_error ? `: ${escapeResearchHtml(video.transcript_error)}` : ''}</div>`;
+                const filterFailures = (video.filter_failures || []).map(reason => `<span class="rounded-full bg-amber-500/10 px-2 py-1 text-[10px] text-amber-300">${escapeResearchHtml(reason)}</span>`).join('');
+                return `
                 <article class="group overflow-hidden rounded-2xl border border-white/10 bg-neutral-950/70 hover:border-red-500/40 transition-all">
                     <div class="grid md:grid-cols-[260px_1fr]">
                         <a href="${escapeResearchHtml(video.webpage_url)}" target="_blank" rel="noopener" class="relative min-h-48 overflow-hidden bg-black">
@@ -3931,29 +3975,53 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                                 <span>${escapeResearchHtml(video.channel || 'قناة غير معروفة')}</span><span>•</span>
                                 <span>${escapeResearchHtml(researchDate(video.upload_date))}</span><span>•</span>
                                 <span class="text-red-400">${escapeResearchHtml(video.angle || 'عام')}</span>
+                                <span class="rounded-full bg-red-500/10 px-2 py-1 text-red-300">${escapeResearchHtml(video.narrative_stage || 'مرحلة تحليلية')}</span>
                                 <span class="rounded-full px-2 py-1 ${video.selection_tier === 'strict_match' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-300'}">${video.selection_tier === 'strict_match' ? 'مطابق للقيود' : 'اختيار تكميلي قوي'}</span>
                             </div>
                             <h3 class="text-lg md:text-xl font-bold text-white leading-8 mb-3">${escapeResearchHtml(video.title)}</h3>
                             <p class="text-sm text-neutral-400 leading-7 mb-4">${escapeResearchHtml(video.summary || '')}</p>
-                            <div class="grid sm:grid-cols-2 gap-3 mb-4 text-xs">
+                            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4 text-xs">
                                 <div class="rounded-xl bg-white/5 p-3"><span class="text-neutral-500">الصلة</span><strong class="float-left text-white">${escapeResearchHtml(video.relevance_score)}/10</strong></div>
                                 <div class="rounded-xl bg-white/5 p-3"><span class="text-neutral-500">قوة النقاش</span><strong class="float-left text-white">${escapeResearchHtml(video.discussion_strength)}/10</strong></div>
+                                <div class="rounded-xl bg-white/5 p-3"><span class="text-neutral-500">الموثوقية</span><strong class="float-left text-white">${escapeResearchHtml(video.reliability_score)}/10</strong></div>
+                                <div class="rounded-xl bg-white/5 p-3"><span class="text-neutral-500">المدة</span><strong class="float-left text-white">${escapeResearchHtml(researchDuration(video.duration))}</strong></div>
                             </div>
-                            <p class="text-xs text-neutral-500 mb-4"><strong class="text-neutral-300">ما الذي يضيفه؟</strong> ${escapeResearchHtml(video.adds_to_previous || '')}</p>
+                            <div class="rounded-xl border border-red-500/20 bg-red-500/5 p-4 mb-4"><p class="text-xs font-bold text-red-300 mb-1">لماذا جاء في الترتيب رقم ${index + 1}؟</p><p class="text-sm text-neutral-300 leading-7">${escapeResearchHtml(video.ordering_reason || '')}</p></div>
+                            <p class="text-xs text-neutral-500 mb-4"><strong class="text-neutral-300">ما الذي يضيفه إلى السابق؟</strong> ${escapeResearchHtml(video.adds_to_previous || '')}</p>
+                            <div class="grid sm:grid-cols-2 gap-3 mb-4 text-xs">
+                                <div class="rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-4"><strong class="block text-emerald-300 mb-2">نقاط القوة</strong><ul class="list-disc pr-4 space-y-2 text-neutral-300">${researchPoints(video.strengths, 'يضيف زاوية مرتبطة بالموضوع.')}</ul></div>
+                                <div class="rounded-xl border border-amber-500/15 bg-amber-500/5 p-4"><strong class="block text-amber-300 mb-2">نقاط الضعف</strong><ul class="list-disc pr-4 space-y-2 text-neutral-300">${researchPoints(video.weaknesses, 'يحتاج إلى المقارنة بمصادر أخرى.')}</ul></div>
+                            </div>
+                            <div class="flex flex-wrap gap-2 mb-4 text-[10px] text-neutral-500"><span>المشاهدات: ${escapeResearchHtml(researchViews(video.view_count))}</span><span>•</span><span>نوع القناة: ${escapeResearchHtml(video.channel_type || 'غير محدد')}</span>${filterFailures ? `<span>•</span>${filterFailures}` : ''}</div>
                             <p class="text-xs text-neutral-500 mb-4"><strong class="text-neutral-300">مستوى المطابقة:</strong> ${escapeResearchHtml(video.selection_note || '')}</p>
+                            ${transcript}
                             <a href="${escapeResearchHtml(video.webpage_url)}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 text-sm font-bold text-red-400 hover:text-red-300"><i data-lucide="external-link" class="w-4 h-4"></i> فتح في YouTube</a>
                         </div>
                     </div>
-                </article>`).join('');
+                </article>`;
+            }).join('');
             const queries = (report.search_plan || []).map(q => `<span class="inline-flex rounded-full border border-white/10 px-3 py-1.5 text-[11px] text-neutral-400">${escapeResearchHtml(q.query)}</span>`).join('');
             const contradictions = (report.contradictions || []).map(c => `<li>${escapeResearchHtml(typeof c.conflict === 'string' ? c.conflict : JSON.stringify(c.conflict))}</li>`).join('');
             const latest = report.latest_development ? `<div class="rounded-2xl border border-neon-blue/20 bg-neon-blue/5 p-5"><p class="text-[10px] font-mono text-neon-blue mb-2">أحدث تطور مرتبط بالقضية</p><a class="font-bold text-white hover:text-neon-blue" target="_blank" rel="noopener" href="${escapeResearchHtml(report.latest_development.url)}">${escapeResearchHtml(report.latest_development.title)}</a><p class="text-xs text-neutral-500 mt-2">${escapeResearchHtml(report.latest_development.source)} — ${escapeResearchHtml(report.latest_development.published)}</p></div>` : '';
+            const sequence = (report.videos || []).map((video, index) => `<div class="flex items-center gap-3 min-w-0"><span class="shrink-0 w-8 h-8 rounded-full bg-red-600 text-white font-black flex items-center justify-center">${index + 1}</span><div class="min-w-0"><strong class="block text-xs text-white">${escapeResearchHtml(video.narrative_stage || 'مرحلة تحليلية')}</strong><span class="block text-[10px] text-neutral-500 truncate">${escapeResearchHtml(video.title)}</span></div></div>`).join('<div class="h-5 w-px bg-red-500/30 mr-4"></div>');
+            const timelineItems = (report.timeline?.items || []).map((event, index) => `
+                <div class="relative pr-8 pb-6 last:pb-0">
+                    <span class="absolute right-0 top-1 w-3 h-3 rounded-full bg-red-500 ring-4 ring-red-500/10"></span>
+                    ${index < (report.timeline?.items || []).length - 1 ? '<span class="absolute right-[5px] top-4 bottom-0 w-px bg-white/10"></span>' : ''}
+                    <div class="flex flex-wrap items-center gap-2 mb-2"><time class="font-mono text-[10px] text-red-400">${escapeResearchHtml(event.date || 'غير مؤرخ')}</time><span class="rounded-full bg-white/5 px-2 py-1 text-[9px] text-neutral-500">${escapeResearchHtml(event.certainty || '')}</span></div>
+                    <p class="text-sm text-white leading-7">${escapeResearchHtml(event.claim || '')}</p>
+                    <p class="mt-1 text-[11px] text-neutral-500">الدليل: ${escapeResearchHtml(event.evidence || '')}</p>
+                    <a href="${escapeResearchHtml(event.webpage_url || '#')}" target="_blank" rel="noopener" class="mt-2 inline-block text-[11px] text-red-400 hover:text-red-300">المصدر: الفيديو ${escapeResearchHtml(event.sequence_position || '')} — ${escapeResearchHtml(event.video_title || '')}</a>
+                </div>`).join('');
+            const timeline = timelineItems ? `<section class="rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-6"><div class="flex items-center gap-3 mb-5"><i data-lucide="milestone" class="w-5 h-5 text-red-400"></i><div><h3 class="font-bold text-white">الخريطة الزمنية للأحداث والادعاءات</h3><p class="text-xs text-neutral-500 mt-1">${escapeResearchHtml(report.timeline?.coverage_note || '')}</p></div></div><div>${timelineItems}</div></section>` : '';
             container.innerHTML = `
                 ${warnings}
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-                    ${[['الاستعلامات', stats.queries], ['المكتشف', stats.discovered], ['بدون تكرار', stats.unique], ['تم فحصه', stats.metadata_checked], ['المختار', stats.selected]].map(([label, value]) => `<div class="rounded-2xl border border-white/10 bg-white/5 p-4"><strong class="block text-2xl text-white">${escapeResearchHtml(value ?? 0)}</strong><span class="text-[10px] font-mono text-neutral-500">${label}</span></div>`).join('')}
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                    ${[['الاستعلامات', stats.queries], ['المكتشف', stats.discovered], ['بدون تكرار', stats.unique], ['تم فحصه', stats.metadata_checked], ['نصوص مفحوصة', stats.transcripts_attempted], ['نصوص متاحة', stats.transcripts_available], ['المختار', stats.selected]].map(([label, value]) => `<div class="rounded-2xl border border-white/10 bg-white/5 p-4"><strong class="block text-2xl text-white">${escapeResearchHtml(value ?? 0)}</strong><span class="text-[10px] font-mono text-neutral-500">${label}</span></div>`).join('')}
                 </div>
                 <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h3 class="font-bold text-white mb-3">خطة البحث</h3><div class="flex flex-wrap gap-2">${queries}</div><p class="mt-4 text-xs text-neutral-500">السياسة الزمنية: ${escapeResearchHtml(stats.date_policy_applied || 'غير محددة')} — استغرقت الجلسة ${escapeResearchHtml(stats.duration_seconds || 0)} ثانية</p></div>
+                <section class="rounded-2xl border border-red-500/20 bg-gradient-to-b from-red-950/20 to-neutral-950 p-5 md:p-6"><h3 class="font-bold text-white mb-1">مسار النقاش من البداية إلى النهاية</h3><p class="text-xs text-neutral-500 mb-5">شاهد الفيديوهات بالترتيب الموضح؛ كل حلقة تبني على ما قبلها وتضيف مرحلة جديدة.</p><div>${sequence}</div></section>
+                ${timeline}
                 <div class="space-y-4">${videos || '<div class="p-10 text-center text-neutral-500">لم تصل نتائج موثقة إلى الحد المطلوب.</div>'}</div>
                 ${contradictions ? `<div class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5"><h3 class="font-bold text-amber-300 mb-3">التناقضات بين الفيديوهات</h3><ul class="list-disc pr-5 text-sm text-neutral-300 space-y-2">${contradictions}</ul></div>` : ''}
                 ${latest}`;
@@ -3980,10 +4048,25 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                     const saved = JSON.parse(localStorage.getItem('youtubeResearchPreviousVideoIds') || '[]');
                     if (Array.isArray(saved)) previousVideoIds = saved.filter(Boolean).slice(0, 100);
                 } catch (_) { previousVideoIds = []; }
+                const fieldValue = id => document.getElementById(id)?.value ?? '';
+                const numberValue = id => Math.max(0, Number(fieldValue(id)) || 0);
+                const filters = {
+                    min_duration_minutes: numberValue('yt-filter-min-duration'),
+                    max_duration_minutes: numberValue('yt-filter-max-duration'),
+                    date_from: fieldValue('yt-filter-date-from') || null,
+                    date_to: fieldValue('yt-filter-date-to') || null,
+                    language: fieldValue('yt-filter-language') || 'any',
+                    country: fieldValue('yt-filter-country').trim(),
+                    channel_type: fieldValue('yt-filter-channel-type') || 'any',
+                    min_views: Math.round(numberValue('yt-filter-min-views')),
+                    min_reliability: numberValue('yt-filter-reliability'),
+                    live_status: fieldValue('yt-filter-live') || 'any',
+                    require_transcript: Boolean(document.getElementById('yt-filter-transcript')?.checked)
+                };
                 const response = await fetch(`${API_URL}/youtube-research`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt, exclude_video_ids: previousVideoIds })
+                    body: JSON.stringify({ prompt, exclude_video_ids: previousVideoIds, filters })
                 });
                 const payload = await response.json();
                 if (!response.ok) throw new Error(payload.detail || 'فشل البحث');
@@ -3991,7 +4074,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                 localStorage.setItem('youtubeResearchPreviousVideoIds', JSON.stringify(currentVideoIds));
                 renderYouTubeResearch(payload);
                 const excludedCount = payload.stats?.excluded_from_previous_search || 0;
-                status.textContent = `اكتملت الجلسة: ${payload.stats?.selected || 0} فيديو موثق جديد${excludedCount ? ` — تم استبعاد ${excludedCount} من البحث السابق` : ''}`;
+                status.textContent = `اكتملت الجلسة: ${payload.stats?.selected || 0} فيديو موثق جديد — توفرت نصوص ${payload.stats?.transcripts_available || 0} من ${payload.stats?.transcripts_attempted || 0}${excludedCount ? ` — تم استبعاد ${excludedCount} من البحث السابق` : ''}`;
             } catch (error) {
                 status.textContent = error.message || 'تعذر إكمال البحث';
                 if (results) {
