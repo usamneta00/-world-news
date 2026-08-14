@@ -4600,10 +4600,13 @@ class YouTubeResearchFilters(BaseModel):
     language: str = Field(default="any", max_length=20)
     country: str = Field(default="", max_length=100)
     channel_type: str = Field(default="any", max_length=30)
+    content_type: str = Field(default="panel_discussion", max_length=30)
+    min_discussion_score: float = Field(default=6, ge=0, le=10)
     min_views: int = Field(default=0, ge=0)
-    min_reliability: float = Field(default=0, ge=0, le=10)
+    min_reliability: float = Field(default=7, ge=0, le=10)
     live_status: str = Field(default="any", max_length=20)
     require_transcript: bool = True
+    strict_filters: bool = True
 
 
 class YouTubeResearchRequest(BaseModel):

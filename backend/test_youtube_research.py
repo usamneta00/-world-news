@@ -1,8 +1,10 @@
 import asyncio
+import time
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from youtube_research import _extract_count, _extract_date_policy, research_youtube
+import youtube_research as youtube_research_module
+from youtube_research import _extract_count, _extract_date_policy, research_youtube, verify_video
 
 
 class YouTubeResearchTests(unittest.TestCase):
@@ -37,6 +39,7 @@ class YouTubeResearchTests(unittest.TestCase):
         report = asyncio.run(research_youtube(
             "@Youtube أفضل تحليلات الذكاء الاصطناعي الوكيل، أريد فيديوهين عربيين من آخر أسبوع",
             api_key="", search_fn=search, metadata_fn=metadata,
+            filters={"strict_filters": False, "require_transcript": False, "content_type": "any", "min_discussion_score": 0, "min_reliability": 0},
         ))
         self.assertGreater(report["stats"]["queries"], 1)
         self.assertEqual(report["stats"]["selected"], 2)
@@ -71,6 +74,7 @@ class YouTubeResearchTests(unittest.TestCase):
         report = asyncio.run(research_youtube(
             "@Youtube إيران والولايات المتحدة وتحليل الصراع، أريد 7 فيديوهات من آخر أسبوع",
             api_key="", search_fn=search, metadata_fn=metadata,
+            filters={"strict_filters": False, "require_transcript": False, "content_type": "any", "min_discussion_score": 0, "min_reliability": 0},
         ))
         self.assertEqual(report["stats"]["selected"], 7)
         self.assertEqual(report["videos"][0]["selection_tier"], "strict_match")
@@ -81,6 +85,7 @@ class YouTubeResearchTests(unittest.TestCase):
         second_report = asyncio.run(research_youtube(
             "@Youtube إيران والولايات المتحدة وتحليل الصراع، أريد 7 فيديوهات من آخر أسبوع",
             api_key="", search_fn=search, metadata_fn=metadata, exclude_video_ids=first_ids,
+            filters={"strict_filters": False, "require_transcript": False, "content_type": "any", "min_discussion_score": 0, "min_reliability": 0},
         ))
         second_ids = {video["video_id"] for video in second_report["videos"]}
         self.assertEqual(second_report["stats"]["selected"], 7)
@@ -94,7 +99,7 @@ class YouTubeResearchTests(unittest.TestCase):
             return [
                 {
                     "video_id": f"storyvid{i:04d}",
-                    "title": f"تاريخ أزمة اليمن وتحليل تطورات الحدث زاويةفريدة{i} محورخاص{i}",
+                    "title": f"حلقة نقاشية بين محللين وخبراء عن أزمة اليمن زاويةفريدة{i} محورخاص{i}",
                     "channel": "شبكة أخبار موثوقة" if i < 8 else "قناة ترفيهية",
                     "url": "x",
                 }
@@ -106,7 +111,7 @@ class YouTubeResearchTests(unittest.TestCase):
             passes = index < 8
             return {
                 "video_id": video_id,
-                "title": f"تاريخ أزمة اليمن وتحليل تطورات الحدث زاويةفريدة{index} محورخاص{index}",
+                "title": f"حلقة نقاشية بين محللين وخبراء عن أزمة اليمن زاويةفريدة{index} محورخاص{index}",
                 "channel": "شبكة أخبار موثوقة" if passes else "قناة ترفيهية",
                 "channel_id": f"channel-{index}", "uploader": "uploader",
                 "upload_date": today.strftime("%Y%m%d"), "timestamp": today.timestamp(),
@@ -119,7 +124,7 @@ class YouTubeResearchTests(unittest.TestCase):
 
         def transcript(url):
             video_id = url.split("=")[-1]
-            return {"txt": (f"{video_id} تاريخ أزمة اليمن مصادر أدلة تطورات وتحليل. " * 250).strip()}
+            return {"txt": (f"{video_id} ينضم إلينا محللون وخبراء لمناقشة أزمة اليمن مع رأي آخر ومصادر وأدلة. " * 250).strip()}
 
         report = asyncio.run(research_youtube(
             "@Youtube ابنِ سلسلة من 7 فيديوهات تشرح تاريخ أزمة اليمن وتطوراتها",
@@ -133,6 +138,9 @@ class YouTubeResearchTests(unittest.TestCase):
                 "min_reliability": 5,
                 "live_status": "not_live",
                 "require_transcript": True,
+                "content_type": "panel_discussion",
+                "min_discussion_score": 6,
+                "strict_filters": True,
             },
         ))
 
@@ -146,6 +154,84 @@ class YouTubeResearchTests(unittest.TestCase):
         self.assertTrue(all(video["strengths"] and video["weaknesses"] for video in report["videos"]))
         self.assertTrue(report["timeline"]["items"])
         self.assertTrue(all(item["video_id"] for item in report["timeline"]["items"]))
+
+    def test_rate_limit_circuit_uses_search_metadata_and_skips_transcripts(self):
+        def search(query, limit):
+            return [
+                {
+                    "video_id": f"limited{i:04d}",
+                    "title": f"تحليل أزمة الشرق الأوسط زاويةفريدة{i} محورمختلف{i}",
+                    "channel": f"قناة أخبار {i}",
+                    "url": "x",
+                    "duration": 900,
+                    "view_count": 10_000 + i,
+                    "language": "ar",
+                }
+                for i in range(10)
+            ]
+
+        previous_limit = youtube_research_module._youtube_rate_limit_until
+        youtube_research_module._youtube_rate_limit_until = time.monotonic() + 60
+        try:
+            report = asyncio.run(research_youtube(
+                "@Youtube سلسلة من 7 فيديوهات عن أزمة الشرق الأوسط",
+                api_key="", search_fn=search, metadata_fn=verify_video,
+                transcript_fetcher=lambda url: {"txt": "يجب ألا يُستدعى أثناء الحظر"},
+                filters={"strict_filters": False, "require_transcript": True, "content_type": "any", "min_discussion_score": 0},
+            ))
+        finally:
+            youtube_research_module._youtube_rate_limit_until = previous_limit
+
+        self.assertEqual(report["stats"]["selected"], 7)
+        self.assertGreaterEqual(report["stats"]["limited_metadata_fallbacks"], 7)
+        self.assertEqual(report["stats"]["transcripts_attempted"], 0)
+        self.assertGreaterEqual(report["stats"]["transcripts_skipped_rate_limit"], 7)
+        self.assertTrue(all(video["metadata_limited"] for video in report["videos"]))
+
+    def test_strict_date_never_backfills_with_old_or_unverified_videos(self):
+        now = datetime.now(timezone.utc)
+        old = now - timedelta(days=400)
+
+        def search(query, limit):
+            return [
+                {
+                    "video_id": f"datedpanel{i:02d}",
+                    "title": f"حلقة نقاشية بين محللين وخبراء حول الحدث زاوية{i} محور{i}",
+                    "channel": "شبكة أخبار رسمية",
+                    "url": "x",
+                }
+                for i in range(10)
+            ]
+
+        def metadata(video_id):
+            index = int(video_id[-2:])
+            published = now if index < 3 else old
+            return {
+                "video_id": video_id, "title": f"حلقة نقاشية بين محللين وخبراء حول الحدث زاوية{index} محور{index}",
+                "channel": "شبكة أخبار رسمية", "channel_id": f"official-{index}", "uploader": "شبكة أخبار رسمية",
+                "upload_date": published.strftime("%Y%m%d"), "timestamp": published.timestamp(), "duration": 1800,
+                "description": "نقاش بين عدة أطراف ومحللين وخبراء مع رأي مقابل", "view_count": 100_000,
+                "live_status": "not_live", "original_url": f"https://youtube.com/watch?v={video_id}",
+                "webpage_url": f"https://youtube.com/watch?v={video_id}", "thumbnail": "https://example.com/x.jpg",
+                "language": "ar", "availability": "public",
+            }
+
+        report = asyncio.run(research_youtube(
+            "@Youtube أريد 7 مناقشات حديثة بين محللين حول الحدث",
+            api_key="", search_fn=search, metadata_fn=metadata,
+            transcript_fetcher=lambda url: {"txt": "ينضم إلينا محللون وخبراء مع رأي آخر ونقاش بين عدة أطراف. " * 200},
+            filters={
+                "date_from": (now - timedelta(days=7)).strftime("%Y-%m-%d"),
+                "date_to": now.strftime("%Y-%m-%d"),
+                "channel_type": "official", "content_type": "panel_discussion",
+                "min_discussion_score": 6, "min_reliability": 5,
+                "require_transcript": True, "strict_filters": True,
+            },
+        ))
+
+        self.assertEqual(report["stats"]["selected"], 3)
+        self.assertTrue(all(video["upload_date"] == now.strftime("%Y%m%d") for video in report["videos"]))
+        self.assertTrue(any("الشروط الصارمة" in warning for warning in report["warnings"]))
 
 
 if __name__ == "__main__":

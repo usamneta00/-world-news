@@ -13,6 +13,7 @@ import logging
 import math
 import os
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -26,20 +27,49 @@ from bs4 import BeautifulSoup
 logger = logging.getLogger(__name__)
 YOUTUBE_URL = "https://www.youtube.com/watch?v={}"
 MIN_FINAL_VIDEOS = 7
+try:
+    YOUTUBE_RATE_LIMIT_COOLDOWN_SECONDS = max(60, int(os.environ.get("YOUTUBE_RATE_LIMIT_COOLDOWN", "900")))
+except ValueError:
+    YOUTUBE_RATE_LIMIT_COOLDOWN_SECONDS = 900
+_youtube_rate_limit_until = 0.0
+
+
+def _youtube_rate_limited() -> bool:
+    return time.monotonic() < _youtube_rate_limit_until
+
+
+def _mark_youtube_rate_limited(reason: str) -> None:
+    global _youtube_rate_limit_until
+    was_limited = _youtube_rate_limited()
+    _youtube_rate_limit_until = max(
+        _youtube_rate_limit_until,
+        time.monotonic() + YOUTUBE_RATE_LIMIT_COOLDOWN_SECONDS,
+    )
+    if not was_limited:
+        logger.warning(
+            "YouTube rate limit detected (%s). Pausing direct metadata and transcript requests for %s seconds.",
+            reason,
+            YOUTUBE_RATE_LIMIT_COOLDOWN_SECONDS,
+        )
 def _normalise_filters(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     raw = raw or {}
 
     def number(name: str, default: float = 0.0) -> float:
         try:
-            return max(0.0, float(raw.get(name) or default))
+            value = raw.get(name)
+            if value is None or value == "":
+                value = default
+            return max(0.0, float(value))
         except (TypeError, ValueError):
             return default
 
     language = str(raw.get("language") or "any").strip().casefold()
     live_status = str(raw.get("live_status") or "any").strip().casefold()
     channel_type = str(raw.get("channel_type") or "any").strip().casefold()
+    content_type = str(raw.get("content_type") or "panel_discussion").strip().casefold()
     allowed_live = {"any", "live", "upcoming", "not_live"}
     allowed_channels = {"any", "news", "official", "independent", "educational", "interview", "documentary"}
+    allowed_content = {"any", "panel_discussion", "debate", "roundtable", "multi_guest_interview", "analysis"}
     date_from = str(raw.get("date_from") or "").strip()
     date_to = str(raw.get("date_to") or "").strip()
     if date_from and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_from):
@@ -58,10 +88,13 @@ def _normalise_filters(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "language": language,
         "country": str(raw.get("country") or "").strip(),
         "channel_type": channel_type if channel_type in allowed_channels else "any",
+        "content_type": content_type if content_type in allowed_content else "panel_discussion",
+        "min_discussion_score": min(10.0, number("min_discussion_score", 6.0)),
         "min_views": int(number("min_views")),
-        "min_reliability": min(10.0, number("min_reliability")),
+        "min_reliability": min(10.0, number("min_reliability", 7.0)),
         "live_status": live_status if live_status in allowed_live else "any",
         "require_transcript": bool(raw.get("require_transcript", True)),
+        "strict_filters": bool(raw.get("strict_filters", True)),
     }
 
 
@@ -289,9 +322,18 @@ def search_youtube(query: str, limit: int = 30) -> List[Dict[str, Any]]:
             "video_id": video_id,
             "title": entry.get("title") or "",
             "channel": entry.get("channel") or entry.get("uploader") or "",
+            "channel_id": entry.get("channel_id") or entry.get("uploader_id") or "",
+            "uploader": entry.get("uploader") or entry.get("channel") or "",
             "url": YOUTUBE_URL.format(video_id),
             "duration": entry.get("duration"),
             "timestamp": entry.get("timestamp"),
+            "upload_date": entry.get("upload_date") or "",
+            "description": entry.get("description") or "",
+            "view_count": entry.get("view_count"),
+            "live_status": entry.get("live_status") or "",
+            "thumbnail": entry.get("thumbnail") or f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
+            "language": entry.get("language") or "",
+            "availability": entry.get("availability") or "public",
         })
     return items
 
@@ -328,12 +370,17 @@ def _extract_balanced_json(text: str, marker: str) -> Optional[Dict[str, Any]]:
 
 
 def _fast_video_metadata(video_id: str) -> Optional[Dict[str, Any]]:
+    if _youtube_rate_limited():
+        return None
     url = YOUTUBE_URL.format(video_id)
     response = requests.get(
         url,
         headers={"User-Agent": "Mozilla/5.0", "Accept-Language": "ar,en-US;q=0.8,en;q=0.7"},
         timeout=15,
     )
+    if response.status_code == 429 or "google.com/sorry" in str(response.url):
+        _mark_youtube_rate_limited(f"HTTP {response.status_code}")
+        return None
     response.raise_for_status()
     data = _extract_balanced_json(response.text, "ytInitialPlayerResponse")
     if not data:
@@ -366,12 +413,17 @@ def _fast_video_metadata(video_id: str) -> Optional[Dict[str, Any]]:
 
 
 def fetch_video_metadata(video_id: str) -> Optional[Dict[str, Any]]:
+    if _youtube_rate_limited():
+        return None
     try:
         fast = _fast_video_metadata(video_id)
         if fast:
             return fast
     except Exception as exc:
         logger.info("Fast YouTube metadata fallback for %s: %s", video_id, exc)
+
+    if _youtube_rate_limited():
+        return None
 
     options = {
         "quiet": True,
@@ -385,8 +437,15 @@ def fetch_video_metadata(video_id: str) -> Optional[Dict[str, Any]]:
         "retries": 1,
         "extractor_retries": 1,
     }
-    with yt_dlp.YoutubeDL(options) as ydl:
-        info = ydl.extract_info(YOUTUBE_URL.format(video_id), download=False)
+    try:
+        with yt_dlp.YoutubeDL(options) as ydl:
+            info = ydl.extract_info(YOUTUBE_URL.format(video_id), download=False)
+    except Exception as exc:
+        message = str(exc)
+        if "429" in message or "Too Many Requests" in message or "Sign in to confirm" in message:
+            _mark_youtube_rate_limited("yt-dlp metadata")
+            return None
+        raise
     if not info or not info.get("id"):
         return None
     return {
@@ -416,6 +475,43 @@ def verify_video(video_id: str) -> Optional[Dict[str, Any]]:
     if metadata.get("availability") in {"private", "subscriber_only", "premium_only"}:
         return None
     return metadata
+
+
+def _metadata_from_search_result(candidate: Dict[str, Any]) -> Dict[str, Any]:
+    """Keep the session useful when YouTube temporarily blocks detail pages.
+
+    yt-dlp already validated the video id while producing the search result.
+    These limited fields are therefore safer than issuing dozens of immediate
+    retries against the watch page from a shared cloud IP.
+    """
+    video_id = str(candidate.get("video_id") or "")
+    timestamp = candidate.get("timestamp")
+    upload_date = str(candidate.get("upload_date") or "")
+    if not upload_date and timestamp:
+        try:
+            upload_date = datetime.fromtimestamp(float(timestamp), tz=timezone.utc).strftime("%Y%m%d")
+        except (TypeError, ValueError, OSError):
+            upload_date = ""
+    return {
+        "video_id": video_id,
+        "title": candidate.get("title") or "",
+        "channel": candidate.get("channel") or candidate.get("uploader") or "",
+        "channel_id": candidate.get("channel_id") or "",
+        "uploader": candidate.get("uploader") or candidate.get("channel") or "",
+        "upload_date": upload_date,
+        "timestamp": timestamp,
+        "duration": candidate.get("duration"),
+        "description": candidate.get("description") or candidate.get("title") or "",
+        "view_count": candidate.get("view_count"),
+        "live_status": candidate.get("live_status") or "",
+        "original_url": YOUTUBE_URL.format(video_id),
+        "webpage_url": YOUTUBE_URL.format(video_id),
+        "thumbnail": candidate.get("thumbnail") or f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
+        "language": candidate.get("language") or "",
+        "availability": candidate.get("availability") or "public",
+        "metadata_source": "youtube_search_result",
+        "metadata_limited": True,
+    }
 
 
 def _tokens(text: str) -> set:
@@ -461,7 +557,7 @@ def _date_filter(items: Sequence[Dict[str, Any]], policies: Sequence[Dict[str, A
 def _infer_channel_type(item: Dict[str, Any]) -> str:
     text = f"{item.get('channel', '')} {item.get('title', '')} {item.get('description', '')[:1200]}".casefold()
     patterns = (
-        ("official", "official رسمي وزارة government presidency الأمم المتحدة un news"),
+        ("official", "official رسمي وزارة government presidency الأمم المتحدة parliament برلمان وكالة رسمية"),
         ("news", "news أخبار إخبارية breaking مباشر العربية الجزيرة bbc cnn sky reuters"),
         ("interview", "interview مقابلة حوار podcast بودكاست ضيف"),
         ("documentary", "documentary وثائقي وثائق تحقيق investigation"),
@@ -471,6 +567,36 @@ def _infer_channel_type(item: Dict[str, Any]) -> str:
         if any(term in text for term in terms.split()):
             return channel_type
     return "independent"
+
+
+def _discussion_format(item: Dict[str, Any]) -> Tuple[str, float]:
+    title = str(item.get("title") or "").casefold()
+    body = f"{title} {item.get('description', '')[:2500]}".casefold()
+    groups = (
+        ("roundtable", "roundtable طاولة مستديرة مائدة مستديرة", 3.8),
+        ("debate", "debate مناظرة مواجهة رأي مقابل وجهات نظر", 3.5),
+        ("panel_discussion", "panel discussion panelists نقاش حلقة نقاشية محللون analysts experts خبراء", 3.2),
+        ("multi_guest_interview", "guests ضيوف joined by يستضيف حوار متعدد مقابلة جماعية", 2.8),
+        ("analysis", "analysis تحليل explained شرح", 1.2),
+    )
+    detected, score = "other", 0.0
+    for content_type, terms, weight in groups:
+        hits = sum(1 for term in terms.split() if term in body)
+        if hits and weight + min(3.0, hits * 0.8) > score:
+            detected = content_type
+            score = weight + min(3.0, hits * 0.8)
+    multi_party_terms = (
+        "عدة أطراف", "طرفان", "محللون", "خبراء", "ضيوف", "panelists", "analysts",
+        "experts", "guests", "versus", " vs ", "مع وضد", "رأي مقابل",
+    )
+    multi_party_hits = sum(1 for term in multi_party_terms if term in body)
+    score += min(3.0, multi_party_hits * 1.1)
+    duration = float(item.get("duration") or 0)
+    if duration >= 900:
+        score += 0.8
+    if item.get("channel_id") and _infer_channel_type(item) in {"official", "news"}:
+        score += 0.5
+    return detected, round(min(10.0, score), 1)
 
 
 def _filter_failures(item: Dict[str, Any], filters: Dict[str, Any], language_match: bool) -> List[str]:
@@ -494,8 +620,23 @@ def _filter_failures(item: Dict[str, Any], filters: Dict[str, Any], language_mat
     body = f"{item.get('channel', '')} {item.get('title', '')} {item.get('description', '')[:2000]}".casefold()
     if filters["country"] and filters["country"].casefold() not in body:
         failures.append("البلد غير ظاهر في بيانات الفيديو")
-    if filters["channel_type"] != "any" and item.get("channel_type") != filters["channel_type"]:
+    accepted_channel_types = {filters["channel_type"]}
+    if filters["channel_type"] == "official":
+        accepted_channel_types.add("news")
+    if filters["channel_type"] != "any" and item.get("channel_type") not in accepted_channel_types:
         failures.append("نوع القناة غير مطابق")
+    requested_content = filters["content_type"]
+    accepted_content_types = {
+        "panel_discussion": {"panel_discussion", "debate", "roundtable", "multi_guest_interview"},
+        "debate": {"debate"},
+        "roundtable": {"roundtable"},
+        "multi_guest_interview": {"multi_guest_interview", "panel_discussion"},
+        "analysis": {"analysis", "panel_discussion", "debate", "roundtable"},
+    }
+    if requested_content != "any" and item.get("content_type") not in accepted_content_types.get(requested_content, {requested_content}):
+        failures.append("ليس نقاشًا متعدد الأطراف بالمواصفات المطلوبة")
+    if float(item.get("discussion_format_score") or 0) < filters["min_discussion_score"]:
+        failures.append("قوة صيغة النقاش أقل من الحد")
     if filters["min_views"] and float(item.get("view_count") or 0) < filters["min_views"]:
         failures.append("المشاهدات أقل من الحد")
     live_status = str(item.get("live_status") or "not_live").casefold()
@@ -537,6 +678,7 @@ def _score_candidate(item: Dict[str, Any], brief: ResearchBrief, filters: Option
     if "shorts" in {str(term).casefold() for term in brief.excluded_content} and duration and duration <= 70:
         excluded_hit = True
     item["channel_type"] = _infer_channel_type(item)
+    item["content_type"], item["discussion_format_score"] = _discussion_format(item)
     language = str(item.get("language") or "").casefold()
     aliases = {"العربية": "ar", "عربي": "ar", "arabic": "ar", "الإنجليزية": "en", "انجليزي": "en", "english": "en"}
     requested_languages = list(brief.preferred_languages)
@@ -632,7 +774,7 @@ def _deduplicate_reuploads(candidates: Sequence[Dict[str, Any]]) -> List[Dict[st
     return unique
 
 
-async def _map_limited(func: Callable[[str], Any], ids: Sequence[str], concurrency: int = 4) -> List[Any]:
+async def _map_limited(func: Callable[[str], Any], ids: Sequence[str], concurrency: int = 2) -> List[Any]:
     semaphore = asyncio.Semaphore(concurrency)
 
     async def one(video_id: str) -> Any:
@@ -651,7 +793,7 @@ async def _search_plan_queries(
     search_fn: Callable[[str, int], List[Dict[str, Any]]],
     per_query: int,
 ) -> List[Any]:
-    semaphore = asyncio.Semaphore(3)
+    semaphore = asyncio.Semaphore(2)
 
     async def one(item: Dict[str, Any]) -> Any:
         async with semaphore:
@@ -736,12 +878,25 @@ async def _enrich_transcripts(
     limit: int,
 ) -> Dict[str, int]:
     if not transcript_fetcher or not items or limit <= 0:
-        return {"attempted": 0, "available": 0}
+        return {"attempted": 0, "available": 0, "skipped_rate_limit": 0}
     semaphore = asyncio.Semaphore(3)
     targets = items[:limit]
+    if _youtube_rate_limited():
+        for item in targets:
+            item["transcript_available"] = False
+            item["transcript_quality"] = 0.0
+            item["transcript_error"] = "أُجّل استخراج النص مؤقتًا بسبب حد طلبات YouTube؛ أعد البحث بعد فترة التهدئة."
+        return {"attempted": 0, "available": 0, "skipped_rate_limit": len(targets)}
 
     async def fetch(item: Dict[str, Any]) -> None:
         async with semaphore:
+            if _youtube_rate_limited():
+                item["transcript_available"] = False
+                item["transcript_quality"] = 0.0
+                item["transcript_skipped_rate_limit"] = True
+                item["transcript_error"] = "أُجّل استخراج النص مؤقتًا بسبب حد طلبات YouTube؛ أعد البحث بعد فترة التهدئة."
+                return
+            item["transcript_attempted"] = True
             try:
                 data = await asyncio.to_thread(transcript_fetcher, item["webpage_url"])
                 transcript = re.sub(r"\n{3,}", "\n\n", str((data or {}).get("txt") or "")).strip()
@@ -752,21 +907,42 @@ async def _enrich_transcripts(
                     item["transcript_complete"] = True
                     topical = _overlap(item.get("title", ""), transcript[:12000])
                     quality = min(10.0, 2.5 + math.log1p(len(transcript) / 1000) * 1.5 + topical * 3)
+                    discussion_cues = (
+                        "ينضم إلينا", "معنا في النقاش", "ضيفنا", "ضيوفنا", "المحلل", "الخبير",
+                        "رأي آخر", "وجهة النظر الأخرى", "joined by", "our guests", "panel",
+                        "analyst", "expert", "another view", "let me respond", "disagree",
+                    )
+                    cue_hits = sum(1 for cue in discussion_cues if cue in transcript[:24000].casefold())
+                    verified_discussion = min(
+                        10.0,
+                        float(item.get("discussion_format_score") or 0) * 0.75 + min(4.0, cue_hits * 0.8),
+                    )
                     item["transcript_quality"] = round(quality, 1)
+                    item["verified_discussion_score"] = round(verified_discussion, 1)
                     item["content_evidence_score"] = round(min(10.0, quality * 0.65 + float(item.get("evidence_score") or 0) * 0.35), 1)
                     item["total_score"] = round(float(item.get("total_score") or 0) + quality * 0.3, 2)
                     item["selection_score"] = round(float(item.get("selection_score") or 0) + quality * 0.65, 2)
                 else:
+                    error_message = str((data or {}).get("error") or "لا تتوفر ترجمة لهذا الفيديو")
+                    if "429" in error_message or "Too Many Requests" in error_message or "Sign in to confirm" in error_message:
+                        _mark_youtube_rate_limited("yt-dlp transcript")
                     item["transcript_available"] = False
-                    item["transcript_error"] = str((data or {}).get("error") or "لا تتوفر ترجمة لهذا الفيديو")[:500]
+                    item["transcript_error"] = error_message[:500]
                     item["transcript_quality"] = 0.0
             except Exception as exc:
+                message = str(exc)
+                if "429" in message or "Too Many Requests" in message or "Sign in to confirm" in message:
+                    _mark_youtube_rate_limited("yt-dlp transcript")
                 item["transcript_available"] = False
-                item["transcript_error"] = str(exc)[:500]
+                item["transcript_error"] = message[:500]
                 item["transcript_quality"] = 0.0
 
     await asyncio.gather(*(fetch(item) for item in targets))
-    return {"attempted": len(targets), "available": len([item for item in targets if item.get("transcript_available")])}
+    return {
+        "attempted": len([item for item in targets if item.get("transcript_attempted")]),
+        "available": len([item for item in targets if item.get("transcript_available")]),
+        "skipped_rate_limit": len([item for item in targets if item.get("transcript_skipped_rate_limit")]),
+    }
 
 
 def _fallback_stage(item: Dict[str, Any]) -> Tuple[int, str]:
@@ -791,13 +967,17 @@ async def _analyze_finalists(items: List[Dict[str, Any]], brief: ResearchBrief, 
         "video_id": item["video_id"], "title": item["title"], "channel": item["channel"],
         "description": item.get("description", "")[:1800], "angle": (item.get("matched_angles") or ["general"])[0],
         "published": item.get("upload_date", ""), "duration": item.get("duration"),
-        "transcript_excerpt": item.get("transcript", "")[:6000],
+        "discussion_format_score": item.get("discussion_format_score"),
+        "verified_discussion_score": item.get("verified_discussion_score"),
+        "transcript_excerpt": item.get("transcript", "")[:10000],
     } for item in items]
     ai = await _openai_json(
         "أنت محلل فيديو دقيق. لا تدّع مشاهدة محتوى غير موجود في البيانات. لا تختلق ضيوفًا أو اقتباسات. أجب JSON فقط.",
         "رتّب الفيديوهات كسلسلة نقاش تعليمية تبدأ بالخلفية والجذور، ثم الوقائع والأدلة، ثم التحليل والرأي المقابل، وتنتهي بآخر التطورات والسيناريوهات. "
         "لكل video_id اكتب: summary من سطرين، main_arguments، discussion_strength من 0 إلى 10، adds_to_previous، angle، contradictions، "
         "sequence_position، narrative_stage، ordering_reason يشرح بدقة سبب موضعه، strengths قائمة نقاط القوة، weaknesses قائمة نقاط الضعف، "
+        "participants قائمة {name, role, position} للأسماء والأدوار المذكورة صراحة فقط، discussion_dynamics يشرح طبيعة التفاعل بين الأطراف، "
+        "exclusive_value يشرح ما الذي يجعل النقاش أصليًا أو حصريًا بناءً على النص فقط، analysis_basis يحدد الجمل أو البيانات التي بُني عليها التحليل، "
         "event_claims قائمة من {date بصيغة YYYY أو YYYY-MM أو YYYY-MM-DD فقط إن كان مذكورًا، claim، certainty، evidence}. "
         "اعتمد على النص المرفق، وإن لم يتوفر فصرّح بأن التحليل مبني على البيانات الوصفية ولا تخترع تاريخًا. "
         "أعد {\"videos\":[...]}.\n"
@@ -817,16 +997,22 @@ async def _analyze_finalists(items: List[Dict[str, Any]], brief: ResearchBrief, 
         fallback_rank, fallback_label = _fallback_stage(item)
         item["narrative_stage"] = str(analysis.get("narrative_stage") or fallback_label)
         item["ordering_reason"] = str(analysis.get("ordering_reason") or (
-            "وُضع أولًا لأنه يقدم المدخل والسياق اللازمين لفهم بقية السلسلة."
-            if index == 0 else "وُضع هنا لأنه يبني على السياق السابق ويضيف طبقة جديدة إلى النقاش."
+            f"ترتيب آلي في مرحلة «{fallback_label}» اعتمادًا على زاوية البحث وتاريخ النشر والبيانات المتحققة."
         ))
         item["strengths"] = analysis.get("strengths") if isinstance(analysis.get("strengths"), list) else [
-            "صلة قوية بموضوع البحث",
-            "بيانات الفيديو والرابط تحققت بنجاح",
+            "يتوافق عنوان الفيديو وبياناته مع موضوع البحث وشروط المناقشة.",
+            "استخُرج النص وأُدخل في قياس قوة المناقشة." if item.get("transcript_available") else "تم التحقق من بيانات الفيديو المتاحة.",
         ]
         item["weaknesses"] = analysis.get("weaknesses") if isinstance(analysis.get("weaknesses"), list) else ([
             "لا تتوفر ترجمة قابلة للاستخراج؛ التحليل مبني على العنوان والوصف."
         ] if not item.get("transcript_available") else ["قد يعرض زاوية واحدة ويحتاج إلى مقارنته ببقية السلسلة."])
+        participants = analysis.get("participants")
+        item["participants"] = [participant for participant in participants if isinstance(participant, dict)] if isinstance(participants, list) else []
+        item["discussion_dynamics"] = str(analysis.get("discussion_dynamics") or "لم يسمِّ التحليل الآلي أطرافًا غير مثبتة في النص.")
+        item["exclusive_value"] = str(analysis.get("exclusive_value") or "لا توجد دعوى حصرية غير مثبتة؛ التقييم مبني على النص والبيانات المتاحة فقط.")
+        item["analysis_basis"] = str(analysis.get("analysis_basis") or (
+            "النص الكامل المستخرج وبيانات الفيديو." if item.get("transcript_available") else "بيانات الفيديو الوصفية فقط."
+        ))
         claims = analysis.get("event_claims")
         item["event_claims"] = [claim for claim in claims if isinstance(claim, dict)] if isinstance(claims, list) else []
         try:
@@ -937,9 +1123,19 @@ async def research_youtube(
     applied_filters = _normalise_filters(filters)
     brief = await analyze_prompt(user_prompt, api_key)
     plan = await build_search_plan(brief, api_key)
+    content_query_context = {
+        "panel_discussion": "نقاش بين عدة أطراف محللون خبراء panel discussion multiple analysts",
+        "debate": "مناظرة رأي مقابل debate opposing views",
+        "roundtable": "طاولة مستديرة محللون roundtable analysts",
+        "multi_guest_interview": "حوار عدة ضيوف multiple guests interview",
+        "analysis": "تحليل خبراء expert analysis",
+    }.get(applied_filters["content_type"], "")
+    source_query_context = "قناة رسمية مؤسسة إعلامية official news channel" if applied_filters["channel_type"] == "official" else ""
     query_context = " ".join(part for part in (
         applied_filters["country"],
         "عربي" if applied_filters["language"] == "ar" else "English" if applied_filters["language"] == "en" else "",
+        content_query_context,
+        source_query_context,
     ) if part)
     if query_context:
         plan = [{**item, "query": f"{item['query']} {query_context}".strip()} for item in plan]
@@ -974,6 +1170,7 @@ async def research_youtube(
     deep_limit = min(len(ranked_discovery), max(80, brief.desired_video_count["max"] * 8))
     enriched: List[Dict[str, Any]] = []
     checked = 0
+    limited_metadata_count = 0
     # Inspect in batches. Continue beyond the first twenty when verification or
     # explicit exclusions leave too few candidates for the requested sequence.
     while checked < deep_limit:
@@ -982,6 +1179,9 @@ async def research_youtube(
         metadata_by_id = {item["video_id"]: item for item in metadata if item}
         for item in batch:
             full = metadata_by_id.get(item["video_id"])
+            if not full and metadata_fn is verify_video and _youtube_rate_limited():
+                full = _metadata_from_search_result(item)
+                limited_metadata_count += 1
             if not full:
                 continue
             full["matched_queries"] = item.get("matched_queries", [])
@@ -1000,12 +1200,27 @@ async def research_youtube(
 
     enriched = _deduplicate_reuploads(enriched)
     dated, applied_date_policy = _date_filter(enriched, brief.date_policy, brief.desired_video_count["min"])
+    if applied_filters["date_from"] or applied_filters["date_to"]:
+        applied_date_policy = (
+            f"من {applied_filters['date_from'] or 'البداية'} إلى {applied_filters['date_to'] or 'الآن'} — نطاق صارم"
+        )
     eligible = [item for item in dated if item["accepted"]]
     if not brief.date_policy:
         eligible = [item for item in enriched if item["accepted"]]
     ranked, tier_counts = _selection_pool(enriched, dated if brief.date_policy else enriched)
+    if applied_filters["strict_filters"]:
+        ranked = [item for item in ranked if item.get("selection_tier") == "strict_match"]
     finalist_pool = ranked[: max(brief.desired_video_count["max"] * 4, 28)]
-    default_probe_count = min(20, max(14, brief.desired_video_count["max"] * 2))
+    if applied_filters["strict_filters"] and applied_filters["require_transcript"]:
+        default_probe_count = max(
+            brief.desired_video_count["max"],
+            min(28, brief.desired_video_count["max"] * 3),
+        )
+    else:
+        default_probe_count = max(
+            brief.desired_video_count["max"],
+            min(14, brief.desired_video_count["max"] * 2),
+        )
     try:
         configured_probe_count = int(os.environ.get("YOUTUBE_RESEARCH_TRANSCRIPTS", str(default_probe_count)))
     except ValueError:
@@ -1016,6 +1231,12 @@ async def research_youtube(
         transcript_fetcher if applied_filters["require_transcript"] else None,
         probe_count,
     )
+    if applied_filters["strict_filters"] and applied_filters["require_transcript"]:
+        finalist_pool = [
+            item for item in finalist_pool
+            if item.get("transcript_available")
+            and float(item.get("verified_discussion_score") or 0) >= applied_filters["min_discussion_score"]
+        ]
     finalist_pool.sort(key=lambda item: item.get("selection_score", 0), reverse=True)
     selected = _select_diverse(finalist_pool, brief.desired_video_count["max"])
 
@@ -1044,9 +1265,16 @@ async def research_youtube(
             "eligible": len(eligible),
             "selected": len(selected),
             "selection_tiers": tier_counts,
-            "selection_strategy": "strict_then_expanded_best_across_angles",
+            "selection_strategy": (
+                "strict_verified_panel_discussions"
+                if applied_filters["strict_filters"] else "strict_then_expanded_best_across_angles"
+            ),
+            "strict_filters_applied": applied_filters["strict_filters"],
             "transcripts_attempted": transcript_stats["attempted"],
             "transcripts_available": transcript_stats["available"],
+            "transcripts_skipped_rate_limit": transcript_stats["skipped_rate_limit"],
+            "limited_metadata_fallbacks": limited_metadata_count,
+            "youtube_rate_limited": _youtube_rate_limited(),
             "date_policy_applied": applied_date_policy,
             "duration_seconds": round((finished - started).total_seconds(), 2),
         },
@@ -1062,6 +1290,10 @@ async def research_youtube(
                if len(selected) < brief.desired_video_count["min"] else [])
             + ([f"تعذر استخراج ترجمة لبعض المرشحين: نجح {transcript_stats['available']} من {transcript_stats['attempted']}. تم توضيح ذلك داخل نقاط ضعف كل فيديو."]
                if transcript_stats["attempted"] and transcript_stats["available"] < transcript_stats["attempted"] else [])
+            + ([f"فعّل YouTube حد الطلبات مؤقتًا؛ استُخدمت بيانات نتائج البحث الموثقة لـ{limited_metadata_count} فيديو بدل تكرار الطلبات المحجوبة، وأُجّل استخراج {transcript_stats['skipped_rate_limit']} نصًا حتى انتهاء فترة التهدئة."]
+               if limited_metadata_count or transcript_stats["skipped_rate_limit"] else [])
+            + ([f"الشروط الصارمة أعادت {len(selected)} فقط من أصل {brief.desired_video_count['min']} مطلوبة. لم يضف الوكيل فيديوهات خارج التاريخ أو نوع القناة أو صيغة النقاش أو من دون نص مستخرج لمجرد إكمال العدد."]
+               if applied_filters["strict_filters"] and len(selected) < brief.desired_video_count["min"] else [])
         ),
         "generated_at": finished.isoformat(),
     }
