@@ -4055,11 +4055,6 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             status.textContent = 'إنشاء خطة بحث متعددة الزوايا ثم فحص نتائج YouTube...';
             if (results) results.classList.add('hidden');
             try {
-                let previousVideoIds = [];
-                try {
-                    const saved = JSON.parse(localStorage.getItem('youtubeResearchPreviousVideoIds') || '[]');
-                    if (Array.isArray(saved)) previousVideoIds = saved.filter(Boolean).slice(0, 100);
-                } catch (_) { previousVideoIds = []; }
                 const fieldValue = id => document.getElementById(id)?.value ?? '';
                 const numberValue = id => Math.max(0, Number(fieldValue(id)) || 0);
                 const filters = {
@@ -4078,6 +4073,17 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                     require_transcript: Boolean(document.getElementById('yt-filter-transcript')?.checked),
                     strict_filters: Boolean(document.getElementById('yt-filter-strict')?.checked)
                 };
+                const searchSignature = JSON.stringify({
+                    prompt: prompt.toLocaleLowerCase('ar').replace(/\s+/g, ' ').trim(),
+                    filters
+                });
+                let previousVideoIds = [];
+                try {
+                    const saved = JSON.parse(localStorage.getItem('youtubeResearchPreviousVideoIds') || 'null');
+                    if (saved && !Array.isArray(saved) && saved.signature === searchSignature && Array.isArray(saved.ids)) {
+                        previousVideoIds = saved.ids.filter(Boolean).slice(0, 100);
+                    }
+                } catch (_) { previousVideoIds = []; }
                 const response = await fetch(`${API_URL}/youtube-research`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -4086,10 +4092,11 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                 const payload = await response.json();
                 if (!response.ok) throw new Error(payload.detail || 'فشل البحث');
                 const currentVideoIds = (payload.videos || []).map(video => video.video_id).filter(Boolean);
-                localStorage.setItem('youtubeResearchPreviousVideoIds', JSON.stringify(currentVideoIds));
+                localStorage.setItem('youtubeResearchPreviousVideoIds', JSON.stringify({ signature: searchSignature, ids: currentVideoIds }));
                 renderYouTubeResearch(payload);
                 const excludedCount = payload.stats?.excluded_from_previous_search || 0;
-                status.textContent = `اكتملت الجلسة: ${payload.stats?.selected || 0} فيديو موثق جديد — توفرت نصوص ${payload.stats?.transcripts_available || 0} من ${payload.stats?.transcripts_attempted || 0}${excludedCount ? ` — تم استبعاد ${excludedCount} من البحث السابق` : ''}`;
+                const reusedPrevious = Boolean(payload.stats?.reused_previous_results);
+                status.textContent = `اكتملت الجلسة: ${payload.stats?.selected || 0} فيديو موثق${reusedPrevious ? ' من أفضل النتائج المتاحة سابقًا' : ' جديد'} — توفرت نصوص ${payload.stats?.transcripts_available || 0} من ${payload.stats?.transcripts_attempted || 0}${excludedCount && !reusedPrevious ? ` — تم استبعاد ${excludedCount} من البحث السابق` : ''}`;
             } catch (error) {
                 status.textContent = error.message || 'تعذر إكمال البحث';
                 if (results) {

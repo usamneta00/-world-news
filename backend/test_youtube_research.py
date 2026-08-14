@@ -233,6 +233,44 @@ class YouTubeResearchTests(unittest.TestCase):
         self.assertTrue(all(video["upload_date"] == now.strftime("%Y%m%d") for video in report["videos"]))
         self.assertTrue(any("الشروط الصارمة" in warning for warning in report["warnings"]))
 
+    def test_reuses_best_previous_results_when_youtube_has_no_new_ids(self):
+        now = datetime.now(timezone.utc)
+
+        def search(query, limit):
+            return [
+                {"video_id": f"repeatvid{i:02d}", "title": f"نقاش سياسي موثق زاويةفريدة{i} محورخاص{i}", "channel": f"قناة {i}", "url": "x"}
+                for i in range(7)
+            ]
+
+        def metadata(video_id):
+            index = int(video_id[-2:])
+            return {
+                "video_id": video_id, "title": f"نقاش سياسي موثق زاويةفريدة{index} محورخاص{index}",
+                "channel": f"قناة {index}", "channel_id": f"channel-{index}", "uploader": f"قناة {index}",
+                "upload_date": now.strftime("%Y%m%d"), "timestamp": now.timestamp(), "duration": 1200,
+                "description": "نقاش سياسي موثق بالمصادر", "view_count": 20_000,
+                "live_status": "not_live", "original_url": f"https://youtube.com/watch?v={video_id}",
+                "webpage_url": f"https://youtube.com/watch?v={video_id}", "thumbnail": "https://example.com/x.jpg",
+                "language": "ar", "availability": "public",
+            }
+
+        common = {
+            "api_key": "", "search_fn": search, "metadata_fn": metadata,
+            "filters": {"strict_filters": False, "require_transcript": False, "content_type": "any", "min_discussion_score": 0, "min_reliability": 0},
+        }
+        first = asyncio.run(research_youtube("@Youtube أريد 7 فيديوهات عن نقاش سياسي موثق", **common))
+        first_ids = {video["video_id"] for video in first["videos"]}
+        second = asyncio.run(research_youtube(
+            "@Youtube أريد 7 فيديوهات عن نقاش سياسي موثق",
+            exclude_video_ids=first_ids,
+            **common,
+        ))
+
+        self.assertEqual(second["stats"]["selected"], 7)
+        self.assertTrue(second["stats"]["reused_previous_results"])
+        self.assertEqual(second["stats"]["new_unique"], 0)
+        self.assertTrue(any("الجلسة السابقة" in warning for warning in second["warnings"]))
+
 
 if __name__ == "__main__":
     unittest.main()

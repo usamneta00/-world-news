@@ -1153,13 +1153,17 @@ async def research_youtube(
             candidate["matched_angles"] = [query["angle"]]
             candidate["query_priority"] = query["priority"]
             discovered.append(candidate)
-    unique = _deduplicate(discovered)
+    all_unique = _deduplicate(discovered)
     excluded_ids = {str(video_id).strip() for video_id in exclude_video_ids if str(video_id).strip()}
-    excluded_previous_count = len([item for item in unique if item.get("video_id") in excluded_ids])
-    if excluded_ids:
-        unique = [item for item in unique if item.get("video_id") not in excluded_ids]
+    excluded_previous_count = len([item for item in all_unique if item.get("video_id") in excluded_ids])
+    unique = [item for item in all_unique if item.get("video_id") not in excluded_ids]
+    new_unique_count = len(unique)
+    reused_previous_results = False
+    if not unique and all_unique:
+        reused_previous_results = True
+        unique = [dict(item, reused_previous_search=True) for item in all_unique]
     if not unique:
-        raise RuntimeError("لم يعثر YouTube على نتائج جديدة مختلفة عن جلسة البحث السابقة لهذا الطلب.")
+        raise RuntimeError("لم يعثر YouTube على أي نتائج قابلة للفحص لهذا الطلب. جرّب توسيع الموضوع أو تخفيف أحد الفلاتر.")
 
     for item in unique:
         item["discovery_score"] = _overlap(brief.main_topic, item.get("title", "")) * 10 + float(item.get("query_priority") or 0)
@@ -1259,7 +1263,9 @@ async def research_youtube(
             "queries": len(plan),
             "discovered": len(discovered),
             "unique": len(unique),
+            "new_unique": new_unique_count,
             "excluded_from_previous_search": excluded_previous_count,
+            "reused_previous_results": reused_previous_results,
             "metadata_checked": len(enriched),
             "discovery_pool_examined": checked,
             "eligible": len(eligible),
@@ -1294,6 +1300,8 @@ async def research_youtube(
                if limited_metadata_count or transcript_stats["skipped_rate_limit"] else [])
             + ([f"الشروط الصارمة أعادت {len(selected)} فقط من أصل {brief.desired_video_count['min']} مطلوبة. لم يضف الوكيل فيديوهات خارج التاريخ أو نوع القناة أو صيغة النقاش أو من دون نص مستخرج لمجرد إكمال العدد."]
                if applied_filters["strict_filters"] and len(selected) < brief.desired_video_count["min"] else [])
+            + (["لم يجد YouTube نتائج جديدة مختلفة بعد تطبيق شروطك؛ لذلك أعاد الوكيل فحص أفضل نتائج الجلسة السابقة بدل ترك الصفحة فارغة."]
+               if reused_previous_results else [])
         ),
         "generated_at": finished.isoformat(),
     }
