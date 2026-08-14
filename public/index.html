@@ -139,7 +139,7 @@
             align-items: center;
             justify-content: center;
             color: #ef4444;
-            background: transparent;
+            background: transparent !important;
             border: 0;
             border-radius: 0.5rem;
             box-shadow: none;
@@ -148,8 +148,8 @@
         #tab-youtube-research:hover,
         #tab-youtube-research.active {
             color: #f87171;
-            background: rgba(239, 68, 68, 0.08);
-            transform: none;
+            background: transparent !important;
+            transform: scale(1.12);
             box-shadow: none;
         }
 
@@ -157,6 +157,8 @@
             width: 1rem;
             height: 1rem;
             stroke-width: 2;
+            fill: currentColor;
+            stroke: currentColor;
         }
 
         /* Custom Scrollbar */
@@ -1509,7 +1511,9 @@
                 </button>
                 <button id="tab-youtube-research" onclick="switchTab('youtube-research')"
                     class="shrink-0 p-2 transition-colors" title="وكيل بحث YouTube" aria-label="وكيل بحث YouTube">
-                    <i data-lucide="youtube" class="w-4 h-4"></i>
+                    <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M8 5.75v12.5L18 12 8 5.75Z"></path>
+                    </svg>
                 </button>
                 <button id="tab-yemen" onclick="switchTab('yemen')"
                     class="p-2 hover:text-neon-blue transition-colors text-neutral-500" title="أخبار اليمن">
@@ -1603,7 +1607,9 @@
                 <div class="flex items-center gap-4">
                     <div
                         class="w-10 h-10 rounded-lg bg-red-500/15 flex items-center justify-center text-red-400 group-hover:scale-110 transition-transform">
-                        <i data-lucide="youtube" class="w-5 h-5"></i>
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <path d="M8 5.75v12.5L18 12 8 5.75Z"></path>
+                        </svg>
                     </div>
                     <div class="text-right">
                         <div class="text-sm font-bold text-neutral-200">وكيل بحث YouTube</div>
@@ -1891,7 +1897,11 @@
                     <div class="absolute -top-20 -left-20 w-64 h-64 rounded-full bg-red-600/10 blur-3xl"></div>
                     <div class="relative">
                         <div class="flex items-center gap-3 mb-4">
-                            <span class="w-12 h-12 rounded-2xl bg-red-600 flex items-center justify-center shadow-lg shadow-red-600/20"><i data-lucide="youtube" class="w-6 h-6 text-white"></i></span>
+                            <span class="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center shadow-lg shadow-red-600/20">
+                                <svg class="w-6 h-6 text-white fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <path d="M8 5.75v12.5L18 12 8 5.75Z"></path>
+                                </svg>
+                            </span>
                             <div>
                                 <p class="text-[10px] font-mono tracking-[0.25em] text-red-400 uppercase">On-demand intelligence</p>
                                 <h2 class="font-serif text-3xl md:text-5xl text-white">YouTube Research Agent</h2>
