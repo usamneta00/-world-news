@@ -1122,30 +1122,42 @@ async def research_youtube(
     started = datetime.now(timezone.utc)
     applied_filters = _normalise_filters(filters)
     brief = await analyze_prompt(user_prompt, api_key)
-    plan = await build_search_plan(brief, api_key)
-    content_query_context = {
-        "panel_discussion": "نقاش بين عدة أطراف محللون خبراء panel discussion multiple analysts",
-        "debate": "مناظرة رأي مقابل debate opposing views",
-        "roundtable": "طاولة مستديرة محللون roundtable analysts",
-        "multi_guest_interview": "حوار عدة ضيوف multiple guests interview",
-        "analysis": "تحليل خبراء expert analysis",
-    }.get(applied_filters["content_type"], "")
-    source_query_context = "قناة رسمية مؤسسة إعلامية official news channel" if applied_filters["channel_type"] == "official" else ""
-    query_context = " ".join(part for part in (
-        applied_filters["country"],
-        "عربي" if applied_filters["language"] == "ar" else "English" if applied_filters["language"] == "en" else "",
-        content_query_context,
-        source_query_context,
-    ) if part)
-    if query_context:
-        plan = [{**item, "query": f"{item['query']} {query_context}".strip()} for item in plan]
+    base_plan = await build_search_plan(brief, api_key)
+    content_contexts = {
+        "panel_discussion": ("نقاش محللون خبراء", "panel discussion analysts"),
+        "debate": ("مناظرة رأي مقابل", "debate opposing views"),
+        "roundtable": ("طاولة مستديرة محللون", "roundtable analysts"),
+        "multi_guest_interview": ("حوار عدة ضيوف", "multiple guests interview"),
+        "analysis": ("تحليل خبراء", "expert analysis"),
+    }
+    arabic_content, english_content = content_contexts.get(applied_filters["content_type"], ("", ""))
+    constrained_plan: List[Dict[str, Any]] = []
+    for item in base_plan[:6]:
+        query = str(item["query"])
+        is_arabic = bool(re.search(r"[\u0600-\u06ff]", query))
+        additions = [
+            applied_filters["country"],
+            arabic_content if is_arabic else english_content,
+            "قناة رسمية" if is_arabic and applied_filters["channel_type"] == "official" else
+            "official news channel" if applied_filters["channel_type"] == "official" else "",
+        ]
+        constrained_query = " ".join([query] + [part for part in additions if part]).strip()
+        constrained_plan.append({**item, "query": constrained_query, "priority": int(item.get("priority") or 5) + 1})
+    # Keep broad discovery queries alongside precise discussion queries. Making
+    # every query highly constrained can cause YouTube to return an empty page.
+    plan = []
+    for broad, constrained in zip(base_plan[:6], constrained_plan):
+        plan.extend((broad, constrained))
+    plan = plan[:12] or base_plan
 
     per_query = max(12, min(30, math.ceil(160 / max(1, len(plan)))))
     search_results = await _search_plan_queries(plan, search_fn, per_query)
     discovered: List[Dict[str, Any]] = []
+    search_failures: List[str] = []
     for query, result in zip(plan, search_results):
         if isinstance(result, Exception):
             logger.info("YouTube query failed (%s): %s", query["query"], result)
+            search_failures.append(str(result))
             continue
         for candidate in result:
             candidate = dict(candidate)
@@ -1153,6 +1165,25 @@ async def research_youtube(
             candidate["matched_angles"] = [query["angle"]]
             candidate["query_priority"] = query["priority"]
             discovered.append(candidate)
+    if not discovered:
+        recovery_plan = [
+            {"query": brief.main_topic, "angle": "broad_recovery", "priority": 10},
+            {"query": f"{brief.main_topic} نقاش محللين", "angle": "discussion_recovery_ar", "priority": 9},
+            {"query": f"{brief.main_topic} panel discussion analysts", "angle": "discussion_recovery_en", "priority": 9},
+        ]
+        await asyncio.sleep(0.4)
+        recovery_results = await _search_plan_queries(recovery_plan, search_fn, 30)
+        plan.extend(recovery_plan)
+        for query, result in zip(recovery_plan, recovery_results):
+            if isinstance(result, Exception):
+                search_failures.append(str(result))
+                continue
+            for candidate in result:
+                candidate = dict(candidate)
+                candidate["matched_queries"] = [query["query"]]
+                candidate["matched_angles"] = [query["angle"]]
+                candidate["query_priority"] = query["priority"]
+                discovered.append(candidate)
     all_unique = _deduplicate(discovered)
     excluded_ids = {str(video_id).strip() for video_id in exclude_video_ids if str(video_id).strip()}
     excluded_previous_count = len([item for item in all_unique if item.get("video_id") in excluded_ids])
@@ -1163,7 +1194,10 @@ async def research_youtube(
         reused_previous_results = True
         unique = [dict(item, reused_previous_search=True) for item in all_unique]
     if not unique:
-        raise RuntimeError("لم يعثر YouTube على أي نتائج قابلة للفحص لهذا الطلب. جرّب توسيع الموضوع أو تخفيف أحد الفلاتر.")
+        rate_limited_search = any("429" in failure or "Too Many Requests" in failure for failure in search_failures)
+        if rate_limited_search:
+            raise RuntimeError("حجب YouTube طلبات البحث مؤقتًا بسبب كثرة الطلبات من خادم Railway. انتظر فترة قصيرة ثم أعد المحاولة؛ لم يغيّر الوكيل فلاترك.")
+        raise RuntimeError("أعاد YouTube صفر نتائج حتى بعد إعادة المحاولة بعبارات بحث واسعة. أعد المحاولة لاحقًا؛ لم تُخفف الفلاتر ولم تُضف نتائج عشوائية.")
 
     for item in unique:
         item["discovery_score"] = _overlap(brief.main_topic, item.get("title", "")) * 10 + float(item.get("query_priority") or 0)

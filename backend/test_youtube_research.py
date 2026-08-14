@@ -271,6 +271,43 @@ class YouTubeResearchTests(unittest.TestCase):
         self.assertEqual(second["stats"]["new_unique"], 0)
         self.assertTrue(any("الجلسة السابقة" in warning for warning in second["warnings"]))
 
+    def test_broad_queries_still_discover_results_when_precise_queries_are_empty(self):
+        now = datetime.now(timezone.utc)
+
+        def search(query, limit):
+            if "قناة رسمية" in query or "official news channel" in query:
+                return []
+            return [
+                {"video_id": f"broadvid{i:03d}", "title": f"حلقة نقاشية بين محللين زاوية{i} محور{i}", "channel": "شبكة أخبار", "url": "x"}
+                for i in range(7)
+            ]
+
+        def metadata(video_id):
+            index = int(video_id[-3:])
+            return {
+                "video_id": video_id, "title": f"حلقة نقاشية بين محللين زاوية{index} محور{index}",
+                "channel": "شبكة أخبار", "channel_id": f"news-{index}", "uploader": "شبكة أخبار",
+                "upload_date": now.strftime("%Y%m%d"), "timestamp": now.timestamp(), "duration": 1500,
+                "description": "نقاش بين عدة أطراف ومحللين وخبراء", "view_count": 100_000,
+                "live_status": "not_live", "original_url": f"https://youtube.com/watch?v={video_id}",
+                "webpage_url": f"https://youtube.com/watch?v={video_id}", "thumbnail": "https://example.com/x.jpg",
+                "language": "ar", "availability": "public",
+            }
+
+        report = asyncio.run(research_youtube(
+            "@Youtube أريد 7 مناقشات بين محللين عن السياسة الدولية",
+            api_key="", search_fn=search, metadata_fn=metadata,
+            transcript_fetcher=lambda url: {"txt": "ينضم إلينا محللون وخبراء مع رأي آخر في هذا النقاش. " * 200},
+            filters={
+                "channel_type": "official", "content_type": "panel_discussion",
+                "min_discussion_score": 6, "min_reliability": 5,
+                "require_transcript": True, "strict_filters": True,
+            },
+        ))
+
+        self.assertEqual(report["stats"]["selected"], 7)
+        self.assertGreater(report["stats"]["discovered"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
