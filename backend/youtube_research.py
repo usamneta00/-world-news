@@ -421,51 +421,9 @@ def fetch_video_metadata(video_id: str) -> Optional[Dict[str, Any]]:
             return fast
     except Exception as exc:
         logger.info("Fast YouTube metadata fallback for %s: %s", video_id, exc)
-
-    if _youtube_rate_limited():
-        return None
-
-    options = {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "ignoreerrors": True,
-        "noplaylist": True,
-        "no_check_formats": True,
-        "ignore_no_formats_error": True,
-        "socket_timeout": 15,
-        "retries": 1,
-        "extractor_retries": 1,
-    }
-    try:
-        with yt_dlp.YoutubeDL(options) as ydl:
-            info = ydl.extract_info(YOUTUBE_URL.format(video_id), download=False)
-    except Exception as exc:
-        message = str(exc)
-        if "429" in message or "Too Many Requests" in message or "Sign in to confirm" in message:
-            _mark_youtube_rate_limited("yt-dlp metadata")
-            return None
-        raise
-    if not info or not info.get("id"):
-        return None
-    return {
-        "video_id": info.get("id"),
-        "title": info.get("title") or "",
-        "channel": info.get("channel") or info.get("uploader") or "",
-        "channel_id": info.get("channel_id") or "",
-        "uploader": info.get("uploader") or "",
-        "upload_date": info.get("upload_date") or "",
-        "timestamp": info.get("timestamp"),
-        "duration": info.get("duration"),
-        "description": info.get("description") or "",
-        "view_count": info.get("view_count"),
-        "live_status": info.get("live_status") or "",
-        "original_url": info.get("original_url") or YOUTUBE_URL.format(video_id),
-        "webpage_url": info.get("webpage_url") or YOUTUBE_URL.format(video_id),
-        "thumbnail": info.get("thumbnail") or f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
-        "language": info.get("language") or "",
-        "availability": info.get("availability") or "",
-    }
+    # Do not start a second yt-dlp request for every discovery candidate. The
+    # expensive extractor is reserved for the final 7-10 transcript targets.
+    return None
 
 
 def verify_video(video_id: str) -> Optional[Dict[str, Any]]:
@@ -876,72 +834,101 @@ async def _enrich_transcripts(
     items: List[Dict[str, Any]],
     transcript_fetcher: Optional[Callable[[str], Dict[str, Any]]],
     limit: int,
+    *,
+    delay_seconds: float = 0.0,
+    cache_dir: str = "",
 ) -> Dict[str, int]:
     if not transcript_fetcher or not items or limit <= 0:
-        return {"attempted": 0, "available": 0, "skipped_rate_limit": 0}
-    semaphore = asyncio.Semaphore(3)
+        return {"attempted": 0, "available": 0, "skipped_rate_limit": 0, "cache_hits": 0}
     targets = items[:limit]
-    if _youtube_rate_limited():
-        for item in targets:
+    delay_seconds = min(30.0, max(0.0, float(delay_seconds or 0)))
+    if cache_dir:
+        os.makedirs(cache_dir, exist_ok=True)
+
+    def apply_transcript(item: Dict[str, Any], raw_transcript: str, cache_hit: bool = False) -> None:
+        transcript = re.sub(r"\n{3,}", "\n\n", raw_transcript).strip()
+        item["transcript"] = transcript
+        item["transcript_available"] = True
+        item["transcript_chars"] = len(transcript)
+        item["transcript_complete"] = True
+        item["transcript_cache_hit"] = cache_hit
+        topical = _overlap(item.get("title", ""), transcript[:12000])
+        quality = min(10.0, 2.5 + math.log1p(len(transcript) / 1000) * 1.5 + topical * 3)
+        discussion_cues = (
+            "ينضم إلينا", "معنا في النقاش", "ضيفنا", "ضيوفنا", "المحلل", "الخبير",
+            "رأي آخر", "وجهة النظر الأخرى", "joined by", "our guests", "panel",
+            "analyst", "expert", "another view", "let me respond", "disagree",
+        )
+        cue_hits = sum(1 for cue in discussion_cues if cue in transcript[:24000].casefold())
+        verified_discussion = min(
+            10.0,
+            float(item.get("discussion_format_score") or 0) * 0.75 + min(4.0, cue_hits * 0.8),
+        )
+        item["transcript_quality"] = round(quality, 1)
+        item["verified_discussion_score"] = round(verified_discussion, 1)
+        item["content_evidence_score"] = round(min(10.0, quality * 0.65 + float(item.get("evidence_score") or 0) * 0.35), 1)
+        item["total_score"] = round(float(item.get("total_score") or 0) + quality * 0.3, 2)
+        item["selection_score"] = round(float(item.get("selection_score") or 0) + quality * 0.65, 2)
+
+    network_attempts = 0
+    for item in targets:
+        video_id = re.sub(r"[^A-Za-z0-9_-]", "", str(item.get("video_id") or ""))
+        cache_path = os.path.join(cache_dir, f"{video_id}.json") if cache_dir and video_id else ""
+        if cache_path and os.path.exists(cache_path):
+            try:
+                with open(cache_path, "r", encoding="utf-8") as cached_file:
+                    cached = json.load(cached_file)
+                cached_text = str(cached.get("txt") or "").strip()
+                if cached_text:
+                    apply_transcript(item, cached_text, cache_hit=True)
+                    continue
+            except (OSError, ValueError, TypeError):
+                logger.info("Ignoring unreadable transcript cache file: %s", cache_path)
+
+        if _youtube_rate_limited():
             item["transcript_available"] = False
             item["transcript_quality"] = 0.0
+            item["transcript_skipped_rate_limit"] = True
             item["transcript_error"] = "أُجّل استخراج النص مؤقتًا بسبب حد طلبات YouTube؛ أعد البحث بعد فترة التهدئة."
-        return {"attempted": 0, "available": 0, "skipped_rate_limit": len(targets)}
+            continue
 
-    async def fetch(item: Dict[str, Any]) -> None:
-        async with semaphore:
-            if _youtube_rate_limited():
-                item["transcript_available"] = False
-                item["transcript_quality"] = 0.0
-                item["transcript_skipped_rate_limit"] = True
-                item["transcript_error"] = "أُجّل استخراج النص مؤقتًا بسبب حد طلبات YouTube؛ أعد البحث بعد فترة التهدئة."
-                return
-            item["transcript_attempted"] = True
-            try:
-                data = await asyncio.to_thread(transcript_fetcher, item["webpage_url"])
-                transcript = re.sub(r"\n{3,}", "\n\n", str((data or {}).get("txt") or "")).strip()
-                if transcript:
-                    item["transcript"] = transcript
-                    item["transcript_available"] = True
-                    item["transcript_chars"] = len(transcript)
-                    item["transcript_complete"] = True
-                    topical = _overlap(item.get("title", ""), transcript[:12000])
-                    quality = min(10.0, 2.5 + math.log1p(len(transcript) / 1000) * 1.5 + topical * 3)
-                    discussion_cues = (
-                        "ينضم إلينا", "معنا في النقاش", "ضيفنا", "ضيوفنا", "المحلل", "الخبير",
-                        "رأي آخر", "وجهة النظر الأخرى", "joined by", "our guests", "panel",
-                        "analyst", "expert", "another view", "let me respond", "disagree",
-                    )
-                    cue_hits = sum(1 for cue in discussion_cues if cue in transcript[:24000].casefold())
-                    verified_discussion = min(
-                        10.0,
-                        float(item.get("discussion_format_score") or 0) * 0.75 + min(4.0, cue_hits * 0.8),
-                    )
-                    item["transcript_quality"] = round(quality, 1)
-                    item["verified_discussion_score"] = round(verified_discussion, 1)
-                    item["content_evidence_score"] = round(min(10.0, quality * 0.65 + float(item.get("evidence_score") or 0) * 0.35), 1)
-                    item["total_score"] = round(float(item.get("total_score") or 0) + quality * 0.3, 2)
-                    item["selection_score"] = round(float(item.get("selection_score") or 0) + quality * 0.65, 2)
-                else:
-                    error_message = str((data or {}).get("error") or "لا تتوفر ترجمة لهذا الفيديو")
-                    if "429" in error_message or "Too Many Requests" in error_message or "Sign in to confirm" in error_message:
-                        _mark_youtube_rate_limited("yt-dlp transcript")
-                    item["transcript_available"] = False
-                    item["transcript_error"] = error_message[:500]
-                    item["transcript_quality"] = 0.0
-            except Exception as exc:
-                message = str(exc)
-                if "429" in message or "Too Many Requests" in message or "Sign in to confirm" in message:
-                    _mark_youtube_rate_limited("yt-dlp transcript")
-                item["transcript_available"] = False
-                item["transcript_error"] = message[:500]
-                item["transcript_quality"] = 0.0
+        if network_attempts and delay_seconds:
+            await asyncio.sleep(delay_seconds)
+        network_attempts += 1
+        item["transcript_attempted"] = True
+        try:
+            data = await asyncio.to_thread(transcript_fetcher, item["webpage_url"])
+            transcript = str((data or {}).get("txt") or "").strip()
+            if transcript:
+                apply_transcript(item, transcript)
+                if cache_path:
+                    temp_path = f"{cache_path}.{os.getpid()}.tmp"
+                    try:
+                        with open(temp_path, "w", encoding="utf-8") as cache_file:
+                            json.dump({"video_id": video_id, "txt": transcript, "cached_at": datetime.now(timezone.utc).isoformat()}, cache_file, ensure_ascii=False)
+                        os.replace(temp_path, cache_path)
+                    except OSError as exc:
+                        logger.warning("Could not persist transcript cache for %s: %s", video_id, exc)
+                continue
+            error_message = str((data or {}).get("error") or "لا تتوفر ترجمة لهذا الفيديو")
+            if "429" in error_message or "Too Many Requests" in error_message or "Sign in to confirm" in error_message:
+                _mark_youtube_rate_limited("yt-dlp transcript")
+            item["transcript_available"] = False
+            item["transcript_error"] = error_message[:500]
+            item["transcript_quality"] = 0.0
+        except Exception as exc:
+            message = str(exc)
+            if "429" in message or "Too Many Requests" in message or "Sign in to confirm" in message:
+                _mark_youtube_rate_limited("yt-dlp transcript")
+            item["transcript_available"] = False
+            item["transcript_error"] = message[:500]
+            item["transcript_quality"] = 0.0
 
-    await asyncio.gather(*(fetch(item) for item in targets))
     return {
         "attempted": len([item for item in targets if item.get("transcript_attempted")]),
         "available": len([item for item in targets if item.get("transcript_available")]),
         "skipped_rate_limit": len([item for item in targets if item.get("transcript_skipped_rate_limit")]),
+        "cache_hits": len([item for item in targets if item.get("transcript_cache_hit")]),
     }
 
 
@@ -1119,6 +1106,8 @@ async def research_youtube(
     search_fn: Callable[[str, int], List[Dict[str, Any]]] = search_youtube,
     metadata_fn: Callable[[str], Optional[Dict[str, Any]]] = verify_video,
     transcript_fetcher: Optional[Callable[[str], Dict[str, Any]]] = None,
+    transcript_delay_seconds: float = 0.0,
+    transcript_cache_dir: str = "",
     exclude_video_ids: Sequence[str] = (),
     filters: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
@@ -1275,25 +1264,14 @@ async def research_youtube(
             ranked = sorted(provisional, key=lambda item: item.get("selection_score", 0), reverse=True)
             tier_counts["provisional_rate_limit"] = len(ranked)
     finalist_pool = ranked[: max(brief.desired_video_count["max"] * 4, 28)]
-    if applied_filters["strict_filters"] and applied_filters["require_transcript"] and not provisional_rate_limit_mode:
-        default_probe_count = max(
-            brief.desired_video_count["max"],
-            min(28, brief.desired_video_count["max"] * 3),
-        )
-    else:
-        default_probe_count = max(
-            brief.desired_video_count["max"],
-            min(14, brief.desired_video_count["max"] * 2),
-        )
-    try:
-        configured_probe_count = int(os.environ.get("YOUTUBE_RESEARCH_TRANSCRIPTS", str(default_probe_count)))
-    except ValueError:
-        configured_probe_count = default_probe_count
-    probe_count = min(len(finalist_pool), max(default_probe_count, configured_probe_count))
+    final_video_limit = min(10, max(MIN_FINAL_VIDEOS, brief.desired_video_count["max"]))
+    probe_count = min(len(finalist_pool), final_video_limit)
     transcript_stats = await _enrich_transcripts(
         finalist_pool,
         transcript_fetcher if applied_filters["require_transcript"] else None,
         probe_count,
+        delay_seconds=transcript_delay_seconds,
+        cache_dir=transcript_cache_dir,
     )
     if applied_filters["strict_filters"] and applied_filters["require_transcript"] and not provisional_rate_limit_mode:
         finalist_pool = [
@@ -1302,7 +1280,7 @@ async def research_youtube(
             and float(item.get("verified_discussion_score") or 0) >= applied_filters["min_discussion_score"]
         ]
     finalist_pool.sort(key=lambda item: item.get("selection_score", 0), reverse=True)
-    selected = _select_diverse(finalist_pool, brief.desired_video_count["max"])
+    selected = _select_diverse(finalist_pool, final_video_limit)
 
     await _analyze_finalists(selected, brief, api_key)
     timeline = _build_event_timeline(selected)
@@ -1340,6 +1318,8 @@ async def research_youtube(
             "transcripts_attempted": transcript_stats["attempted"],
             "transcripts_available": transcript_stats["available"],
             "transcripts_skipped_rate_limit": transcript_stats["skipped_rate_limit"],
+            "transcript_cache_hits": transcript_stats["cache_hits"],
+            "transcript_limit": final_video_limit,
             "limited_metadata_fallbacks": limited_metadata_count,
             "youtube_rate_limited": _youtube_rate_limited(),
             "date_policy_applied": applied_date_policy,

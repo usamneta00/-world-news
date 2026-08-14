@@ -75,6 +75,15 @@ manager = ConnectionManager()
 import os
 DATA_DIR = os.environ.get('DATA_DIR', '/data' if os.path.exists('/data') else '.')
 DB_PATH = os.path.join(DATA_DIR, 'world_news.db')
+YOUTUBE_TRANSCRIPT_CACHE_DIR = os.environ.get(
+    'YOUTUBE_TRANSCRIPT_CACHE_DIR', os.path.join(DATA_DIR, 'youtube_transcript_cache')
+)
+try:
+    YOUTUBE_TRANSCRIPT_DELAY_SECONDS = min(
+        10.0, max(5.0, float(os.environ.get('YOUTUBE_TRANSCRIPT_DELAY_SECONDS', '6')))
+    )
+except ValueError:
+    YOUTUBE_TRANSCRIPT_DELAY_SECONDS = 6.0
 SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 logger.info(f"Using database at: {DB_PATH}")
@@ -1344,7 +1353,27 @@ def select_best_lang(subtitles, automatic_captions, spoken_lang):
             
     return None, False
 
-def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, formats=['txt', 'srt']):
+_po_provider_warning_emitted = False
+
+
+def append_youtube_po_token_args(args):
+    """Configure yt-dlp's mweb client and optional external BgUtils provider."""
+    global _po_provider_warning_emitted
+    args.extend(["--extractor-args", "youtube:player_client=mweb"])
+    provider_url = os.environ.get(
+        "YOUTUBE_PO_TOKEN_PROVIDER_URL", "http://127.0.0.1:4416"
+    ).strip().rstrip("/")
+    if provider_url:
+        args.extend(["--extractor-args", f"youtubepot-bgutilhttp:base_url={provider_url}"])
+    elif not _po_provider_warning_emitted:
+        logger.warning(
+            "YOUTUBE_PO_TOKEN_PROVIDER_URL is not configured; mweb will run without the external PO Token provider."
+        )
+        _po_provider_warning_emitted = True
+    return args
+
+
+def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, formats=['txt', 'srt'], use_po_token=False):
     import subprocess
 
     results = {"srt": None, "txt": None, "title": None, "error": None}
@@ -1375,8 +1404,11 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
     attempts = [
         ("preferred", build_args("ar,en,en-orig,en-US,en-GB,en.*")),
         ("all", build_args("all,-live_chat")),
-        ("web-all", build_args("all,-live_chat", "youtube:player_client=web,default")),
     ]
+    if use_po_token:
+        attempts = [(label, append_youtube_po_token_args(args)) for label, args in attempts]
+    else:
+        attempts.append(("web-all", build_args("all,-live_chat", "youtube:player_client=web,default")))
 
     try:
         for label, args in attempts:
@@ -1445,7 +1477,7 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
         logger.error(f"[yt-dlp fallback] failed: {e}")
     return results
 
-def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
+def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt'], use_cookies=True, use_po_token=False):
     """جلب SRT و TXT من اليوتيوب باستخدام yt-dlp CLI كعملية فرعية مع تجنب خطأ 429."""
     import tempfile
     import subprocess
@@ -1454,7 +1486,7 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
     results = {"srt": None, "txt": None, "title": None, "error": None}
     
     # 1. إعدادات استخراج البيانات الوصفية (عبر CLI لتجنب البلوك)
-    cookies_base64 = os.environ.get('YOUTUBE_COOKIES')
+    cookies_base64 = os.environ.get('YOUTUBE_COOKIES') if use_cookies else None
     cookies_file_meta = None
     
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -1481,6 +1513,8 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
             "--ignore-no-formats-error",
             "--js-runtimes", "node"
         ]
+        if use_po_token:
+            append_youtube_po_token_args(meta_args)
         if cookies_file_meta:
             meta_args.extend(["--cookies", cookies_file_meta])
         meta_args.append(video_url)
@@ -1507,7 +1541,9 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
         best_lang, is_auto = select_best_lang(subtitles, automatic_captions, spoken_lang)
         if not best_lang:
             logger.warning("[yt-dlp meta] No subtitles in metadata; trying direct subtitle download fallback.")
-            fallback_results = try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file_meta, formats=formats)
+            fallback_results = try_direct_ytdlp_subtitle_download(
+                video_url, tmpdir, cookies_file_meta, formats=formats, use_po_token=use_po_token
+            )
             if fallback_results.get("srt") or fallback_results.get("txt"):
                 return fallback_results
             logger.warning(f"[yt-dlp fallback] {fallback_results.get('error')}")
@@ -1531,6 +1567,8 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
             "--js-runtimes", "node",
             "-o", output_template
         ]
+        if use_po_token:
+            append_youtube_po_token_args(args)
         
         cookies_file = None
         if cookies_base64:
@@ -4623,7 +4661,11 @@ async def run_youtube_research(request: YouTubeResearchRequest):
             request.prompt,
             api_key=OPENAI_API_KEY,
             exclude_video_ids=request.exclude_video_ids[:300],
-            transcript_fetcher=lambda url: fetch_youtube_subs_downsub(url, formats=["txt"]),
+            transcript_fetcher=lambda url: fetch_youtube_subs_downsub(
+                url, formats=["txt"], use_cookies=False, use_po_token=True
+            ),
+            transcript_delay_seconds=YOUTUBE_TRANSCRIPT_DELAY_SECONDS,
+            transcript_cache_dir=YOUTUBE_TRANSCRIPT_CACHE_DIR,
             filters=request.filters.model_dump() if hasattr(request.filters, "model_dump") else request.filters.dict(),
         )
     except ValueError as exc:

@@ -1,13 +1,43 @@
 import asyncio
+import tempfile
 import time
 import unittest
 from datetime import datetime, timedelta, timezone
 
 import youtube_research as youtube_research_module
-from youtube_research import _extract_count, _extract_date_policy, research_youtube, verify_video
+from youtube_research import _enrich_transcripts, _extract_count, _extract_date_policy, research_youtube, verify_video
 
 
 class YouTubeResearchTests(unittest.TestCase):
+    def test_transcript_cache_prevents_duplicate_ytdlp_requests(self):
+        calls = []
+
+        def fetch(url):
+            calls.append(url)
+            return {"txt": "ينضم إلينا محللون وخبراء في نقاش موثق. " * 100}
+
+        def items():
+            return [
+                {
+                    "video_id": f"cachevid{i:03d}", "title": f"نقاش محللين {i}",
+                    "webpage_url": f"https://youtube.com/watch?v=cachevid{i:03d}",
+                    "discussion_format_score": 8, "evidence_score": 7,
+                    "total_score": 5, "selection_score": 5,
+                }
+                for i in range(2)
+            ]
+
+        with tempfile.TemporaryDirectory() as cache_dir:
+            first = asyncio.run(_enrich_transcripts(items(), fetch, 2, cache_dir=cache_dir))
+            second = asyncio.run(_enrich_transcripts(
+                items(), lambda url: self.fail("yt-dlp should not run for a cached video"), 2, cache_dir=cache_dir
+            ))
+
+        self.assertEqual(first["attempted"], 2)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(second["attempted"], 0)
+        self.assertEqual(second["cache_hits"], 2)
+
     def test_extracts_user_count_and_date_expansion(self):
         self.assertEqual(_extract_count("أريد من 6 إلى 9 فيديوهات"), {"min": 7, "max": 9})
         self.assertEqual([p["days"] for p in _extract_date_policy("آخر أسبوع ثم شهر")], [7, 30])

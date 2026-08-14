@@ -1,12 +1,14 @@
 [phases.setup]
-nixPkgs = ["python311", "nodejs_22"]
+nixPkgs = ["python311", "nodejs_22", "git"]
 
 [phases.install]
 cmds = [
   "python -m pip install --upgrade pip",
   "python -m pip install --upgrade \"yt-dlp[default]\"",
-  "python -m pip install -r requirements.txt"
+  "python -m pip install -r requirements.txt",
+  "test -d .bgutil-ytdlp-pot-provider || git clone --depth 1 --branch 1.3.1 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git .bgutil-ytdlp-pot-provider",
+  "cd .bgutil-ytdlp-pot-provider/server && npm ci && npx tsc"
 ]
 
 [start]
-cmd = "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
+cmd = "sh -c 'node .bgutil-ytdlp-pot-provider/server/build/main.js --port 4416 & exec uvicorn backend.main:app --host 0.0.0.0 --port $PORT'"
