@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Set, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Query, HTTPException
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, desc
@@ -12,6 +13,7 @@ import json
 import re
 import time
 import threading
+from uuid import uuid4
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
 import os
@@ -4653,21 +4655,112 @@ class YouTubeResearchRequest(BaseModel):
     filters: YouTubeResearchFilters = Field(default_factory=YouTubeResearchFilters)
 
 
+_youtube_research_jobs: Dict[str, Dict[str, Any]] = {}
+_youtube_research_job_tasks: Dict[str, asyncio.Task] = {}
+_youtube_research_jobs_lock = threading.Lock()
+
+
+def _youtube_research_arguments(request: YouTubeResearchRequest) -> Dict[str, Any]:
+    return {
+        "user_prompt": request.prompt,
+        "api_key": OPENAI_API_KEY,
+        "exclude_video_ids": request.exclude_video_ids[:300],
+        "transcript_fetcher": lambda url: fetch_youtube_subs_downsub(
+            url, formats=["txt"], use_cookies=False, use_po_token=True
+        ),
+        "transcript_delay_seconds": YOUTUBE_TRANSCRIPT_DELAY_SECONDS,
+        "transcript_cache_dir": YOUTUBE_TRANSCRIPT_CACHE_DIR,
+        "filters": request.filters.model_dump() if hasattr(request.filters, "model_dump") else request.filters.dict(),
+    }
+
+
+def _prune_youtube_research_jobs() -> None:
+    cutoff = time.time() - 3600
+    with _youtube_research_jobs_lock:
+        expired = [
+            job_id for job_id, job in _youtube_research_jobs.items()
+            if float(job.get("updated_at") or 0) < cutoff and job.get("status") in {"completed", "failed"}
+        ]
+        for job_id in expired:
+            _youtube_research_jobs.pop(job_id, None)
+            _youtube_research_job_tasks.pop(job_id, None)
+        if len(_youtube_research_jobs) > 30:
+            finished = sorted(
+                (
+                    (job_id, float(job.get("updated_at") or 0))
+                    for job_id, job in _youtube_research_jobs.items()
+                    if job.get("status") in {"completed", "failed"}
+                ),
+                key=lambda pair: pair[1],
+            )
+            for job_id, _ in finished[:max(0, len(_youtube_research_jobs) - 30)]:
+                _youtube_research_jobs.pop(job_id, None)
+                _youtube_research_job_tasks.pop(job_id, None)
+
+
+async def _run_youtube_research_job(job_id: str, arguments: Dict[str, Any]) -> None:
+    with _youtube_research_jobs_lock:
+        job = _youtube_research_jobs.get(job_id)
+        if job:
+            job.update({"status": "running", "stage": "web_research", "updated_at": time.time()})
+    try:
+        result = jsonable_encoder(await research_youtube(**arguments))
+        with _youtube_research_jobs_lock:
+            job = _youtube_research_jobs.get(job_id)
+            if job:
+                job.update({
+                    "status": "completed", "stage": "completed", "result": result,
+                    "updated_at": time.time(),
+                })
+    except Exception as exc:
+        logger.exception("YouTube Research background job %s failed", job_id)
+        if isinstance(exc, ValueError):
+            message = str(exc)
+        elif isinstance(exc, RuntimeError):
+            message = str(exc)
+        else:
+            message = f"تعذر إكمال جلسة البحث: {exc}"
+        with _youtube_research_jobs_lock:
+            job = _youtube_research_jobs.get(job_id)
+            if job:
+                job.update({
+                    "status": "failed", "stage": "failed", "error": message,
+                    "updated_at": time.time(),
+                })
+
+
+@app.post("/api/youtube-research/jobs", status_code=202)
+async def start_youtube_research_job(request: YouTubeResearchRequest):
+    """Start long research without holding a Railway proxy connection open."""
+    _prune_youtube_research_jobs()
+    job_id = uuid4().hex
+    now = time.time()
+    with _youtube_research_jobs_lock:
+        _youtube_research_jobs[job_id] = {
+            "job_id": job_id, "status": "queued", "stage": "queued",
+            "created_at": now, "updated_at": now,
+        }
+    task = asyncio.create_task(_run_youtube_research_job(job_id, _youtube_research_arguments(request)))
+    with _youtube_research_jobs_lock:
+        _youtube_research_job_tasks[job_id] = task
+    return {"job_id": job_id, "status": "queued", "poll_url": f"/api/youtube-research/jobs/{job_id}"}
+
+
+@app.get("/api/youtube-research/jobs/{job_id}")
+async def get_youtube_research_job(job_id: str):
+    with _youtube_research_jobs_lock:
+        job = _youtube_research_jobs.get(job_id)
+        snapshot = dict(job) if job else None
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="مهمة البحث غير موجودة أو انتهت صلاحيتها بعد إعادة تشغيل الخادم.")
+    return snapshot
+
+
 @app.post("/api/youtube-research")
 async def run_youtube_research(request: YouTubeResearchRequest):
     """Run one independent, on-demand research session inside this app."""
     try:
-        return await research_youtube(
-            request.prompt,
-            api_key=OPENAI_API_KEY,
-            exclude_video_ids=request.exclude_video_ids[:300],
-            transcript_fetcher=lambda url: fetch_youtube_subs_downsub(
-                url, formats=["txt"], use_cookies=False, use_po_token=True
-            ),
-            transcript_delay_seconds=YOUTUBE_TRANSCRIPT_DELAY_SECONDS,
-            transcript_cache_dir=YOUTUBE_TRANSCRIPT_CACHE_DIR,
-            filters=request.filters.model_dump() if hasattr(request.filters, "model_dump") else request.filters.dict(),
-        )
+        return await research_youtube(**_youtube_research_arguments(request))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     except RuntimeError as exc:

@@ -10,6 +10,27 @@ from youtube_research import _enrich_transcripts, _extract_count, _extract_date_
 
 
 class YouTubeResearchTests(unittest.TestCase):
+    def test_background_job_returns_result_without_long_http_request(self):
+        import main as main_module
+
+        async def scenario():
+            request = main_module.YouTubeResearchRequest(prompt="موضوع بحث واضح ومفصل")
+            fake_result = {"videos": [{"video_id": "jobresult01"}], "stats": {"selected": 1}}
+            with patch.object(main_module, "research_youtube", new=AsyncMock(return_value=fake_result)):
+                started = await main_module.start_youtube_research_job(request)
+                job_id = started["job_id"]
+                await main_module._youtube_research_job_tasks[job_id]
+                completed = await main_module.get_youtube_research_job(job_id)
+            with main_module._youtube_research_jobs_lock:
+                main_module._youtube_research_jobs.pop(job_id, None)
+                main_module._youtube_research_job_tasks.pop(job_id, None)
+            return started, completed
+
+        started, completed = asyncio.run(scenario())
+        self.assertEqual(started["status"], "queued")
+        self.assertEqual(completed["status"], "completed")
+        self.assertEqual(completed["result"]["stats"]["selected"], 1)
+
     def test_web_research_candidates_replace_marginal_keyword_backfill(self):
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         web_research = _normalise_web_research({
