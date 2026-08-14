@@ -66,7 +66,7 @@ def _normalise_filters(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     language = str(raw.get("language") or "any").strip().casefold()
     live_status = str(raw.get("live_status") or "any").strip().casefold()
     channel_type = str(raw.get("channel_type") or "any").strip().casefold()
-    content_type = str(raw.get("content_type") or "panel_discussion").strip().casefold()
+    content_type = str(raw.get("content_type") or "any").strip().casefold()
     allowed_live = {"any", "live", "upcoming", "not_live"}
     allowed_channels = {"any", "news", "official", "independent", "educational", "interview", "documentary"}
     allowed_content = {"any", "panel_discussion", "debate", "roundtable", "multi_guest_interview", "analysis"}
@@ -88,13 +88,13 @@ def _normalise_filters(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "language": language,
         "country": str(raw.get("country") or "").strip(),
         "channel_type": channel_type if channel_type in allowed_channels else "any",
-        "content_type": content_type if content_type in allowed_content else "panel_discussion",
-        "min_discussion_score": min(10.0, number("min_discussion_score", 6.0)),
+        "content_type": content_type if content_type in allowed_content else "any",
+        "min_discussion_score": min(10.0, number("min_discussion_score")),
         "min_views": int(number("min_views")),
-        "min_reliability": min(10.0, number("min_reliability", 7.0)),
+        "min_reliability": min(10.0, number("min_reliability")),
         "live_status": live_status if live_status in allowed_live else "any",
         "require_transcript": bool(raw.get("require_transcript", True)),
-        "strict_filters": bool(raw.get("strict_filters", True)),
+        "strict_filters": bool(raw.get("strict_filters", False)),
     }
 
 
@@ -244,12 +244,11 @@ async def analyze_prompt(user_prompt: str, api_key: str = "") -> ResearchBrief:
     ):
         raw = values.get(key)
         values[key] = [str(item).strip() for item in raw if str(item).strip()] if isinstance(raw, list) else schema[key]
-    date_policy = values.get("date_policy")
-    if isinstance(date_policy, list):
-        date_policy = [item for item in date_policy if isinstance(item, dict) and item.get("days")]
-    else:
-        date_policy = []
-    values["date_policy"] = date_policy or fallback.date_policy
+    # Hard constraints must come from the user's literal prompt, not from an
+    # AI inference. Otherwise a broad request can silently become "last week"
+    # or Arabic-only and legitimately discovered videos are then discarded.
+    values["date_policy"] = fallback.date_policy
+    values["preferred_languages"] = fallback.preferred_languages
     return ResearchBrief(**values)
 
 
@@ -1213,7 +1212,7 @@ async def research_youtube(
         metadata_by_id = {item["video_id"]: item for item in metadata if item}
         for item in batch:
             full = metadata_by_id.get(item["video_id"])
-            if not full and metadata_fn is verify_video and _youtube_rate_limited():
+            if not full and metadata_fn is verify_video:
                 full = _metadata_from_search_result(item)
                 limited_metadata_count += 1
             if not full:
@@ -1292,6 +1291,7 @@ async def research_youtube(
     current_topic = bool(re.search(r"خبر|حديث|جديد|حالي|سياسي|عسكري|اقتصاد|news|latest|current", user_prompt, re.I))
     latest = await asyncio.to_thread(_latest_web_development, brief.main_topic) if current_topic else None
     finished = datetime.now(timezone.utc)
+    youtube_rate_limited_now = _youtube_rate_limited()
     return {
         "topic": brief.main_topic,
         "brief": brief.as_dict(),
@@ -1321,7 +1321,7 @@ async def research_youtube(
             "transcript_cache_hits": transcript_stats["cache_hits"],
             "transcript_limit": final_video_limit,
             "limited_metadata_fallbacks": limited_metadata_count,
-            "youtube_rate_limited": _youtube_rate_limited(),
+            "youtube_rate_limited": youtube_rate_limited_now,
             "date_policy_applied": applied_date_policy,
             "duration_seconds": round((finished - started).total_seconds(), 2),
         },
@@ -1337,8 +1337,10 @@ async def research_youtube(
                if len(selected) < brief.desired_video_count["min"] else [])
             + ([f"تعذر استخراج ترجمة لبعض المرشحين: نجح {transcript_stats['available']} من {transcript_stats['attempted']}. تم توضيح ذلك داخل نقاط ضعف كل فيديو."]
                if transcript_stats["attempted"] and transcript_stats["available"] < transcript_stats["attempted"] else [])
-            + ([f"فعّل YouTube حد الطلبات مؤقتًا؛ استُخدمت بيانات نتائج البحث الموثقة لـ{limited_metadata_count} فيديو بدل تكرار الطلبات المحجوبة، وأُجّل استخراج {transcript_stats['skipped_rate_limit']} نصًا حتى انتهاء فترة التهدئة."]
-               if limited_metadata_count or transcript_stats["skipped_rate_limit"] else [])
+            + ([f"فعّل YouTube حد الطلبات مؤقتًا؛ استُخدمت بيانات نتائج البحث الأولية لـ{limited_metadata_count} فيديو بدل تكرار الطلبات المحجوبة، وأُجّل استخراج {transcript_stats['skipped_rate_limit']} نصًا حتى انتهاء فترة التهدئة."]
+               if youtube_rate_limited_now and (limited_metadata_count or transcript_stats["skipped_rate_limit"]) else [])
+            + ([f"تعذر جلب صفحة التفاصيل لـ{limited_metadata_count} نتيجة؛ لذلك فُحصت بيانات نتيجة بحث YouTube الأولية ولم تُسقط الفيديوهات من القائمة."]
+               if limited_metadata_count and not youtube_rate_limited_now else [])
             + ([f"الشروط الصارمة أعادت {len(selected)} فقط من أصل {brief.desired_video_count['min']} مطلوبة. لم يضف الوكيل فيديوهات خارج التاريخ أو نوع القناة أو صيغة النقاش أو من دون نص مستخرج لمجرد إكمال العدد."]
                if applied_filters["strict_filters"] and len(selected) < brief.desired_video_count["min"] else [])
             + (["لم يجد YouTube نتائج جديدة مختلفة بعد تطبيق شروطك؛ لذلك أعاد الوكيل فحص أفضل نتائج الجلسة السابقة بدل ترك الصفحة فارغة."]

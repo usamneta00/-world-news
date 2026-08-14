@@ -3,12 +3,67 @@ import tempfile
 import time
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, patch
 
 import youtube_research as youtube_research_module
-from youtube_research import _enrich_transcripts, _extract_count, _extract_date_policy, research_youtube, verify_video
+from youtube_research import _enrich_transcripts, _extract_count, _extract_date_policy, analyze_prompt, research_youtube, verify_video
 
 
 class YouTubeResearchTests(unittest.TestCase):
+    def test_ai_cannot_invent_hidden_date_or_language_filters(self):
+        invented = {
+            "date_policy": [{"days": 7, "label": "last week", "expand_if_needed": False}],
+            "preferred_languages": ["en"],
+        }
+        with patch.object(youtube_research_module, "_openai_json", new=AsyncMock(return_value=invented)):
+            brief = asyncio.run(analyze_prompt("حسن الظن بالله", api_key="test-key"))
+
+        self.assertEqual(brief.date_policy, [])
+        self.assertEqual(brief.preferred_languages, [])
+
+    def test_default_open_search_keeps_results_when_detail_pages_fail(self):
+        now = datetime.now(timezone.utc)
+
+        def search(query, limit):
+            return [
+                {
+                    "video_id": f"fallback{i:03d}",
+                    "title": f"حسن الظن بالله شرح وتدبر perspective{i:03d} evidence{i:03d}",
+                    "channel": f"قناة المعرفة {i}",
+                    "channel_id": f"knowledge-{i}",
+                    "uploader": f"قناة المعرفة {i}",
+                    "url": f"https://youtube.com/watch?v=fallback{i:03d}",
+                    "timestamp": now.timestamp(),
+                    "upload_date": now.strftime("%Y%m%d"),
+                    "duration": 900 + i,
+                    "description": f"شرح موثق عن حسن الظن بالله والتدبر angle{i:03d}",
+                    "view_count": 1000 + i,
+                    "language": "ar",
+                    "availability": "public",
+                }
+                for i in range(12)
+            ]
+
+        previous_limit = youtube_research_module._youtube_rate_limit_until
+        youtube_research_module._youtube_rate_limit_until = 0.0
+        try:
+            with patch.object(youtube_research_module, "fetch_video_metadata", return_value=None):
+                report = asyncio.run(research_youtube(
+                    "@Youtube حسن الظن بالله أريد 8 فيديوهات",
+                    api_key="", search_fn=search, metadata_fn=verify_video,
+                    transcript_fetcher=None,
+                ))
+        finally:
+            youtube_research_module._youtube_rate_limit_until = previous_limit
+
+        self.assertEqual(report["filters"]["channel_type"], "any")
+        self.assertEqual(report["filters"]["content_type"], "any")
+        self.assertEqual(report["filters"]["min_discussion_score"], 0)
+        self.assertEqual(report["filters"]["min_reliability"], 0)
+        self.assertFalse(report["filters"]["strict_filters"])
+        self.assertGreaterEqual(report["stats"]["metadata_checked"], 8)
+        self.assertEqual(report["stats"]["selected"], 8)
+
     def test_transcript_cache_prevents_duplicate_ytdlp_requests(self):
         calls = []
 
