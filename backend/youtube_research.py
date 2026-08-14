@@ -161,6 +161,197 @@ async def _openai_json(system: str, prompt: str, api_key: str, max_tokens: int =
         return None
 
 
+def _responses_output_text(payload: Dict[str, Any]) -> str:
+    direct = str(payload.get("output_text") or "").strip()
+    if direct:
+        return direct
+    parts: List[str] = []
+    for output in payload.get("output") or []:
+        if not isinstance(output, dict) or output.get("type") != "message":
+            continue
+        for content in output.get("content") or []:
+            if isinstance(content, dict) and content.get("type") == "output_text":
+                parts.append(str(content.get("text") or ""))
+    return "\n".join(parts).strip()
+
+
+def _youtube_id_from_url(value: str) -> str:
+    match = re.search(
+        r"(?:youtube\.com/(?:watch\?(?:[^#\s]*&)?v=|shorts/|live/)|youtu\.be/)([A-Za-z0-9_-]{11})",
+        str(value or ""),
+        re.I,
+    )
+    return match.group(1) if match else ""
+
+
+def _normalise_web_research(raw: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(raw, dict):
+        return None
+
+    def strings(value: Any) -> List[str]:
+        if not isinstance(value, list):
+            return []
+        result = []
+        for item in value:
+            text = str(item.get("text") if isinstance(item, dict) else item).strip()
+            if text:
+                result.append(text)
+        return result
+
+    sources: List[Dict[str, str]] = []
+    for source in raw.get("web_sources") or []:
+        if not isinstance(source, dict):
+            continue
+        url = str(source.get("url") or "").strip()
+        if not re.match(r"^https?://", url, re.I):
+            continue
+        sources.append({
+            "title": str(source.get("title") or source.get("name") or url).strip(),
+            "url": url,
+            "publisher": str(source.get("publisher") or "").strip(),
+        })
+
+    videos: List[Dict[str, Any]] = []
+    seen_ids = set()
+    for index, video in enumerate(raw.get("videos") or []):
+        if not isinstance(video, dict):
+            continue
+        url = str(video.get("youtube_url") or video.get("video_url") or video.get("url") or "").strip()
+        video_id = _youtube_id_from_url(url)
+        if not video_id or video_id in seen_ids:
+            continue
+        seen_ids.add(video_id)
+        published = str(video.get("published_date") or video.get("upload_date") or "").strip()
+        upload_date = published.replace("-", "") if re.fullmatch(r"\d{4}-\d{2}-\d{2}", published) else ""
+        evidence = strings(video.get("evidence")) or strings(video.get("supporting_facts"))
+        try:
+            web_score = max(0.0, min(10.0, float(video.get("relevance_score") or 9.0)))
+        except (TypeError, ValueError):
+            web_score = 9.0
+        angle = str(video.get("angle") or "تحقيق ويب موثق").strip()
+        why = str(video.get("why_relevant") or video.get("relevance_reason") or "").strip()
+        videos.append({
+            "video_id": video_id,
+            "title": str(video.get("title") or "").strip(),
+            "channel": str(video.get("channel") or "").strip(),
+            "channel_id": "",
+            "uploader": str(video.get("channel") or "").strip(),
+            "url": YOUTUBE_URL.format(video_id),
+            "duration": video.get("duration_seconds"),
+            "timestamp": None,
+            "upload_date": upload_date,
+            "description": " — ".join(part for part in (why, "؛ ".join(evidence)) if part),
+            "view_count": video.get("view_count"),
+            "live_status": str(video.get("live_status") or "not_live"),
+            "thumbnail": f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
+            "language": str(video.get("language") or "").strip(),
+            "availability": "public",
+            "matched_queries": [str(video.get("discovery_query") or "بحث ويب تحقيقي")],
+            "matched_angles": [angle],
+            "query_priority": 30 - min(index, 10),
+            "web_research_verified": True,
+            "web_relevance_score": web_score,
+            "web_research_reason": why,
+            "web_research_evidence": evidence,
+            "web_research_order": index + 1,
+        })
+
+    latest = raw.get("latest_development") if isinstance(raw.get("latest_development"), dict) else None
+    if latest:
+        latest_url = str(latest.get("url") or "").strip()
+        latest = {
+            "title": str(latest.get("title") or latest.get("development") or "").strip(),
+            "url": latest_url if re.match(r"^https?://", latest_url, re.I) else "",
+            "source": str(latest.get("source") or "").strip(),
+            "published": str(latest.get("published") or latest.get("date") or "").strip(),
+        }
+    return {
+        "overview": str(raw.get("overview") or raw.get("verified_context") or "").strip(),
+        "verified_facts": strings(raw.get("verified_facts")),
+        "conflicting_narratives": strings(raw.get("conflicting_narratives")),
+        "limitations": strings(raw.get("limitations")),
+        "search_queries": strings(raw.get("search_queries")),
+        "web_sources": sources,
+        "latest_development": latest,
+        "videos": videos,
+    }
+
+
+async def _openai_web_research(
+    user_prompt: str,
+    brief: "ResearchBrief",
+    filters: Dict[str, Any],
+    api_key: str,
+) -> Optional[Dict[str, Any]]:
+    if not api_key or str(os.environ.get("YOUTUBE_RESEARCH_WEB_ENABLED", "true")).casefold() in {"0", "false", "no"}:
+        return None
+
+    date_requirement = (
+        f"النطاق اليدوي القطعي من {filters.get('date_from') or 'البداية'} إلى {filters.get('date_to') or 'الآن'}."
+        if filters.get("date_from") or filters.get("date_to")
+        else json.dumps(brief.date_policy, ensure_ascii=False)
+    )
+    prompt = f"""
+أجرِ بحث ويب تحقيقيًا مباشرًا لاختيار فيديوهات YouTube التي تطابق طلب المستخدم نفسه، بمنهج يشبه تقرير محلل بحث محترف.
+تاريخ اليوم: {datetime.now(timezone.utc).date().isoformat()}.
+طلب المستخدم: {user_prompt}
+الموضوع المركز: {brief.main_topic}
+العدد المستهدف: من {brief.desired_video_count['min']} إلى {brief.desired_video_count['max']}، لكن أعد عددًا أقل ولا تملأ القائمة إن لم تجد نتائج قوية.
+سياسة التاريخ: {date_requirement or 'لا يوجد نطاق زمني مفروض'}
+الفلاتر: {json.dumps(filters, ensure_ascii=False)}
+
+ابحث في الويب وفي YouTube بالعربية والإنجليزية وباللغات ذات الصلة. تحقق من أصل الخبر أولًا عبر مصادر موثوقة وحديثة، ثم ابحث عن فيديوهات تتناول الحدث أو السؤال المحدد لا مجرد كلمات عامة مشتركة. افتح صفحة كل فيديو أو نتيجة موثوقة تشير إليه وتأكد من رابط YouTube المباشر والعنوان والقناة وتاريخ النشر. لا تخترع رابطًا أو تاريخًا. لا تستخدم صفحة نتائج بحث كرابط فيديو. لا تُدخل فيديوهات هامشية لإكمال العدد. رتّب الفيديوهات كسلسلة تبدأ بالخبر/الخلفية ثم الأثر والأدلة ثم الآراء المتعارضة وتنتهي بأحدث تطور.
+
+أعد JSON فقط بهذا الشكل:
+{{
+  "overview": "ملخص الحقائق المؤكدة والسياق الضروري",
+  "verified_facts": ["حقائق مدعومة بالمصادر"],
+  "conflicting_narratives": ["الروايات أو التوترات المتعارضة"],
+  "latest_development": {{"title":"", "url":"https://...", "source":"", "date":"YYYY-MM-DD"}},
+  "search_queries": ["عبارات البحث الفعلية"],
+  "web_sources": [{{"title":"", "url":"https://...", "publisher":""}}],
+  "limitations": ["ما تعذر إثباته"],
+  "videos": [{{
+    "youtube_url":"https://www.youtube.com/watch?v=XXXXXXXXXXX",
+    "title":"العنوان الحقيقي",
+    "channel":"القناة الحقيقية",
+    "published_date":"YYYY-MM-DD",
+    "language":"ar أو en",
+    "angle":"زاوية محددة",
+    "why_relevant":"لماذا يطابق السؤال تحديدًا وما الذي يضيفه للسلسلة",
+    "evidence":["الحقائق التي يدعمها الفيديو أو المصادر المصاحبة"],
+    "relevance_score":9.5,
+    "discovery_query":"عبارة البحث التي أوصلت إليه"
+  }}]
+}}
+""".strip()
+
+    def call() -> Optional[Dict[str, Any]]:
+        response = requests.post(
+            "https://api.openai.com/v1/responses",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": os.environ.get("YOUTUBE_RESEARCH_WEB_MODEL", "gpt-5.6"),
+                "tools": [{"type": "web_search", "search_context_size": "high"}],
+                "tool_choice": "required",
+                "max_tool_calls": max(4, int(os.environ.get("YOUTUBE_RESEARCH_WEB_MAX_CALLS", "12"))),
+                "max_output_tokens": 12000,
+                "input": prompt,
+            },
+            timeout=max(120, int(os.environ.get("YOUTUBE_RESEARCH_WEB_TIMEOUT", "300"))),
+        )
+        response.raise_for_status()
+        payload = response.json()
+        return _normalise_web_research(_json_from_text(_responses_output_text(payload)))
+
+    try:
+        result = await asyncio.to_thread(call)
+        return result if result and result.get("videos") else None
+    except Exception as exc:
+        logger.warning("ChatGPT-style web research discovery failed; using YouTube fallback: %s", exc)
+        return None
+
+
 def _clean_prompt(prompt: str) -> str:
     prompt = re.sub(r"^\s*@youtube\s*", "", prompt or "", flags=re.I)
     return re.sub(r"\s+", " ", prompt).strip()
@@ -468,6 +659,11 @@ def _metadata_from_search_result(candidate: Dict[str, Any]) -> Dict[str, Any]:
         "availability": candidate.get("availability") or "public",
         "metadata_source": "youtube_search_result",
         "metadata_limited": True,
+        "web_research_verified": bool(candidate.get("web_research_verified")),
+        "web_relevance_score": candidate.get("web_relevance_score"),
+        "web_research_reason": candidate.get("web_research_reason") or "",
+        "web_research_evidence": candidate.get("web_research_evidence") or [],
+        "web_research_order": candidate.get("web_research_order"),
     }
 
 
@@ -630,6 +826,11 @@ def _score_candidate(item: Dict[str, Any], brief: ResearchBrief, filters: Option
     topic_overlap = _overlap(brief.main_topic, body)
     query_overlap = max((_overlap(query, body) for query in item.get("matched_queries") or []), default=0.0)
     relevance = min(10.0, 2.5 + 12 * max(topic_overlap, query_overlap * 0.8))
+    if item.get("web_research_verified"):
+        try:
+            relevance = max(relevance, min(10.0, float(item.get("web_relevance_score") or 9.0)))
+        except (TypeError, ValueError):
+            relevance = max(relevance, 9.0)
     duration = float(item.get("duration") or 0)
     depth = min(10.0, 3 + math.log1p(duration / 60)) if duration else 3.0
     analysis_terms = "تحليل مقابلة نقاش وثائقي خبير analysis interview documentary discussion explained"
@@ -684,7 +885,8 @@ def _score_candidate(item: Dict[str, Any], brief: ResearchBrief, filters: Option
         ),
     })
     item["query_match_score"] = round(min(10.0, query_overlap * 10), 1)
-    item["total_score"] = round(relevance * 0.3 + discussion * 0.18 + depth * 0.12 + reliability * 0.18 + freshness * 0.09 + item["query_match_score"] * 0.08 + evidence_score * 0.05 + (0.7 if preferred_source else 0), 2)
+    web_research_bonus = 4.0 if item.get("web_research_verified") else 0.0
+    item["total_score"] = round(relevance * 0.3 + discussion * 0.18 + depth * 0.12 + reliability * 0.18 + freshness * 0.09 + item["query_match_score"] * 0.08 + evidence_score * 0.05 + (0.7 if preferred_source else 0) + web_research_bonus, 2)
     return item
 
 
@@ -974,6 +1176,9 @@ async def _analyze_finalists(items: List[Dict[str, Any]], brief: ResearchBrief, 
         "discussion_format_score": item.get("discussion_format_score"),
         "verified_discussion_score": item.get("verified_discussion_score"),
         "transcript_excerpt": item.get("transcript", "")[:10000],
+        "web_research_verified": item.get("web_research_verified", False),
+        "web_research_reason": item.get("web_research_reason", ""),
+        "web_research_evidence": item.get("web_research_evidence", []),
     } for item in items]
     ai = await _openai_json(
         "أنت محلل فيديو دقيق. لا تدّع مشاهدة محتوى غير موجود في البيانات. لا تختلق ضيوفًا أو اقتباسات. أجب JSON فقط.",
@@ -983,7 +1188,7 @@ async def _analyze_finalists(items: List[Dict[str, Any]], brief: ResearchBrief, 
         "participants قائمة {name, role, position} للأسماء والأدوار المذكورة صراحة فقط، discussion_dynamics يشرح طبيعة التفاعل بين الأطراف، "
         "exclusive_value يشرح ما الذي يجعل النقاش أصليًا أو حصريًا بناءً على النص فقط، analysis_basis يحدد الجمل أو البيانات التي بُني عليها التحليل، "
         "event_claims قائمة من {date بصيغة YYYY أو YYYY-MM أو YYYY-MM-DD فقط إن كان مذكورًا، claim، certainty، evidence}. "
-        "اعتمد على النص المرفق، وإن لم يتوفر فصرّح بأن التحليل مبني على البيانات الوصفية ولا تخترع تاريخًا. "
+        "اعتمد على النص المرفق، ثم على أدلة البحث الويب المرفقة، وإن لم يتوفرا فصرّح بأن التحليل مبني على البيانات الوصفية ولا تخترع تاريخًا. "
         "أعد {\"videos\":[...]}.\n"
         f"الموضوع: {brief.main_topic}\nالمرشحون: {json.dumps(compact, ensure_ascii=False)}",
         api_key,
@@ -1022,6 +1227,7 @@ async def _analyze_finalists(items: List[Dict[str, Any]], brief: ResearchBrief, 
         item["analysis_basis"] = str(analysis.get("analysis_basis") or (
             "النص الكامل المستخرج وبيانات الفيديو." if item.get("transcript_available") else
             "عنوان ورابط نتيجة بحث YouTube فقط؛ التحقق التفصيلي مؤجل بسبب الحظر." if item.get("verification_status") == "partial_due_to_youtube_rate_limit" else
+            "بحث ويب متعدد المصادر وبيانات الفيديو." if item.get("web_research_verified") else
             "بيانات الفيديو الوصفية فقط."
         ))
         claims = analysis.get("event_claims")
@@ -1141,6 +1347,8 @@ async def research_youtube(
     started = datetime.now(timezone.utc)
     applied_filters = _normalise_filters(filters)
     brief = await analyze_prompt(user_prompt, api_key)
+    web_research = await _openai_web_research(user_prompt, brief, applied_filters, api_key)
+    web_candidates = list((web_research or {}).get("videos") or [])
     base_plan = await build_search_plan(brief, api_key)
     content_contexts = {
         "panel_discussion": ("نقاش محللون خبراء", "panel discussion analysts"),
@@ -1169,32 +1377,21 @@ async def research_youtube(
         plan.extend((broad, constrained))
     plan = plan[:12] or base_plan
 
-    per_query = max(12, min(30, math.ceil(160 / max(1, len(plan)))))
-    search_results = await _search_plan_queries(plan, search_fn, per_query)
-    discovered: List[Dict[str, Any]] = []
+    discovered: List[Dict[str, Any]] = list(web_candidates)
     search_failures: List[str] = []
-    for query, result in zip(plan, search_results):
-        if isinstance(result, Exception):
-            logger.info("YouTube query failed (%s): %s", query["query"], result)
-            search_failures.append(str(result))
-            continue
-        for candidate in result:
-            candidate = dict(candidate)
-            candidate["matched_queries"] = [query["query"]]
-            candidate["matched_angles"] = [query["angle"]]
-            candidate["query_priority"] = query["priority"]
-            discovered.append(candidate)
-    if not discovered:
-        recovery_plan = [
-            {"query": brief.main_topic, "angle": "broad_recovery", "priority": 10},
-            {"query": f"{brief.main_topic} نقاش محللين", "angle": "discussion_recovery_ar", "priority": 9},
-            {"query": f"{brief.main_topic} panel discussion analysts", "angle": "discussion_recovery_en", "priority": 9},
-        ]
-        await asyncio.sleep(0.4)
-        recovery_results = await _search_plan_queries(recovery_plan, search_fn, 30)
-        plan.extend(recovery_plan)
-        for query, result in zip(recovery_plan, recovery_results):
+    if web_candidates:
+        researched_queries = (web_research or {}).get("search_queries") or []
+        if researched_queries:
+            plan = [
+                {"query": query, "angle": "web_research", "priority": 20 - min(index, 10)}
+                for index, query in enumerate(researched_queries[:12])
+            ]
+    else:
+        per_query = max(12, min(30, math.ceil(160 / max(1, len(plan)))))
+        search_results = await _search_plan_queries(plan, search_fn, per_query)
+        for query, result in zip(plan, search_results):
             if isinstance(result, Exception):
+                logger.info("YouTube query failed (%s): %s", query["query"], result)
                 search_failures.append(str(result))
                 continue
             for candidate in result:
@@ -1203,6 +1400,25 @@ async def research_youtube(
                 candidate["matched_angles"] = [query["angle"]]
                 candidate["query_priority"] = query["priority"]
                 discovered.append(candidate)
+        if not discovered:
+            recovery_plan = [
+                {"query": brief.main_topic, "angle": "broad_recovery", "priority": 10},
+                {"query": f"{brief.main_topic} نقاش محللين", "angle": "discussion_recovery_ar", "priority": 9},
+                {"query": f"{brief.main_topic} panel discussion analysts", "angle": "discussion_recovery_en", "priority": 9},
+            ]
+            await asyncio.sleep(0.4)
+            recovery_results = await _search_plan_queries(recovery_plan, search_fn, 30)
+            plan.extend(recovery_plan)
+            for query, result in zip(recovery_plan, recovery_results):
+                if isinstance(result, Exception):
+                    search_failures.append(str(result))
+                    continue
+                for candidate in result:
+                    candidate = dict(candidate)
+                    candidate["matched_queries"] = [query["query"]]
+                    candidate["matched_angles"] = [query["angle"]]
+                    candidate["query_priority"] = query["priority"]
+                    discovered.append(candidate)
     all_unique = _deduplicate(discovered)
     excluded_ids = {str(video_id).strip() for video_id in exclude_video_ids if str(video_id).strip()}
     excluded_previous_count = len([item for item in all_unique if item.get("video_id") in excluded_ids])
@@ -1331,7 +1547,9 @@ async def research_youtube(
             contradictions.append({"video_id": item["video_id"], "conflict": conflict})
 
     current_topic = bool(re.search(r"خبر|حديث|جديد|حالي|سياسي|عسكري|اقتصاد|news|latest|current", user_prompt, re.I))
-    latest = await asyncio.to_thread(_latest_web_development, brief.main_topic) if current_topic else None
+    latest = (web_research or {}).get("latest_development")
+    if not latest and current_topic:
+        latest = await asyncio.to_thread(_latest_web_development, brief.main_topic)
     finished = datetime.now(timezone.utc)
     youtube_rate_limited_now = _youtube_rate_limited()
     return {
@@ -1352,9 +1570,13 @@ async def research_youtube(
             "selected": len(selected),
             "selection_tiers": tier_counts,
             "selection_strategy": (
-                "strict_verified_panel_discussions"
-                if applied_filters["strict_filters"] else "strict_then_expanded_best_across_angles"
+                "chatgpt_style_web_research"
+                if web_candidates else
+                "strict_verified_panel_discussions" if applied_filters["strict_filters"] else
+                "strict_then_expanded_best_across_angles"
             ),
+            "web_research_used": bool(web_candidates),
+            "web_research_candidates": len(web_candidates),
             "strict_filters_applied": applied_filters["strict_filters"],
             "provisional_rate_limit_mode": provisional_rate_limit_mode,
             "transcripts_attempted": transcript_stats["attempted"],
@@ -1371,6 +1593,11 @@ async def research_youtube(
         "timeline": timeline,
         "contradictions": contradictions,
         "latest_development": latest,
+        "research_overview": (web_research or {}).get("overview", ""),
+        "verified_facts": (web_research or {}).get("verified_facts", []),
+        "conflicting_narratives": (web_research or {}).get("conflicting_narratives", []),
+        "research_limitations": (web_research or {}).get("limitations", []),
+        "web_sources": (web_research or {}).get("web_sources", []),
         "search_terms": _search_terms(plan),
         "warnings": (
             ([f"تم توسيع بعض القيود لاختيار أفضل {len(selected)} فيديوهات موثقة بدل الاكتفاء بالنتائج المطابقة حرفيًا."]
@@ -1389,6 +1616,8 @@ async def research_youtube(
                if reused_previous_results else [])
             + ([f"يعرض الوكيل {len(selected)} مرشحين ظاهرين فعلًا في YouTube بتحقق جزئي. لم يدّعِ مطابقة تاريخهم أو وجود نقاش متعدد الأطراف لأن YouTube حجب صفحات التفاصيل والنصوص مؤقتًا."]
                if provisional_rate_limit_mode and selected else [])
+            + (["تعذر مسار البحث الويب التحقيقي؛ استُخدم بحث YouTube المحلي الاحتياطي، وقد تكون قدرته على التحقق من السياق الخارجي أقل من ChatGPT Work."]
+               if api_key and not web_candidates else [])
         ),
         "generated_at": finished.isoformat(),
     }

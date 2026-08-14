@@ -6,10 +6,48 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import youtube_research as youtube_research_module
-from youtube_research import _enrich_transcripts, _extract_count, _extract_date_policy, _latest_web_development, analyze_prompt, research_youtube, verify_video
+from youtube_research import _enrich_transcripts, _extract_count, _extract_date_policy, _latest_web_development, _normalise_web_research, analyze_prompt, research_youtube, verify_video
 
 
 class YouTubeResearchTests(unittest.TestCase):
+    def test_web_research_candidates_replace_marginal_keyword_backfill(self):
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        web_research = _normalise_web_research({
+            "overview": "تحقق البحث من الحدث عبر مصادر مستقلة قبل اختيار الفيديوهات.",
+            "verified_facts": ["القرار مؤكد في المصدر الرسمي."],
+            "conflicting_narratives": ["تختلف التقديرات بشأن أثر القرار."],
+            "search_queries": ["exact event YouTube analysis"],
+            "web_sources": [{"title": "Official source", "url": "https://example.com/source"}],
+            "videos": [
+                {
+                    "youtube_url": f"https://www.youtube.com/watch?v=webexact{i:03d}",
+                    "title": f"Exact event investigation perspective{i:02d}",
+                    "channel": f"Verified channel {i}",
+                    "published_date": today,
+                    "angle": f"verified-angle-{i}",
+                    "why_relevant": f"Directly investigates exact event part {i}",
+                    "evidence": [f"Verified fact {i}"],
+                    "relevance_score": 9.5,
+                }
+                for i in range(3)
+            ],
+        })
+
+        with patch.object(youtube_research_module, "_openai_web_research", new=AsyncMock(return_value=web_research)):
+            report = asyncio.run(research_youtube(
+                "@Youtube أريد 7 فيديوهات عن الحدث المحدد بدقة",
+                api_key="",
+                search_fn=lambda query, limit: self.fail("keyword fallback must not run after verified web discovery"),
+                transcript_fetcher=None,
+                filters={"require_transcript": False},
+            ))
+
+        self.assertTrue(report["stats"]["web_research_used"])
+        self.assertEqual(report["stats"]["selected"], 3)
+        self.assertEqual({video["video_id"] for video in report["videos"]}, {f"webexact{i:03d}" for i in range(3)})
+        self.assertTrue(all(video["web_research_verified"] for video in report["videos"]))
+        self.assertEqual(report["research_overview"], web_research["overview"])
+
     def test_advanced_date_range_never_backfills_old_videos(self):
         now = datetime.now(timezone.utc)
 
