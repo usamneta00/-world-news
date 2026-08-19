@@ -1408,10 +1408,11 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
     ]
     if use_po_token:
         attempts = [(label, append_youtube_po_token_args(args)) for label, args in attempts]
-    # mweb/PO-token لا يعرض دائمًا نفس مسارات الترجمة التي يعرضها web.
-    # جرّب web كمسار احتياطي في الحالتين، خصوصًا عندما تكون الترجمة موجودة
-    # في YouTube/DownSub ولكنها غير ظاهرة في metadata الخاصة بعميل mweb.
+    
+    # إضافة محاولات عبر عملاء مختلفين (android, web, ios) في حالة قيود يوتيوب على tv/mweb
+    attempts.append(("android-all", build_args("all,-live_chat", "youtube:player_client=android,web")))
     attempts.append(("web-all", build_args("all,-live_chat", "youtube:player_client=web,default")))
+    attempts.append(("ios-all", build_args("all,-live_chat", "youtube:player_client=ios,web")))
 
     try:
         for label, args in attempts:
