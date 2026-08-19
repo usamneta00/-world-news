@@ -1694,6 +1694,7 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt'], use_cookies=Tr
             "yt-dlp",
             "--write-auto-subs" if is_auto else "--write-subs",
             "--sub-lang", best_lang,
+            "--extractor-args", "youtube:player_client=android_vr,android",
             "--skip-download",
             "--no-playlist",
             "--no-warnings",
