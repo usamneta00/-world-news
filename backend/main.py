@@ -1385,6 +1385,7 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
             "yt-dlp",
             "--write-subs",
             "--write-auto-subs",
+            "--sub-format", "vtt/srt/best",
             "--skip-download",
             "--no-playlist",
             "--no-warnings",
@@ -1409,10 +1410,11 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
     if use_po_token:
         attempts = [(label, append_youtube_po_token_args(args)) for label, args in attempts]
     
-    # إضافة محاولات عبر عملاء مختلفين (android, web, ios) في حالة قيود يوتيوب على tv/mweb
-    attempts.append(("android-all", build_args("all,-live_chat", "youtube:player_client=android,web")))
-    attempts.append(("web-all", build_args("all,-live_chat", "youtube:player_client=web,default")))
-    attempts.append(("ios-all", build_args("all,-live_chat", "youtube:player_client=ios,web")))
+    # محاولات مخصصة تفرض استخدام عملاء موثوقين من يوتيوب لضمان ظهور الترجمة التلقائية
+    attempts.append(("android-all", build_args("all,-live_chat", "youtube:player_client=android")))
+    attempts.append(("web-all", build_args("all,-live_chat", "youtube:player_client=web")))
+    attempts.append(("ios-all", build_args("all,-live_chat", "youtube:player_client=ios")))
+    attempts.append(("tvhtml5-all", build_args("all,-live_chat", "youtube:player_client=tvhtml5")))
 
     try:
         for label, args in attempts:
