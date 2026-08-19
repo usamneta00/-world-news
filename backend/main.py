@@ -1409,8 +1409,10 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
     ]
     if use_po_token:
         attempts = [(label, append_youtube_po_token_args(args)) for label, args in attempts]
-    else:
-        attempts.append(("web-all", build_args("all,-live_chat", "youtube:player_client=web,default")))
+    # mweb/PO-token لا يعرض دائمًا نفس مسارات الترجمة التي يعرضها web.
+    # جرّب web كمسار احتياطي في الحالتين، خصوصًا عندما تكون الترجمة موجودة
+    # في YouTube/DownSub ولكنها غير ظاهرة في metadata الخاصة بعميل mweb.
+    attempts.append(("web-all", build_args("all,-live_chat", "youtube:player_client=web,default")))
 
     try:
         for label, args in attempts:
@@ -1542,14 +1544,20 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt'], use_cookies=Tr
         # تحديد أفضل لغة متوفرة لا تسبب خطأ 429
         best_lang, is_auto = select_best_lang(subtitles, automatic_captions, spoken_lang)
         if not best_lang:
-            logger.warning("[yt-dlp meta] No subtitles in metadata; trying direct subtitle download fallback.")
+            logger.warning(
+                "[yt-dlp meta] لا تظهر الترجمات في metadata؛ سيتم تجربة التنزيل المباشر "
+                "بكل اللغات وعبر عميل web الاحتياطي."
+            )
             fallback_results = try_direct_ytdlp_subtitle_download(
                 video_url, tmpdir, cookies_file_meta, formats=formats, use_po_token=use_po_token
             )
             if fallback_results.get("srt") or fallback_results.get("txt"):
                 return fallback_results
             logger.warning(f"[yt-dlp fallback] {fallback_results.get('error')}")
-            results["error"] = "لا توجد أي ملفات ترجمة أو نصوص تلقائية متاحة لهذا الفيديو"
+            results["error"] = (
+                "لم يكتب yt-dlp ملف ترجمة؛ قد تكون الترجمة غير متاحة عبر عميل YouTube "
+                "المستخدم أو غير ظاهرة في metadata"
+            )
             logger.warning(f"⚠️ [yt-dlp meta] {results['error']}")
             return results
             
