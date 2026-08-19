@@ -7,7 +7,6 @@ aiosqlite
 asyncio
 python-dateutil
 yt-dlp[default]
-youtube-transcript-api
 beautifulsoup4
 requests
 telethon

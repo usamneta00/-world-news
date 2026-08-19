@@ -1454,57 +1454,142 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
                 sub_file = vtt_or_srt_files[0]
 
         if not sub_file:
-            # محاولة احتياطية استخدام youtube_transcript_api إذا أخفق yt-dlp تماماً
+            # محاولة احتياطية: جلب الترجمة مباشرة من صفحة HTML ليوتيوب
+            # هذا يتجاوز حظر يوتيوب لعناوين IP السحابية لأنه يحاكي زيارة متصفح عادية
             try:
-                from youtube_transcript_api import YouTubeTranscriptApi
                 video_id = None
                 if "v=" in video_url:
                     video_id = video_url.split("v=")[1].split("&")[0]
                 elif "youtu.be/" in video_url:
                     video_id = video_url.split("youtu.be/")[1].split("?")[0]
                 if video_id:
-                    logger.info(f"🔄 [Transcript API fallback] جاري تجربة youtube_transcript_api للفيديو: {video_id}")
-                    transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-                    transcript = None
-                    try:
-                        transcript = transcript_list.find_transcript(['ar', 'en'])
-                    except Exception:
-                        try:
-                            transcript = transcript_list.find_generated_transcript(['ar', 'en'])
-                        except Exception:
-                            for t in transcript_list:
-                                transcript = t
-                                break
-                    if transcript:
-                        fetched = transcript.fetch()
-                        srt_lines = []
-                        txt_lines = []
-                        for i, item in enumerate(fetched, 1):
-                            start = item['start']
-                            duration = item.get('duration', 2.0)
-                            end = start + duration
-                            text = item['text'].replace('\n', ' ')
-                            txt_lines.append(text)
+                    logger.info(f"🔄 [HTML scrape fallback] جاري استخراج الترجمة من صفحة يوتيوب: {video_id}")
+                    import requests as req_lib
+                    import json as json_lib
+                    import re as re_lib
+                    import html as html_lib
+
+                    page_url = f"https://www.youtube.com/watch?v={video_id}"
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                        "Accept-Language": "ar,en-US;q=0.9,en;q=0.8",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    }
+                    resp = req_lib.get(page_url, headers=headers, timeout=20)
+                    resp.raise_for_status()
+                    page_html = resp.text
+
+                    # استخراج ytInitialPlayerResponse من HTML
+                    match = re_lib.search(
+                        r'ytInitialPlayerResponse\s*=\s*(\{.+?\})\s*;\s*(?:var\s|<\/script)',
+                        page_html, re_lib.DOTALL
+                    )
+                    if not match:
+                        match = re_lib.search(
+                            r'ytInitialPlayerResponse\s*=\s*(\{.+?\})\s*;',
+                            page_html, re_lib.DOTALL
+                        )
+
+                    if match:
+                        player_response = json_lib.loads(match.group(1))
+                        captions = player_response.get("captions", {})
+                        renderer = captions.get("playerCaptionsTracklistRenderer", {})
+                        caption_tracks = renderer.get("captionTracks", [])
+
+                        if caption_tracks:
+                            # ترتيب حسب الأولوية: عربي، إنجليزي، ثم أي لغة
+                            preferred_langs = ['ar', 'en']
+                            chosen_track = None
+                            for lang in preferred_langs:
+                                for track in caption_tracks:
+                                    if track.get("languageCode", "").startswith(lang):
+                                        chosen_track = track
+                                        break
+                                if chosen_track:
+                                    break
+                            if not chosen_track:
+                                chosen_track = caption_tracks[0]
+
+                            # جلب ملف الترجمة (تسيير XML أو json3)
+                            base_url = chosen_track["baseUrl"]
                             
-                            def fmt(s):
+                            # تجربة جلب json3 أولاً ثم XML كاحتياطي
+                            sub_content = ""
+                            sub_json = None
+                            try:
+                                json_url = base_url + "&fmt=json3" if "fmt=" not in base_url else re_lib.sub(r'fmt=[^&]+', 'fmt=json3', base_url)
+                                sub_resp = req_lib.get(json_url, headers=headers, timeout=20)
+                                if sub_resp.status_code == 200 and sub_resp.text.strip():
+                                    sub_json = sub_resp.json()
+                            except Exception:
+                                pass
+
+                            srt_lines = []
+                            txt_lines = []
+                            idx = 0
+
+                            def _fmt_ts(ms):
+                                s = ms / 1000.0
                                 hrs = int(s // 3600)
                                 mins = int((s % 3600) // 60)
                                 secs = int(s % 60)
                                 millis = int((s - int(s)) * 1000)
                                 return f"{hrs:02d}:{mins:02d}:{secs:02d},{millis:03d}"
-                            
-                            srt_lines.append(f"{i}\n{fmt(start)} --> {fmt(end)}\n{text}\n")
-                        
-                        srt_data = "\n".join(srt_lines)
-                        txt_data = " ".join(txt_lines)
-                        if 'srt' in formats:
-                            results['srt'] = srt_data
-                        if 'txt' in formats:
-                            results['txt'] = txt_data
-                        logger.info(f"✅ [Transcript API fallback] تم نجاح جلب الترجمة عبر youtube_transcript_api")
-                        return results
-            except Exception as e_api:
-                logger.warning(f"⚠️ [Transcript API fallback] لم تتمكن من جلب الترجمة: {e_api}")
+
+                            if sub_json and "events" in sub_json:
+                                for ev in sub_json.get("events", []):
+                                    segs = ev.get("segs")
+                                    if not segs:
+                                        continue
+                                    text = "".join(seg.get("utf8", "") for seg in segs).strip()
+                                    text = html_lib.unescape(text).replace("\n", " ").strip()
+                                    if not text:
+                                        continue
+                                    start_ms = ev.get("tStartMs", 0)
+                                    dur_ms = ev.get("dDurationMs", 2000)
+                                    end_ms = start_ms + dur_ms
+                                    idx += 1
+                                    txt_lines.append(text)
+                                    srt_lines.append(f"{idx}\n{_fmt_ts(start_ms)} --> {_fmt_ts(end_ms)}\n{text}\n")
+                            else:
+                                # التراجع إلى XML المباشر
+                                xml_resp = req_lib.get(base_url, headers=headers, timeout=20)
+                                if xml_resp.status_code == 200 and xml_resp.text.strip():
+                                    import xml.etree.ElementTree as ET_lib
+                                    root = ET_lib.fromstring(xml_resp.text)
+                                    for elem in root.findall('.//text'):
+                                        t = elem.text
+                                        if not t:
+                                            continue
+                                        text = html_lib.unescape(t).replace("\n", " ").strip()
+                                        if not text:
+                                            continue
+                                        start_s = float(elem.attrib.get("start", 0))
+                                        dur_s = float(elem.attrib.get("dur", 2))
+                                        start_ms = int(start_s * 1000)
+                                        end_ms = int((start_s + dur_s) * 1000)
+                                        idx += 1
+                                        txt_lines.append(text)
+                                        srt_lines.append(f"{idx}\n{_fmt_ts(start_ms)} --> {_fmt_ts(end_ms)}\n{text}\n")
+
+                            if txt_lines:
+                                srt_data = "\n".join(srt_lines)
+                                txt_data = " ".join(txt_lines)
+                                if 'srt' in formats:
+                                    results['srt'] = srt_data
+                                if 'txt' in formats:
+                                    results['txt'] = txt_data
+                                lang_code = chosen_track.get("languageCode", "?")
+                                logger.info(f"✅ [HTML scrape fallback] تم جلب الترجمة بنجاح ({lang_code}, {idx} سطر)")
+                                return results
+                            else:
+                                logger.warning("⚠️ [HTML scrape fallback] تم العثور على مسار ترجمة لكن بدون نصوص")
+                        else:
+                            logger.warning("⚠️ [HTML scrape fallback] لا توجد مسارات ترجمة في ytInitialPlayerResponse")
+                    else:
+                        logger.warning("⚠️ [HTML scrape fallback] لم يتم العثور على ytInitialPlayerResponse في HTML")
+            except Exception as e_scrape:
+                logger.warning(f"⚠️ [HTML scrape fallback] خطأ: {e_scrape}")
 
             results["error"] = "No subtitle file was written by yt-dlp fallback"
             return results
