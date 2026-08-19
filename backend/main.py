@@ -1476,12 +1476,34 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
 
                     caption_tracks = []
                     if page_html:
-                        tracks_match = re_lib.search(r'"captionTracks":\s*(\[\{.+?\}\])\s*,\s*"', page_html)
+                        tracks_match = re_lib.search(r'"captionTracks":\s*(\[\{.+?\}\])', page_html)
                         if tracks_match:
                             try:
                                 caption_tracks = json_lib.loads(tracks_match.group(1))
                             except Exception:
                                 pass
+
+                    # إذا لم تظهر في الصفحة العادية، جلبها مباشرة عبر InnerTube Player API
+                    if not caption_tracks:
+                        try:
+                            innertube_url = "https://www.youtube.com/youtubei/v1/player"
+                            innertube_payload = {
+                                "context": {
+                                    "client": {
+                                        "hl": "en",
+                                        "gl": "US",
+                                        "clientName": "ANDROID_VR",
+                                        "clientVersion": "1.65.25"
+                                    }
+                                },
+                                "videoId": video_id
+                            }
+                            api_resp = req_lib.post(innertube_url, json=innertube_payload, timeout=15)
+                            if api_resp.status_code == 200:
+                                player_data = api_resp.json()
+                                caption_tracks = player_data.get("captions", {}).get("playerCaptionsTracklistRenderer", {}).get("captionTracks", [])
+                        except Exception as e_inner:
+                            logger.warning(f"[InnerTube fallback] error: {e_inner}")
                     if caption_tracks:
                         # فلترة جلب الترجمة: تفضيل العربي أولاً، ثم الإنجليزي فقط
                         chosen_track = None
