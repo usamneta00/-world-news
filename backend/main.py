@@ -1483,27 +1483,30 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
                             except Exception:
                                 pass
 
-                    # إذا لم تظهر في الصفحة العادية، جلبها مباشرة عبر InnerTube Player API
+                    # إذا لم تظهر في الصفحة العادية، جلبها مباشرة عبر InnerTube Player API بتجربة عملاء متعددين
                     if not caption_tracks:
-                        try:
-                            innertube_url = "https://www.youtube.com/youtubei/v1/player"
-                            innertube_payload = {
-                                "context": {
-                                    "client": {
-                                        "hl": "en",
-                                        "gl": "US",
-                                        "clientName": "ANDROID_VR",
-                                        "clientVersion": "1.65.25"
-                                    }
-                                },
-                                "videoId": video_id
-                            }
-                            api_resp = req_lib.post(innertube_url, json=innertube_payload, timeout=15)
-                            if api_resp.status_code == 200:
-                                player_data = api_resp.json()
-                                caption_tracks = player_data.get("captions", {}).get("playerCaptionsTracklistRenderer", {}).get("captionTracks", [])
-                        except Exception as e_inner:
-                            logger.warning(f"[InnerTube fallback] error: {e_inner}")
+                        for c_name, c_ver in [("ANDROID_VR", "1.65.25"), ("ANDROID", "19.09.37"), ("WEB", "2.20240101.00.00")]:
+                            try:
+                                innertube_url = "https://www.youtube.com/youtubei/v1/player"
+                                innertube_payload = {
+                                    "context": {
+                                        "client": {
+                                            "hl": "en",
+                                            "gl": "US",
+                                            "clientName": c_name,
+                                            "clientVersion": c_ver
+                                        }
+                                    },
+                                    "videoId": video_id
+                                }
+                                api_resp = req_lib.post(innertube_url, json=innertube_payload, timeout=15)
+                                if api_resp.status_code == 200:
+                                    player_data = api_resp.json()
+                                    caption_tracks = player_data.get("captions", {}).get("playerCaptionsTracklistRenderer", {}).get("captionTracks", [])
+                                    if caption_tracks:
+                                        break
+                            except Exception as e_inner:
+                                logger.warning(f"[InnerTube fallback {c_name}] error: {e_inner}")
                     if caption_tracks:
                         # فلترة جلب الترجمة: تفضيل العربي أولاً، ثم الإنجليزي فقط
                         chosen_track = None
