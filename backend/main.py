@@ -1464,8 +1464,7 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
                     video_id = video_url.split("youtu.be/")[1].split("?")[0]
                 if video_id:
                     logger.info(f"🔄 [Transcript API fallback] جاري تجربة youtube_transcript_api للفيديو: {video_id}")
-                    api = YouTubeTranscriptApi()
-                    transcript_list = api.list_transcripts(video_id)
+                    transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
                     transcript = None
                     try:
                         transcript = transcript_list.find_transcript(['ar', 'en'])
