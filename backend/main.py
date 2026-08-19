@@ -1404,11 +1404,13 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
         return args
 
     # البدء مباشرة بالعملاء الموثوقين (android_vr و android) لتفادي البلوك
+    # النص المطلوب هنا إنجليزي. لا نطلب العربية أو all في المحاولة الأولى،
+    # لأن yt-dlp قد يختار مسارًا إسبانيًا/عشوائيًا عند استخدام all.
+    english_langs = "en,en-orig,en-US,en-GB,en.*"
     attempts = [
-        ("android-vr", build_args("ar,en,en-orig,en-US,en-GB,en.*", "youtube:player_client=android_vr,android")),
-        ("android", build_args("ar,en,en-orig,en-US,en-GB,en.*", "youtube:player_client=android,android_embedded")),
-        ("preferred", build_args("ar,en,en-orig,en-US,en-GB,en.*", "youtube:player_client=android_vr,android")),
-        ("all-vr", build_args("all,-live_chat", "youtube:player_client=android_vr,android")),
+        ("android-vr-en", build_args(english_langs, "youtube:player_client=android_vr,android")),
+        ("android-en", build_args(english_langs, "youtube:player_client=android,android_embedded")),
+        ("web-en", build_args(english_langs, "youtube:player_client=web,default")),
     ]
     if use_po_token:
         attempts = [(label, append_youtube_po_token_args(args)) for label, args in attempts]
@@ -1433,7 +1435,6 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
                 files.remove(file_to_remove)
 
         preferred_suffixes = [
-            ".ar.vtt", ".ar.srt",
             ".en-orig.vtt", ".en-orig.srt",
             ".en.vtt", ".en.srt",
             ".en-US.vtt", ".en-US.srt",
@@ -1446,7 +1447,11 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
                 sub_file = matched[0]
                 break
         if not sub_file:
-            vtt_or_srt_files = [f for f in files if f.endswith('.vtt') or f.endswith('.srt')]
+            vtt_or_srt_files = [
+                f for f in files
+                if (f.endswith('.vtt') or f.endswith('.srt'))
+                and any(token in f.lower() for token in ('.en.', '.en-', '.en_'))
+            ]
             if vtt_or_srt_files:
                 sub_file = vtt_or_srt_files[0]
 
