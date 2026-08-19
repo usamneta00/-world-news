@@ -1410,10 +1410,10 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
     if use_po_token:
         attempts = [(label, append_youtube_po_token_args(args)) for label, args in attempts]
     
-    # محاولات مخصصة تفرض استخدام عملاء موثوقين من يوتيوب لضمان ظهور الترجمة التلقائية
-    attempts.append(("android-all", build_args("all,-live_chat", "youtube:player_client=android")))
-    attempts.append(("web-all", build_args("all,-live_chat", "youtube:player_client=web")))
-    attempts.append(("ios-all", build_args("all,-live_chat", "youtube:player_client=ios")))
+    # استخدام عملاء موثوقين ومجربين بنجاح (android_vr و android) لجلب الترجمات الإنجليزية والعربية
+    attempts.append(("android-vr", build_args("ar,en,en-orig,en-US,en-GB,en.*", "youtube:player_client=android_vr,android")))
+    attempts.append(("android", build_args("ar,en,en-orig,en-US,en-GB,en.*", "youtube:player_client=android,android_embedded")))
+    attempts.append(("all-vr", build_args("all,-live_chat", "youtube:player_client=android_vr,android")))
 
     try:
         for label, args in attempts:
@@ -1636,6 +1636,7 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt'], use_cookies=Tr
         meta_args = [
             "yt-dlp",
             "-j",
+            "--extractor-args", "youtube:player_client=android_vr,android",
             "--skip-download",
             "--no-check-formats",
             "--ignore-no-formats-error",
