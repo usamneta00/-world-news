@@ -1454,6 +1454,59 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
                 sub_file = vtt_or_srt_files[0]
 
         if not sub_file:
+            # محاولة احتياطية استخدام youtube_transcript_api إذا أخفق yt-dlp تماماً
+            try:
+                from youtube_transcript_api import YouTubeTranscriptApi
+                video_id = None
+                if "v=" in video_url:
+                    video_id = video_url.split("v=")[1].split("&")[0]
+                elif "youtu.be/" in video_url:
+                    video_id = video_url.split("youtu.be/")[1].split("?")[0]
+                if video_id:
+                    logger.info(f"🔄 [Transcript API fallback] جاري تجربة youtube_transcript_api للفيديو: {video_id}")
+                    api = YouTubeTranscriptApi()
+                    transcript_list = api.list_transcripts(video_id)
+                    transcript = None
+                    try:
+                        transcript = transcript_list.find_transcript(['ar', 'en'])
+                    except Exception:
+                        try:
+                            transcript = transcript_list.find_generated_transcript(['ar', 'en'])
+                        except Exception:
+                            for t in transcript_list:
+                                transcript = t
+                                break
+                    if transcript:
+                        fetched = transcript.fetch()
+                        srt_lines = []
+                        txt_lines = []
+                        for i, item in enumerate(fetched, 1):
+                            start = item['start']
+                            duration = item.get('duration', 2.0)
+                            end = start + duration
+                            text = item['text'].replace('\n', ' ')
+                            txt_lines.append(text)
+                            
+                            def fmt(s):
+                                hrs = int(s // 3600)
+                                mins = int((s % 3600) // 60)
+                                secs = int(s % 60)
+                                millis = int((s - int(s)) * 1000)
+                                return f"{hrs:02d}:{mins:02d}:{secs:02d},{millis:03d}"
+                            
+                            srt_lines.append(f"{i}\n{fmt(start)} --> {fmt(end)}\n{text}\n")
+                        
+                        srt_data = "\n".join(srt_lines)
+                        txt_data = " ".join(txt_lines)
+                        if 'srt' in formats:
+                            results['srt'] = srt_data
+                        if 'txt' in formats:
+                            results['txt'] = txt_data
+                        logger.info(f"✅ [Transcript API fallback] تم نجاح جلب الترجمة عبر youtube_transcript_api")
+                        return results
+            except Exception as e_api:
+                logger.warning(f"⚠️ [Transcript API fallback] لم تتمكن من جلب الترجمة: {e_api}")
+
             results["error"] = "No subtitle file was written by yt-dlp fallback"
             return results
 

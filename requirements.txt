@@ -11,6 +11,7 @@ python-multipart
 aiosqlite
 asyncio
 yt-dlp[default]
+youtube-transcript-api
 python-dateutil
 scikit-learn
 numpy
