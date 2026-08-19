@@ -1403,17 +1403,15 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
         args.append(video_url)
         return args
 
+    # البدء مباشرة بالعملاء الموثوقين (android_vr و android) لتفادي البلوك
     attempts = [
-        ("preferred", build_args("ar,en,en-orig,en-US,en-GB,en.*")),
-        ("all", build_args("all,-live_chat")),
+        ("android-vr", build_args("ar,en,en-orig,en-US,en-GB,en.*", "youtube:player_client=android_vr,android")),
+        ("android", build_args("ar,en,en-orig,en-US,en-GB,en.*", "youtube:player_client=android,android_embedded")),
+        ("preferred", build_args("ar,en,en-orig,en-US,en-GB,en.*", "youtube:player_client=android_vr,android")),
+        ("all-vr", build_args("all,-live_chat", "youtube:player_client=android_vr,android")),
     ]
     if use_po_token:
         attempts = [(label, append_youtube_po_token_args(args)) for label, args in attempts]
-    
-    # استخدام عملاء موثوقين ومجربين بنجاح (android_vr و android) لجلب الترجمات الإنجليزية والعربية
-    attempts.append(("android-vr", build_args("ar,en,en-orig,en-US,en-GB,en.*", "youtube:player_client=android_vr,android")))
-    attempts.append(("android", build_args("ar,en,en-orig,en-US,en-GB,en.*", "youtube:player_client=android,android_embedded")))
-    attempts.append(("all-vr", build_args("all,-live_chat", "youtube:player_client=android_vr,android")))
 
     try:
         for label, args in attempts:
