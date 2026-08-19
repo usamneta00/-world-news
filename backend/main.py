@@ -1482,6 +1482,8 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
                                 caption_tracks = json_lib.loads(tracks_match.group(1))
                             except Exception:
                                 pass
+                    if caption_tracks:
+                        # فلترة جلب الترجمة: تفضيل العربي أولاً، ثم الإنجليزي فقط
                         chosen_track = None
                         for lang in ['ar', 'en']:
                             for track in caption_tracks:
@@ -1493,85 +1495,51 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
                                 break
                         
                         if chosen_track:
-                            # جلب ملف الترجمة (تسيير XML أو json3)
+                            # جلب ملف الترجمة
                             base_url = chosen_track["baseUrl"]
-                            
-                            # تجربة جلب json3 أولاً ثم XML كاحتياطي
-                            sub_content = ""
-                            sub_json = None
-                            try:
-                                json_url = base_url + "&fmt=json3" if "fmt=" not in base_url else re_lib.sub(r'fmt=[^&]+', 'fmt=json3', base_url)
-                                sub_resp = req_lib.get(json_url, headers=headers, timeout=20)
-                                if sub_resp.status_code == 200 and sub_resp.text.strip():
-                                    sub_json = sub_resp.json()
-                            except Exception:
-                                pass
-
-                            srt_lines = []
-                            txt_lines = []
-                            idx = 0
-
-                            def _fmt_ts(ms):
-                                s = ms / 1000.0
-                                hrs = int(s // 3600)
-                                mins = int((s % 3600) // 60)
-                                secs = int(s % 60)
-                                millis = int((s - int(s)) * 1000)
-                                return f"{hrs:02d}:{mins:02d}:{secs:02d},{millis:03d}"
-
-                            if sub_json and "events" in sub_json:
-                                for ev in sub_json.get("events", []):
-                                    segs = ev.get("segs")
-                                    if not segs:
+                            sub_resp = req_lib.get(base_url, headers=headers, timeout=20)
+                            if sub_resp.status_code == 200 and sub_resp.text.strip():
+                                import xml.etree.ElementTree as ET_lib
+                                root = ET_lib.fromstring(sub_resp.text)
+                                srt_lines = []
+                                txt_lines = []
+                                idx = 0
+                                def _fmt_ts(ms):
+                                    s = ms / 1000.0
+                                    hrs = int(s // 3600)
+                                    mins = int((s % 3600) // 60)
+                                    secs = int(s % 60)
+                                    millis = int((s - int(s)) * 1000)
+                                    return f"{hrs:02d}:{mins:02d}:{secs:02d},{millis:03d}"
+                                for elem in root.findall('.//text'):
+                                    t = elem.text
+                                    if not t:
                                         continue
-                                    text = "".join(seg.get("utf8", "") for seg in segs).strip()
-                                    text = html_lib.unescape(text).replace("\n", " ").strip()
+                                    text = html_lib.unescape(t).replace("\n", " ").strip()
                                     if not text:
                                         continue
-                                    start_ms = ev.get("tStartMs", 0)
-                                    dur_ms = ev.get("dDurationMs", 2000)
-                                    end_ms = start_ms + dur_ms
+                                    start_s = float(elem.attrib.get("start", 0))
+                                    dur_s = float(elem.attrib.get("dur", 2))
+                                    start_ms = int(start_s * 1000)
+                                    end_ms = int((start_s + dur_s) * 1000)
                                     idx += 1
                                     txt_lines.append(text)
                                     srt_lines.append(f"{idx}\n{_fmt_ts(start_ms)} --> {_fmt_ts(end_ms)}\n{text}\n")
-                            else:
-                                # التراجع إلى XML المباشر
-                                xml_resp = req_lib.get(base_url, headers=headers, timeout=20)
-                                if xml_resp.status_code == 200 and xml_resp.text.strip():
-                                    import xml.etree.ElementTree as ET_lib
-                                    root = ET_lib.fromstring(xml_resp.text)
-                                    for elem in root.findall('.//text'):
-                                        t = elem.text
-                                        if not t:
-                                            continue
-                                        text = html_lib.unescape(t).replace("\n", " ").strip()
-                                        if not text:
-                                            continue
-                                        start_s = float(elem.attrib.get("start", 0))
-                                        dur_s = float(elem.attrib.get("dur", 2))
-                                        start_ms = int(start_s * 1000)
-                                        end_ms = int((start_s + dur_s) * 1000)
-                                        idx += 1
-                                        txt_lines.append(text)
-                                        srt_lines.append(f"{idx}\n{_fmt_ts(start_ms)} --> {_fmt_ts(end_ms)}\n{text}\n")
-
-                            if txt_lines:
-                                srt_data = "\n".join(srt_lines)
-                                txt_data = " ".join(txt_lines)
-                                if 'srt' in formats:
-                                    results['srt'] = srt_data
-                                if 'txt' in formats:
-                                    results['txt'] = txt_data
-                                lang_code = chosen_track.get("languageCode", "?")
-                                logger.info(f"✅ [HTML scrape fallback] تم جلب الترجمة بنجاح ({lang_code}, {idx} سطر)")
-                                return results
-                            else:
-                                logger.warning("⚠️ [HTML scrape fallback] تم العثور على مسار ترجمة لكن بدون نصوص")
+                                if txt_lines:
+                                    srt_data = "\n".join(srt_lines)
+                                    txt_data = " ".join(txt_lines)
+                                    if 'srt' in formats:
+                                        results['srt'] = srt_data
+                                    if 'txt' in formats:
+                                        results['txt'] = txt_data
+                                    lang_code = chosen_track.get("languageCode", "?")
+                                    logger.info(f"✅ [HTML scrape fallback] تم جلب الترجمة بنجاح ({lang_code}, {idx} سطر)")
+                                    return results
                         else:
                             available_langs = [t.get('languageCode') for t in caption_tracks]
                             logger.warning(f"⚠️ [HTML scrape fallback] توجد مسارات ترجمة باللغات {available_langs} لكن ليست باللغة العربية أو الإنجليزية")
                     else:
-                        logger.warning("⚠️ [HTML scrape fallback] لا توجد مسارات ترجمة متوفرة لهذا الفيديو")
+                        logger.warning("⚠️ [HTML scrape fallback] لا توجد أي مسارات ترجمة متوفرة على يوتيوب لهذا الفيديو حالياً")
             except Exception as e_scrape:
                 logger.warning(f"⚠️ [HTML scrape fallback] خطأ: {e_scrape}")
 
