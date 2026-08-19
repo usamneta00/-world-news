@@ -1479,36 +1479,49 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
                     resp.raise_for_status()
                     page_html = resp.text
 
-                    # استخراج ytInitialPlayerResponse من HTML
-                    match = re_lib.search(
-                        r'ytInitialPlayerResponse\s*=\s*(\{.+?\})\s*;\s*(?:var\s|<\/script)',
-                        page_html, re_lib.DOTALL
-                    )
-                    if not match:
+                    # استخراج captionTracks باستخدام regex مباشر وموثوق من HTML
+                    caption_tracks = []
+                    tracks_match = re_lib.search(r'"captionTracks":\s*(\[\{.+?\}\])\s*,\s*"', page_html)
+                    if tracks_match:
+                        try:
+                            # فك تشفير السلسلة النصية مع الرموز التعبيرية مثل \u0026
+                            caption_tracks = json_lib.loads(tracks_match.group(1))
+                        except Exception as e_json:
+                            logger.warning(f"⚠️ [HTML scrape] فشل فك JSON لـ captionTracks: {e_json}")
+                    
+                    if not caption_tracks:
+                        # تجربة الاستخراج من ytInitialPlayerResponse كخيار ثانٍ
                         match = re_lib.search(
-                            r'ytInitialPlayerResponse\s*=\s*(\{.+?\})\s*;',
+                            r'ytInitialPlayerResponse\s*=\s*(\{.+?\})\s*;\s*(?:var\s|<\/script)',
                             page_html, re_lib.DOTALL
                         )
+                        if not match:
+                            match = re_lib.search(
+                                r'ytInitialPlayerResponse\s*=\s*(\{.+?\})\s*;',
+                                page_html, re_lib.DOTALL
+                            )
+                        if match:
+                            try:
+                                player_response = json_lib.loads(match.group(1))
+                                captions = player_response.get("captions", {})
+                                renderer = captions.get("playerCaptionsTracklistRenderer", {})
+                                caption_tracks = renderer.get("captionTracks", [])
+                            except Exception:
+                                pass
 
-                    if match:
-                        player_response = json_lib.loads(match.group(1))
-                        captions = player_response.get("captions", {})
-                        renderer = captions.get("playerCaptionsTracklistRenderer", {})
-                        caption_tracks = renderer.get("captionTracks", [])
-
-                        if caption_tracks:
-                            # ترتيب حسب الأولوية: عربي، إنجليزي، ثم أي لغة
-                            preferred_langs = ['ar', 'en']
-                            chosen_track = None
-                            for lang in preferred_langs:
-                                for track in caption_tracks:
-                                    if track.get("languageCode", "").startswith(lang):
-                                        chosen_track = track
-                                        break
-                                if chosen_track:
+                    if caption_tracks:
+                        # فلترة جلب الترجمة: تفضيل العربي أولاً، ثم الإنجليزي فقط (تجاهل الإسبانية أو أي لغة أخرى)
+                        chosen_track = None
+                        for lang in ['ar', 'en']:
+                            for track in caption_tracks:
+                                lang_code = track.get("languageCode", "").lower()
+                                if lang_code == lang or lang_code.startswith(f"{lang}-"):
+                                    chosen_track = track
                                     break
-                            if not chosen_track:
-                                chosen_track = caption_tracks[0]
+                            if chosen_track:
+                                break
+                        
+                        if chosen_track:
 
                             # جلب ملف الترجمة (تسيير XML أو json3)
                             base_url = chosen_track["baseUrl"]
