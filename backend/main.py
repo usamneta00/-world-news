@@ -1568,7 +1568,8 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
                             else:
                                 logger.warning("⚠️ [HTML scrape fallback] تم العثور على مسار ترجمة لكن بدون نصوص")
                         else:
-                            logger.warning("⚠️ [HTML scrape fallback] توجد مسارات ترجمة لكن ليست باللغة العربية أو الإنجليزية")
+                            available_langs = [t.get('languageCode') for t in caption_tracks]
+                            logger.warning(f"⚠️ [HTML scrape fallback] توجد مسارات ترجمة باللغات {available_langs} لكن ليست باللغة العربية أو الإنجليزية")
                     else:
                         logger.warning("⚠️ [HTML scrape fallback] لا توجد مسارات ترجمة متوفرة لهذا الفيديو")
             except Exception as e_scrape:
