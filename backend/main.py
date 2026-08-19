@@ -1414,7 +1414,6 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
     attempts.append(("android-all", build_args("all,-live_chat", "youtube:player_client=android")))
     attempts.append(("web-all", build_args("all,-live_chat", "youtube:player_client=web")))
     attempts.append(("ios-all", build_args("all,-live_chat", "youtube:player_client=ios")))
-    attempts.append(("tvhtml5-all", build_args("all,-live_chat", "youtube:player_client=tvhtml5")))
 
     try:
         for label, args in attempts:
@@ -1454,8 +1453,7 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
                 sub_file = vtt_or_srt_files[0]
 
         if not sub_file:
-            # محاولة احتياطية: جلب الترجمة مباشرة من صفحة HTML ليوتيوب
-            # هذا يتجاوز حظر يوتيوب لعناوين IP السحابية لأنه يحاكي زيارة متصفح عادية
+            # محاولة احتياطية: جلب الترجمة مباشرة عبر HTML Scraping أو InnerTube API
             try:
                 video_id = None
                 if "v=" in video_url:
@@ -1476,41 +1474,16 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
                         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                     }
                     resp = req_lib.get(page_url, headers=headers, timeout=20)
-                    resp.raise_for_status()
-                    page_html = resp.text
+                    page_html = resp.text if resp.status_code == 200 else ""
 
-                    # استخراج captionTracks باستخدام regex مباشر وموثوق من HTML
                     caption_tracks = []
-                    tracks_match = re_lib.search(r'"captionTracks":\s*(\[\{.+?\}\])\s*,\s*"', page_html)
-                    if tracks_match:
-                        try:
-                            # فك تشفير السلسلة النصية مع الرموز التعبيرية مثل \u0026
-                            caption_tracks = json_lib.loads(tracks_match.group(1))
-                        except Exception as e_json:
-                            logger.warning(f"⚠️ [HTML scrape] فشل فك JSON لـ captionTracks: {e_json}")
-                    
-                    if not caption_tracks:
-                        # تجربة الاستخراج من ytInitialPlayerResponse كخيار ثانٍ
-                        match = re_lib.search(
-                            r'ytInitialPlayerResponse\s*=\s*(\{.+?\})\s*;\s*(?:var\s|<\/script)',
-                            page_html, re_lib.DOTALL
-                        )
-                        if not match:
-                            match = re_lib.search(
-                                r'ytInitialPlayerResponse\s*=\s*(\{.+?\})\s*;',
-                                page_html, re_lib.DOTALL
-                            )
-                        if match:
+                    if page_html:
+                        tracks_match = re_lib.search(r'"captionTracks":\s*(\[\{.+?\}\])\s*,\s*"', page_html)
+                        if tracks_match:
                             try:
-                                player_response = json_lib.loads(match.group(1))
-                                captions = player_response.get("captions", {})
-                                renderer = captions.get("playerCaptionsTracklistRenderer", {})
-                                caption_tracks = renderer.get("captionTracks", [])
+                                caption_tracks = json_lib.loads(tracks_match.group(1))
                             except Exception:
                                 pass
-
-                    if caption_tracks:
-                        # فلترة جلب الترجمة: تفضيل العربي أولاً، ثم الإنجليزي فقط (تجاهل الإسبانية أو أي لغة أخرى)
                         chosen_track = None
                         for lang in ['ar', 'en']:
                             for track in caption_tracks:
@@ -1522,7 +1495,6 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
                                 break
                         
                         if chosen_track:
-
                             # جلب ملف الترجمة (تسيير XML أو json3)
                             base_url = chosen_track["baseUrl"]
                             
@@ -1598,9 +1570,9 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
                             else:
                                 logger.warning("⚠️ [HTML scrape fallback] تم العثور على مسار ترجمة لكن بدون نصوص")
                         else:
-                            logger.warning("⚠️ [HTML scrape fallback] لا توجد مسارات ترجمة في ytInitialPlayerResponse")
+                            logger.warning("⚠️ [HTML scrape fallback] توجد مسارات ترجمة لكن ليست باللغة العربية أو الإنجليزية")
                     else:
-                        logger.warning("⚠️ [HTML scrape fallback] لم يتم العثور على ytInitialPlayerResponse في HTML")
+                        logger.warning("⚠️ [HTML scrape fallback] لا توجد مسارات ترجمة متوفرة لهذا الفيديو")
             except Exception as e_scrape:
                 logger.warning(f"⚠️ [HTML scrape fallback] خطأ: {e_scrape}")
 
