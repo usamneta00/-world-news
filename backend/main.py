@@ -1361,17 +1361,16 @@ _po_provider_warning_emitted = False
 def append_youtube_po_token_args(args):
     """Configure yt-dlp's mweb client and optional external BgUtils provider."""
     global _po_provider_warning_emitted
-    args.extend(["--extractor-args", "youtube:player_client=mweb"])
-    provider_url = os.environ.get(
-        "YOUTUBE_PO_TOKEN_PROVIDER_URL", "http://127.0.0.1:4416"
-    ).strip().rstrip("/")
+    provider_url = os.environ.get("YOUTUBE_PO_TOKEN_PROVIDER_URL", "").strip().rstrip("/")
     if provider_url:
-        args.extend(["--extractor-args", f"youtubepot-bgutilhttp:base_url={provider_url}"])
-    elif not _po_provider_warning_emitted:
-        logger.warning(
-            "YOUTUBE_PO_TOKEN_PROVIDER_URL is not configured; mweb will run without the external PO Token provider."
-        )
-        _po_provider_warning_emitted = True
+        args.extend(["--extractor-args", f"youtube:player_client=mweb;youtubepot-bgutilhttp:base_url={provider_url}"])
+    else:
+        args.extend(["--extractor-args", "youtube:player_client=mweb"])
+        if not _po_provider_warning_emitted:
+            logger.warning(
+                "YOUTUBE_PO_TOKEN_PROVIDER_URL is not configured; mweb will run without the external PO Token provider."
+            )
+            _po_provider_warning_emitted = True
     return args
 
 
