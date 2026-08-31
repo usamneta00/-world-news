@@ -1061,24 +1061,59 @@ def classify_news_intensity(title):
     return "important"
 
 def translate_to_arabic(text: str) -> str:
-    """Translate English text to Arabic using Google Translate free API"""
+    """Translate short feed text to Arabic.
+
+    The Google endpoint is unofficial and can be unavailable from the
+    production host, so use it as a fast first attempt and fall back to the
+    configured OpenAI key instead of silently returning the English title.
+    """
     if not text or any(char in text for char in 'أبتثجحخدذرزسشصضطظعغفقكلمنهوي'): # Skip if already has Arabic chars
         return text
     
     try:
         # Using the unofficial but widely used Google Translate API endpoint
-        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ar&dt=t&q={quote(text)}"
+        url = "https://translate.googleapis.com/translate_a/single"
         headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(
+            url,
+            params={'client': 'gtx', 'sl': 'auto', 'tl': 'ar', 'dt': 't', 'q': text},
+            headers=headers,
+            timeout=10,
+        )
         
         if response.status_code == 200:
             result = response.json()
             translated_text = "".join([segment[0] for segment in result[0] if segment[0]])
             return translated_text
-        return text
+        logger.warning("Google title translation returned HTTP %s; trying OpenAI fallback", response.status_code)
     except Exception as e:
-        logger.warning(f"Translation skipped (timeout/error): {e}")
-        return text
+        logger.warning(f"Google title translation failed; trying OpenAI fallback: {e}")
+
+    if OPENAI_API_KEY:
+        try:
+            response = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": "gpt-4o-mini",
+                    "messages": [{
+                        "role": "user",
+                        "content": f"ترجم العنوان الإخباري التالي إلى العربية فقط، دون شرح أو علامات اقتباس:\n{text}",
+                    }],
+                    "temperature": 0.2,
+                    "max_tokens": 120,
+                },
+                timeout=20,
+            )
+            if response.status_code == 200:
+                translated = response.json()['choices'][0]['message']['content'].strip().strip('"')
+                if translated:
+                    return translated
+            logger.warning("OpenAI title translation returned HTTP %s", response.status_code)
+        except Exception as e:
+            logger.warning(f"OpenAI title translation failed: {e}")
+
+    return text
 
 
 # ============================================
