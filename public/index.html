@@ -3995,7 +3995,15 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             const verifiedFacts = (report.verified_facts || []).map(fact => `<li>${escapeResearchHtml(fact)}</li>`).join('');
             const conflictingNarratives = (report.conflicting_narratives || []).map(item => `<li>${escapeResearchHtml(item)}</li>`).join('');
             const researchLimitations = (report.research_limitations || []).map(item => `<li>${escapeResearchHtml(item)}</li>`).join('');
-            const webSources = (report.web_sources || []).map(source => `<a href="${escapeResearchHtml(source.url)}" target="_blank" rel="noopener" class="block rounded-xl border border-white/10 bg-black/20 p-3 hover:border-neon-blue/40"><strong class="block text-xs text-white">${escapeResearchHtml(source.title || source.url)}</strong><span class="text-[10px] text-neutral-500">${escapeResearchHtml(source.publisher || source.url)}</span></a>`).join('');
+            // Keep the reading surface dense: one headline per URL/title, with direct links.
+            const uniqueSources = [];
+            const sourceKeys = new Set();
+            (report.web_sources || []).forEach(source => {
+                const key = String(source.url || source.title || '').trim().toLowerCase();
+                if (!key || sourceKeys.has(key)) return;
+                sourceKeys.add(key); uniqueSources.push(source);
+            });
+            const webSources = uniqueSources.slice(0, 24).map((source, index) => `<a href="${escapeResearchHtml(source.url)}" target="_blank" rel="noopener" class="headline-source-card"><span class="headline-index">${index + 1}</span><span class="min-w-0"><strong class="block text-sm leading-6 text-white">${escapeResearchHtml(source.title || source.url)}</strong><span class="text-[10px] text-neutral-500">${escapeResearchHtml(source.publisher || source.url)}</span></span><i data-lucide="arrow-up-left" class="w-4 h-4 shrink-0 text-neon-blue"></i></a>`).join('');
             const researchDossier = report.research_overview ? `
                 <section class="rounded-2xl border border-neon-blue/20 bg-gradient-to-b from-neon-blue/5 to-neutral-950 p-5 md:p-6">
                     <div class="flex items-center gap-3 mb-4"><i data-lucide="scan-search" class="w-5 h-5 text-neon-blue"></i><div><h3 class="font-bold text-white">خلاصة البحث الويب والتحقق الخارجي</h3><p class="text-[10px] font-mono text-neon-blue">منهج بحث متعدد المصادر قبل اختيار الفيديوهات</p></div></div>
@@ -4004,10 +4012,18 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                         ${verifiedFacts ? `<div class="rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-4"><strong class="text-xs text-emerald-300">الحقائق المؤكدة</strong><ul class="mt-3 list-disc pr-5 space-y-2 text-xs leading-6 text-neutral-300">${verifiedFacts}</ul></div>` : ''}
                         ${conflictingNarratives ? `<div class="rounded-xl border border-amber-500/15 bg-amber-500/5 p-4"><strong class="text-xs text-amber-300">الروايات والتوترات المتعارضة</strong><ul class="mt-3 list-disc pr-5 space-y-2 text-xs leading-6 text-neutral-300">${conflictingNarratives}</ul></div>` : ''}
                     </div>
-                    ${webSources ? `<div class="mt-5"><strong class="text-xs text-white">مصادر التحقق خارج YouTube</strong><div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">${webSources}</div></div>` : ''}
+                    ${webSources ? `<div class="mt-5"><div class="flex items-end justify-between gap-3"><div><strong class="text-sm text-white">العناوين الصحفية للقراءة</strong><p class="text-[10px] text-neutral-500 mt-1">${uniqueSources.length} عناوين مستقلة — افتح أي عنوان لقراءة النص الأصلي</p></div><span class="rounded-full bg-neon-blue/10 px-3 py-1 text-[10px] text-neon-blue">بدون تكرار</span></div><div class="grid sm:grid-cols-2 gap-2 mt-3">${webSources}</div></div>` : ''}
                     ${researchLimitations ? `<div class="mt-4 rounded-xl bg-white/[0.03] p-4"><strong class="text-xs text-neutral-300">حدود ما أمكن إثباته</strong><ul class="mt-2 list-disc pr-5 space-y-1 text-xs text-neutral-500">${researchLimitations}</ul></div>` : ''}
                 </section>` : '';
-            const videos = (report.videos || []).map((video, index) => {
+            const uniqueVideos = [];
+            const videoKeys = new Set();
+            (report.videos || []).forEach(video => {
+                const key = String(video.video_id || video.webpage_url || '').trim().toLowerCase();
+                const channel = String(video.channel_type || '').toLowerCase();
+                const isJournalism = video.journalism_relevant !== false && !['entertainment', 'gaming', 'music', 'sports'].some(word => channel.includes(word));
+                if (key && !videoKeys.has(key) && isJournalism) { videoKeys.add(key); uniqueVideos.push(video); }
+            });
+            const videos = uniqueVideos.map((video, index) => {
                 const isProvisional = video.selection_tier === 'provisional_rate_limit';
                 const transcript = video.transcript_available ? `
                     <details class="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 overflow-hidden">
@@ -4032,7 +4048,8 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                                 <span class="rounded-full px-2 py-1 ${video.selection_tier === 'strict_match' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-300'}">${video.selection_tier === 'strict_match' ? 'مطابق ومتحقق' : isProvisional ? 'مرشح — تحقق جزئي' : 'اختيار تكميلي قوي'}</span>
                             </div>
                             ${isProvisional ? '<div class="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-6 text-amber-200">هذا الفيديو ظاهر فعلًا في نتائج YouTube، لكن التاريخ والنص ونوع النقاش لم تُتحقق بسبب حظر الطلبات المؤقت.</div>' : ''}
-                            <h3 class="text-lg md:text-xl font-bold text-white leading-8 mb-3">${escapeResearchHtml(video.title)}</h3>
+                            <h3 class="text-lg md:text-xl font-bold text-white leading-8 mb-2">${escapeResearchHtml(video.title)}</h3>
+                            ${video.why_relevant ? `<p class="mb-4 rounded-xl border-r-2 border-red-500/60 bg-red-500/5 px-3 py-2 text-xs leading-6 text-neutral-300"><strong class="text-red-300">الخلاصة:</strong> ${escapeResearchHtml(video.why_relevant)}</p>` : ''}
                             <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4 text-xs">
                                 <div class="rounded-xl bg-white/5 p-3"><span class="text-neutral-500">الصلة</span><strong class="float-left text-white">${escapeResearchHtml(video.relevance_score)}/10</strong></div>
                                 <div class="rounded-xl bg-white/5 p-3"><span class="text-neutral-500">قوة النقاش</span><strong class="float-left text-white">${escapeResearchHtml(video.discussion_strength)}/10</strong></div>
@@ -4051,7 +4068,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             const queries = (report.search_plan || []).map(q => `<span class="inline-flex rounded-full border border-white/10 px-3 py-1.5 text-[11px] text-neutral-400">${escapeResearchHtml(q.query)}</span>`).join('');
             const contradictions = (report.contradictions || []).map(c => `<li>${escapeResearchHtml(typeof c.conflict === 'string' ? c.conflict : JSON.stringify(c.conflict))}</li>`).join('');
             const latest = report.latest_development ? `<div class="rounded-2xl border border-neon-blue/20 bg-neon-blue/5 p-5"><p class="text-[10px] font-mono text-neon-blue mb-2">أحدث تطور مرتبط بالقضية</p><a class="font-bold text-white hover:text-neon-blue" target="_blank" rel="noopener" href="${escapeResearchHtml(report.latest_development.url)}">${escapeResearchHtml(report.latest_development.title)}</a><p class="text-xs text-neutral-500 mt-2">${escapeResearchHtml(report.latest_development.source)} — ${escapeResearchHtml(report.latest_development.published)}</p></div>` : '';
-            const sequence = (report.videos || []).map((video, index) => `<div class="flex items-center gap-3 min-w-0"><span class="shrink-0 w-8 h-8 rounded-full bg-red-600 text-white font-black flex items-center justify-center">${index + 1}</span><div class="min-w-0"><strong class="block text-xs text-white">${escapeResearchHtml(video.narrative_stage || 'مرحلة تحليلية')}</strong><span class="block text-[10px] text-neutral-500 truncate">${escapeResearchHtml(video.title)}</span></div></div>`).join('<div class="h-5 w-px bg-red-500/30 mr-4"></div>');
+            const sequence = uniqueVideos.map((video, index) => `<div class="flex items-center gap-3 min-w-0"><span class="shrink-0 w-8 h-8 rounded-full bg-red-600 text-white font-black flex items-center justify-center">${index + 1}</span><div class="min-w-0"><strong class="block text-xs text-white">${escapeResearchHtml(video.narrative_stage || 'مرحلة تحليلية')}</strong><span class="block text-[10px] text-neutral-500 truncate">${escapeResearchHtml(video.title)}</span></div></div>`).join('<div class="h-5 w-px bg-red-500/30 mr-4"></div>');
             const timelineItems = (report.timeline?.items || []).map((event, index) => `
                 <div class="relative pr-8 pb-6 last:pb-0">
                     <span class="absolute right-0 top-1 w-3 h-3 rounded-full bg-red-500 ring-4 ring-red-500/10"></span>
