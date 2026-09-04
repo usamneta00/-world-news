@@ -1505,6 +1505,48 @@ async def research_youtube(
         unique = [dict(item, reused_previous_search=True) for item in all_unique]
     if not unique:
         rate_limited_search = any("429" in failure or "Too Many Requests" in failure for failure in search_failures)
+        # Web research can still produce a useful dossier even when YouTube
+        # discovery is empty or temporarily blocked.  Do not discard those
+        # sources by turning the whole job into a failed request.
+        web_sources = list((web_research or {}).get("web_sources") or [])
+        if web_sources:
+            finished = datetime.now(timezone.utc)
+            reason = (
+                "حجب YouTube طلبات البحث مؤقتًا"
+                if rate_limited_search
+                else "لم يُرجع YouTube فيديوهات قابلة للعرض في هذه المحاولة"
+            )
+            return {
+                "topic": brief.main_topic,
+                "brief": brief.as_dict(),
+                "filters": applied_filters,
+                "research_mode": research_mode,
+                "search_plan": plan,
+                "stats": {
+                    "queries": len(plan), "discovered": 0, "unique": 0,
+                    "new_unique": 0, "excluded_from_previous_search": 0,
+                    "reused_previous_results": False, "metadata_checked": 0,
+                    "eligible": 0, "selected": 0,
+                    "selection_strategy": "web_sources_only",
+                    "web_research_used": True,
+                    "web_research_candidates": 0,
+                    "web_research_model": ((web_research or {}).get("_usage") or {}).get("model", ""),
+                    "web_search_calls": int(((web_research or {}).get("_usage") or {}).get("web_search_calls") or 0),
+                    "web_research_cache_hit": bool(((web_research or {}).get("_usage") or {}).get("cache_hit")),
+                    "youtube_rate_limited": rate_limited_search,
+                    "duration_seconds": round((finished - started).total_seconds(), 2),
+                },
+                "videos": [], "timeline": [], "contradictions": [],
+                "latest_development": (web_research or {}).get("latest_development"),
+                "research_overview": (web_research or {}).get("overview", ""),
+                "verified_facts": (web_research or {}).get("verified_facts", []),
+                "conflicting_narratives": (web_research or {}).get("conflicting_narratives", []),
+                "research_limitations": (web_research or {}).get("limitations", []),
+                "web_sources": web_sources,
+                "search_terms": _search_terms(plan),
+                "warnings": [f"{reason}. عُرضت بقية المصادر الصحفية للقراءة، ويمكن إعادة محاولة قسم الفيديو لاحقًا."],
+                "generated_at": finished.isoformat(),
+            }
         if rate_limited_search:
             raise RuntimeError("حجب YouTube طلبات البحث مؤقتًا بسبب كثرة الطلبات من خادم Railway. انتظر فترة قصيرة ثم أعد المحاولة؛ لم يغيّر الوكيل فلاترك.")
         raise RuntimeError("أعاد YouTube صفر نتائج حتى بعد إعادة المحاولة بعبارات بحث واسعة. أعد المحاولة لاحقًا؛ لم تُخفف الفلاتر ولم تُضف نتائج عشوائية.")
