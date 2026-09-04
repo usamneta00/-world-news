@@ -1509,7 +1509,7 @@ async def research_youtube(
         # discovery is empty or temporarily blocked.  Do not discard those
         # sources by turning the whole job into a failed request.
         web_sources = list((web_research or {}).get("web_sources") or [])
-        if web_sources:
+        if web_research is not None:
             finished = datetime.now(timezone.utc)
             reason = (
                 "حجب YouTube طلبات البحث مؤقتًا"
