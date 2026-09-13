@@ -211,6 +211,7 @@ def _normalise_web_research(raw: Any) -> Optional[Dict[str, Any]]:
             "title": str(source.get("title") or source.get("name") or url).strip(),
             "url": url,
             "publisher": str(source.get("publisher") or "").strip(),
+            "published": str(source.get("published") or source.get("date") or "").strip(),
         })
 
     videos: List[Dict[str, Any]] = []
@@ -285,6 +286,7 @@ async def _openai_web_research(
     filters: Dict[str, Any],
     api_key: str,
     research_mode: str = "economy",
+    web_only: bool = False,
 ) -> Optional[Dict[str, Any]]:
     research_mode = research_mode if research_mode in {"economy", "local"} else "economy"
     if research_mode == "local" or not api_key or str(os.environ.get("YOUTUBE_RESEARCH_WEB_ENABLED", "true")).casefold() in {"0", "false", "no"}:
@@ -296,7 +298,7 @@ async def _openai_web_research(
         os.path.join("/data" if os.path.exists("/data") else ".", "youtube_web_research_cache"),
     )
     cache_signature = json.dumps(
-        {"prompt": _clean_prompt(user_prompt).casefold(), "filters": filters, "mode": research_mode, "model": model},
+        {"prompt": _clean_prompt(user_prompt).casefold(), "filters": filters, "mode": research_mode, "model": model, "web_only": web_only},
         ensure_ascii=False,
         sort_keys=True,
     )
@@ -306,7 +308,10 @@ async def _openai_web_research(
         if os.path.exists(cache_path) and time.time() - os.path.getmtime(cache_path) <= cache_ttl:
             with open(cache_path, "r", encoding="utf-8") as cache_file:
                 cached = json.load(cache_file)
-            if isinstance(cached, dict) and cached.get("videos"):
+            cache_has_content = isinstance(cached, dict) and (
+                cached.get("videos") or cached.get("web_sources") or cached.get("overview")
+            )
+            if cache_has_content:
                 cached["_usage"] = {**(cached.get("_usage") or {}), "cache_hit": True, "web_search_calls": 0}
                 return cached
     except (OSError, ValueError, TypeError) as exc:
@@ -317,27 +322,26 @@ async def _openai_web_research(
         if filters.get("date_from") or filters.get("date_to")
         else json.dumps(brief.date_policy, ensure_ascii=False)
     )
-    prompt = f"""
+    if web_only:
+        research_instruction = """
+أجرِ بحثًا مباشرًا في الويب عن الموضوع الذي أدخله المستخدم، بمنهج يشبه تقرير محلل بحث محترف.
+لا تبحث في YouTube إطلاقًا، ولا تبحث عن فيديوهات، ولا تُرجع أي روابط youtube.com أو youtu.be.
+ركّز على المقالات والتقارير والبيانات الرسمية والدراسات ومصادر الأخبار الموثوقة التي تتحدث عن الموضوع.
+"""
+    else:
+        research_instruction = """
 أجرِ بحث ويب تحقيقيًا مباشرًا لاختيار فيديوهات YouTube التي تطابق طلب المستخدم نفسه، بمنهج يشبه تقرير محلل بحث محترف.
-تاريخ اليوم: {datetime.now(timezone.utc).date().isoformat()}.
-طلب المستخدم: {user_prompt}
-الموضوع المركز: {brief.main_topic}
-العدد المستهدف: من {brief.desired_video_count['min']} إلى {brief.desired_video_count['max']}، لكن أعد عددًا أقل ولا تملأ القائمة إن لم تجد نتائج قوية.
-سياسة التاريخ: {date_requirement or 'لا يوجد نطاق زمني مفروض'}
-الفلاتر: {json.dumps(filters, ensure_ascii=False)}
-
-ابحث في الويب وفي YouTube بالعربية والإنجليزية وباللغات ذات الصلة. تحقق من أصل الخبر أولًا عبر مصادر موثوقة وحديثة. أعد في web_sources ما لا يقل عن 12 عنوانًا صحفيًا مستقلًا (وحتى 24 عند توفرها) من صحف ووكالات وقنوات إخبارية عالمية، مع عنوان المقال الحقيقي ورابطه المباشر والناشر؛ أزل التكرار ولا تضع صفحات نتائج البحث أو روابط عامة. ثم ابحث عن فيديوهات صحفية/تحليلية فقط تتناول الحدث أو السؤال المحدد، ويجب أن يقرأ المتحدث أو يناقش تقارير صحف ومصادر عالمية متعددة؛ استبعد الترفيه والرياضة والموسيقى والفيديوهات العامة غير الصحفية. افتح صفحة كل فيديو أو نتيجة موثوقة تشير إليه وتأكد من رابط YouTube المباشر والعنوان والقناة وتاريخ النشر. لا تخترع رابطًا أو تاريخًا. لا تُدخل فيديوهات هامشية لإكمال العدد. رتّب الفيديوهات كسلسلة تبدأ بالخبر/الخلفية ثم الأثر والأدلة ثم الآراء المتعارضة وتنتهي بأحدث تطور.
-
-أعد JSON فقط بهذا الشكل:
-{{
-  "overview": "ملخص الحقائق المؤكدة والسياق الضروري",
-  "verified_facts": ["حقائق مدعومة بالمصادر"],
-  "conflicting_narratives": ["الروايات أو التوترات المتعارضة"],
-  "latest_development": {{"title":"", "url":"https://...", "source":"", "date":"YYYY-MM-DD"}},
-  "search_queries": ["عبارات البحث الفعلية"],
-  "web_sources": [{{"title":"", "url":"https://...", "publisher":""}}],
-  "limitations": ["ما تعذر إثباته"],
-  "videos": [{{
+"""
+    output_instruction = """
+في web_sources أعد ما لا يقل عن 12 عنوانًا مستقلًا (وحتى 24 عند توفرها) من صحف ووكالات ومؤسسات رسمية ومراكز أبحاث، مع عنوان المقال الحقيقي ورابطه المباشر والناشر وتاريخ النشر إن توفر. أزل التكرار ولا تضع صفحات نتائج البحث أو روابط عامة.
+""" if web_only else """
+أعد في web_sources ما لا يقل عن 12 عنوانًا صحفيًا مستقلًا (وحتى 24 عند توفرها) من صحف ووكالات وقنوات إخبارية عالمية، مع عنوان المقال الحقيقي ورابطه المباشر والناشر؛ أزل التكرار ولا تضع صفحات نتائج البحث أو روابط عامة.
+"""
+    videos_instruction = "" if web_only else """
+ثم ابحث عن فيديوهات صحفية/تحليلية فقط تتناول الحدث أو السؤال المحدد، ويجب أن يقرأ المتحدث أو يناقش تقارير صحف ومصادر عالمية متعددة؛ استبعد الترفيه والرياضة والموسيقى والفيديوهات العامة غير الصحفية. افتح صفحة كل فيديو أو نتيجة موثوقة تشير إليه وتأكد من رابط YouTube المباشر والعنوان والقناة وتاريخ النشر. لا تخترع رابطًا أو تاريخًا. لا تُدخل فيديوهات هامشية لإكمال العدد. رتّب الفيديوهات كسلسلة تبدأ بالخبر/الخلفية ثم الأثر والأدلة ثم الآراء المتعارضة وتنتهي بأحدث تطور.
+"""
+    videos_schema = "" if web_only else """
+  "videos": [{
     "youtube_url":"https://www.youtube.com/watch?v=XXXXXXXXXXX",
     "title":"العنوان الحقيقي",
     "channel":"القناة الحقيقية",
@@ -349,7 +353,30 @@ async def _openai_web_research(
     "evidence":["الحقائق التي يدعمها الفيديو أو المصادر المصاحبة"],
     "relevance_score":9.5,
     "discovery_query":"عبارة البحث التي أوصلت إليه"
-  }}]
+  }]
+"""
+    schema_videos = f",\n{videos_schema}" if videos_schema else ""
+    prompt = f"""
+{research_instruction}
+تاريخ اليوم: {datetime.now(timezone.utc).date().isoformat()}.
+طلب المستخدم: {user_prompt}
+الموضوع المركز: {brief.main_topic}
+العدد المستهدف: من {brief.desired_video_count['min']} إلى {brief.desired_video_count['max']}، لكن أعد عددًا أقل ولا تملأ القائمة إن لم تجد نتائج قوية.
+سياسة التاريخ: {date_requirement or 'لا يوجد نطاق زمني مفروض'}
+الفلاتر: {json.dumps(filters, ensure_ascii=False)}
+
+ابحث بالعربية والإنجليزية وباللغات ذات الصلة، وتحقق من أصل الخبر أولًا عبر مصادر موثوقة وحديثة. {output_instruction}
+{videos_instruction}
+
+أعد JSON فقط بهذا الشكل:
+{{
+  "overview": "ملخص الحقائق المؤكدة والسياق الضروري",
+  "verified_facts": ["حقائق مدعومة بالمصادر"],
+  "conflicting_narratives": ["الروايات أو التوترات المتعارضة"],
+  "latest_development": {{"title":"", "url":"https://...", "source":"", "date":"YYYY-MM-DD"}},
+  "search_queries": ["عبارات البحث الفعلية"],
+  "web_sources": [{{"title":"", "url":"https://...", "publisher":"", "published":"YYYY-MM-DD"}}],
+  "limitations": ["ما تعذر إثباته"]{schema_videos}
 }}
 """.strip()
 
@@ -390,7 +417,10 @@ async def _openai_web_research(
 
     try:
         result = await asyncio.to_thread(call)
-        if result and result.get("videos"):
+        result_has_content = result and (
+            result.get("videos") or result.get("web_sources") or result.get("overview")
+        )
+        if result_has_content:
             try:
                 os.makedirs(cache_root, exist_ok=True)
                 temp_path = f"{cache_path}.{os.getpid()}.tmp"
@@ -402,7 +432,11 @@ async def _openai_web_research(
             return result
         return None
     except Exception as exc:
-        logger.warning("ChatGPT-style web research discovery failed; using YouTube fallback: %s", exc)
+        logger.warning(
+            "Web research discovery failed%s: %s",
+            "; using YouTube fallback" if not web_only else "",
+            exc,
+        )
         return None
 
 
@@ -1410,6 +1444,7 @@ async def research_youtube(
     exclude_video_ids: Sequence[str] = (),
     filters: Optional[Dict[str, Any]] = None,
     research_mode: str = "economy",
+    web_only: bool = False,
 ) -> Dict[str, Any]:
     """Run one complete on-demand research session and return a final report."""
     if not user_prompt or len(user_prompt.strip()) < 8:
@@ -1422,7 +1457,66 @@ async def research_youtube(
     started = datetime.now(timezone.utc)
     applied_filters = _normalise_filters(filters)
     brief = await analyze_prompt(user_prompt, planning_api_key)
-    web_research = await _openai_web_research(user_prompt, brief, applied_filters, api_key, research_mode)
+    effective_research_mode = "economy" if web_only else research_mode
+    web_research = await _openai_web_research(
+        user_prompt, brief, applied_filters, api_key, effective_research_mode, web_only=web_only
+    )
+
+    # The web agent is intentionally a separate execution path. It returns
+    # articles and reports only and does not call yt-dlp, YouTube search, video
+    # metadata verification, or transcript extraction.
+    if web_only:
+        if not web_research:
+            raise RuntimeError(
+                "تعذر تنفيذ بحث الويب. تأكد من إعداد OPENAI_API_KEY ثم أعد المحاولة؛ "
+                "لم يتم تشغيل بحث YouTube."
+            )
+        finished = datetime.now(timezone.utc)
+        web_sources = [
+            source for source in (web_research.get("web_sources") or [])
+            if not re.search(r"(?:youtube\.com|youtu\.be)", str(source.get("url") or ""), re.I)
+        ]
+        latest_development = web_research.get("latest_development")
+        if latest_development and re.search(
+            r"(?:youtube\.com|youtu\.be)", str(latest_development.get("url") or ""), re.I
+        ):
+            latest_development = None
+        search_queries = list(web_research.get("search_queries") or [])
+        return {
+            "web_only": True,
+            "topic": brief.main_topic,
+            "brief": brief.as_dict(),
+            "filters": applied_filters,
+            "research_mode": effective_research_mode,
+            "search_plan": [{"query": query, "angle": "web_research", "priority": max(1, 12 - index)} for index, query in enumerate(search_queries)],
+            "stats": {
+                "queries": len(search_queries),
+                "discovered": len(web_sources),
+                "unique": len(web_sources),
+                "selected": len(web_sources),
+                "selection_strategy": "web_sources_only",
+                "web_research_used": True,
+                "web_research_candidates": len(web_sources),
+                "web_research_model": ((web_research.get("_usage") or {}).get("model", "")),
+                "web_search_calls": int((web_research.get("_usage") or {}).get("web_search_calls") or 0),
+                "openai_input_tokens": int((web_research.get("_usage") or {}).get("input_tokens") or 0),
+                "openai_output_tokens": int((web_research.get("_usage") or {}).get("output_tokens") or 0),
+                "web_research_cache_hit": bool((web_research.get("_usage") or {}).get("cache_hit")),
+                "duration_seconds": round((finished - started).total_seconds(), 2),
+            },
+            "videos": [],
+            "timeline": [],
+            "contradictions": [],
+            "latest_development": latest_development,
+            "research_overview": web_research.get("overview", ""),
+            "verified_facts": web_research.get("verified_facts", []),
+            "conflicting_narratives": web_research.get("conflicting_narratives", []),
+            "research_limitations": web_research.get("limitations", []),
+            "web_sources": web_sources,
+            "search_terms": {"arabic": [q for q in search_queries if re.search(r"[\u0600-\u06ff]", q)][:8], "english": [q for q in search_queries if not re.search(r"[\u0600-\u06ff]", q)][:8]},
+            "warnings": (["تم استبعاد أي رابط YouTube تلقائيًا؛ هذا الوكيل مخصص لمصادر الويب فقط."] if len(web_sources) != len(web_research.get("web_sources") or []) else []),
+            "generated_at": finished.isoformat(),
+        }
     web_candidates = list((web_research or {}).get("videos") or [])
     base_plan = await build_search_plan(brief, planning_api_key)
     content_contexts = {

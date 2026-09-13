@@ -4820,6 +4820,10 @@ class YouTubeResearchRequest(BaseModel):
     exclude_video_ids: List[str] = Field(default_factory=list)
     filters: YouTubeResearchFilters = Field(default_factory=YouTubeResearchFilters)
     research_mode: str = Field(default="economy", pattern="^(economy|local)$")
+    # The existing endpoint is kept for compatibility with older clients, but
+    # the current UI uses the agent as a web-sources researcher. In this mode
+    # the research pipeline must never fall back to YouTube discovery.
+    web_only: bool = False
 
 
 _youtube_research_jobs: Dict[str, Dict[str, Any]] = {}
@@ -4839,6 +4843,7 @@ def _youtube_research_arguments(request: YouTubeResearchRequest) -> Dict[str, An
         "transcript_cache_dir": YOUTUBE_TRANSCRIPT_CACHE_DIR,
         "filters": request.filters.model_dump() if hasattr(request.filters, "model_dump") else request.filters.dict(),
         "research_mode": request.research_mode,
+        "web_only": request.web_only,
     }
 
 

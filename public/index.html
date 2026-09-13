@@ -1510,10 +1510,8 @@
                     <i data-lucide="radio" class="w-4 h-4"></i>
                 </button>
                 <button id="tab-youtube-research" onclick="switchTab('youtube-research')"
-                    class="shrink-0 p-2 transition-colors" title="وكيل بحث YouTube" aria-label="وكيل بحث YouTube">
-                    <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                        <path d="M8 5.75v12.5L18 12 8 5.75Z"></path>
-                    </svg>
+                    class="shrink-0 p-2 transition-colors" title="وكيل بحث الويب" aria-label="وكيل بحث الويب">
+                    <i data-lucide="globe-2" class="w-4 h-4"></i>
                 </button>
                 <button id="tab-yemen" onclick="switchTab('yemen')"
                     class="p-2 hover:text-neon-blue transition-colors text-neutral-500" title="أخبار اليمن">
@@ -1612,8 +1610,8 @@
                         </svg>
                     </div>
                     <div class="text-right">
-                        <div class="text-sm font-bold text-neutral-200">وكيل بحث YouTube</div>
-                        <div class="text-[9px] font-mono text-red-400/70 uppercase tracking-tighter">YouTube Research Agent</div>
+                        <div class="text-sm font-bold text-neutral-200">وكيل بحث الويب</div>
+                        <div class="text-[9px] font-mono text-red-400/70 uppercase tracking-tighter">Web Research Agent</div>
                     </div>
                 </div>
                 <i data-lucide="chevron-left" class="w-4 h-4 text-neutral-700 group-hover:text-red-400"></i>
@@ -1890,7 +1888,7 @@
             </section>
         </div>
 
-        <!-- On-demand YouTube Research View -->
+        <!-- On-demand web research view -->
         <div id="youtube-research-view" class="hidden" dir="rtl">
             <section class="max-w-6xl mx-auto">
                 <div class="relative overflow-hidden rounded-3xl border border-red-500/20 bg-gradient-to-br from-red-950/40 via-neutral-950 to-neutral-950 p-6 md:p-10 mb-8">
@@ -1899,42 +1897,23 @@
                         <div class="flex items-center gap-3 mb-4">
                             <span class="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center shadow-lg shadow-red-600/20">
                                 <svg class="w-6 h-6 text-white fill-current" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                                    <path d="M8 5.75v12.5L18 12 8 5.75Z"></path>
+                                    <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.9 9h-3.02a15.7 15.7 0 0 0-1.2-5.01A8.03 8.03 0 0 1 18.9 11ZM12 4c.84 1.2 1.65 3.14 1.88 7h-3.76c.23-3.86 1.04-5.8 1.88-7ZM7.32 5.99A15.7 15.7 0 0 0 6.12 11H3.1a8.03 8.03 0 0 1 4.22-5.01ZM3.1 13h3.02c.23 1.87.65 3.58 1.2 5.01A8.03 8.03 0 0 1 3.1 13ZM12 20c-.84-1.2-1.65-3.14-1.88-7h3.76c-.23 3.86-1.04 5.8-1.88 7Zm2.68-1.99c.55-1.43.97-3.14 1.2-5.01h3.02a8.03 8.03 0 0 1-4.22 5.01Z"></path>
                                 </svg>
                             </span>
                             <div>
                                 <p class="text-[10px] font-mono tracking-[0.25em] text-red-400 uppercase">On-demand intelligence</p>
-                                <h2 class="font-serif text-3xl md:text-5xl text-white">YouTube Research Agent</h2>
+                                <h2 class="font-serif text-3xl md:text-5xl text-white">Web Research Agent</h2>
                             </div>
                         </div>
-                        <p class="text-sm text-neutral-400 max-w-3xl leading-7 mb-6">الصق أي خبر أو مقال أو سؤال. سيحوّله النظام إلى خطة بحث متعددة الزوايا، يفحص النتائج وبياناتها، يزيل التكرار، ثم يبني سلسلة فيديوهات موثقة ومترابطة. يبدأ فقط عند طلبك.</p>
+                        <p class="text-sm text-neutral-400 max-w-3xl leading-7 mb-6">أدخل موضوعًا أو سؤالًا واضحًا. سيبحث الوكيل في الإنترنت عبر مصادر متعددة، ويتحقق من المقالات والتقارير والبيانات المرتبطة بالموضوع، ثم يعرض لك خلاصة ومصادر مباشرة للقراءة. لا يستخدم YouTube ولا يبحث عن مقاطع.</p>
                         <form id="youtube-research-form" class="space-y-4">
                             <textarea id="youtube-research-prompt" rows="9" required minlength="8"
                                 class="w-full rounded-2xl border border-white/10 bg-black/30 p-5 text-sm text-white placeholder:text-neutral-600 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none resize-y leading-7"
-                                placeholder="@Youtube&#10;&#10;الصق البرومبت أو الخبر أو المقال هنا، وحدد عدد الفيديوهات واللغة والنطاق الزمني إن رغبت..."></textarea>
-                            <details class="rounded-2xl border border-white/10 bg-black/20 overflow-hidden">
-                                <summary class="cursor-pointer select-none px-5 py-4 flex items-center justify-between gap-3 text-sm font-bold text-white hover:bg-white/5">
-                                    <span class="flex items-center gap-2"><i data-lucide="sliders-horizontal" class="w-4 h-4 text-red-400"></i> الفلاتر المتقدمة</span>
-                                    <span class="text-[10px] font-mono text-neutral-500">المدة · التاريخ · اللغة · البلد · القناة · المشاهدات · الموثوقية · البث</span>
-                                </summary>
-                                <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 border-t border-white/10 p-5 text-xs">
-                                    <label class="space-y-2 sm:col-span-2 lg:col-span-4"><span class="text-neutral-400">ميزانية البحث</span><select id="yt-research-mode" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"><option value="economy" selected>اقتصادي — GPT-5.6 Luna وبحثان ويب كحد أقصى</option><option value="local">محلي مجاني — YouTube فقط دون OpenAI</option></select><small class="block text-neutral-600">أُلغي البحث العميق المكلف؛ يستخدم الوضع الاقتصادي التخزين المؤقت لتجنب دفع تكلفة البحث نفسه مرة أخرى.</small></label>
-                                    <label class="space-y-2"><span class="text-neutral-400">المدة الدنيا (دقيقة)</span><input id="yt-filter-min-duration" type="number" min="0" max="1440" value="0" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"></label>
-                                    <label class="space-y-2"><span class="text-neutral-400">المدة القصوى (دقيقة)</span><input id="yt-filter-max-duration" type="number" min="0" max="1440" value="0" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"></label>
-                                    <label class="space-y-2"><span class="text-neutral-400">من تاريخ</span><input id="yt-filter-date-from" type="date" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"></label>
-                                    <label class="space-y-2"><span class="text-neutral-400">إلى تاريخ</span><input id="yt-filter-date-to" type="date" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"></label>
-                                    <label class="space-y-2"><span class="text-neutral-400">اللغة</span><select id="yt-filter-language" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"><option value="any">كل اللغات</option><option value="ar">العربية</option><option value="en">الإنجليزية</option><option value="fr">الفرنسية</option><option value="es">الإسبانية</option></select></label>
-                                    <label class="space-y-2"><span class="text-neutral-400">البلد أو المنطقة</span><input id="yt-filter-country" type="text" maxlength="100" placeholder="مثال: اليمن" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white placeholder:text-neutral-700 outline-none focus:border-red-500"></label>
-                                    <label class="space-y-2"><span class="text-neutral-400">نوع القناة</span><select id="yt-filter-channel-type" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"><option value="any" selected>كل القنوات</option><option value="official">رسمية / مؤسسة إعلامية</option><option value="news">إخبارية</option><option value="independent">مستقلة</option><option value="educational">تعليمية</option><option value="interview">مقابلات وحوارات</option><option value="documentary">وثائقية</option></select></label>
-                                    <label class="space-y-2"><span class="text-neutral-400">نوع المحتوى</span><select id="yt-filter-content-type" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"><option value="any" selected>كل الأنواع</option><option value="panel_discussion">نقاش متعدد الأطراف</option><option value="debate">مناظرة ورأي مقابل</option><option value="roundtable">طاولة مستديرة</option><option value="multi_guest_interview">حوار مع عدة ضيوف</option><option value="analysis">تحليل خبراء</option></select></label>
-                                    <label class="space-y-2"><span class="text-neutral-400">أدنى قوة للمناقشة</span><select id="yt-filter-discussion-score" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"><option value="0" selected>دون حد</option><option value="5">5/10 فأعلى</option><option value="6">6/10 فأعلى</option><option value="7">7/10 فأعلى</option><option value="8">8/10 فأعلى</option></select></label>
-                                    <label class="space-y-2"><span class="text-neutral-400">أقل عدد مشاهدات</span><input id="yt-filter-min-views" type="number" min="0" value="0" step="1000" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"></label>
-                                    <label class="space-y-2"><span class="text-neutral-400">أدنى موثوقية</span><select id="yt-filter-reliability" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"><option value="0" selected>دون حد</option><option value="5">5/10 فأعلى</option><option value="6">6/10 فأعلى</option><option value="7">7/10 فأعلى</option><option value="8">8/10 فأعلى</option></select></label>
-                                    <label class="space-y-2"><span class="text-neutral-400">حالة البث</span><select id="yt-filter-live" class="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-white outline-none focus:border-red-500"><option value="any">الكل</option><option value="not_live">فيديوهات مسجلة</option><option value="live">مباشر الآن</option><option value="upcoming">بث قادم</option></select></label>
-                                    <label class="sm:col-span-2 flex items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 cursor-pointer"><input id="yt-filter-transcript" type="checkbox" checked class="accent-red-600 w-4 h-4"><span><strong class="block text-white">استخراج النص قبل الاختيار</strong><small class="text-neutral-500">يستخدم yt-dlp لفحص أقوى المرشحين وترجيح الفيديوهات ذات المحتوى والأدلة الأفضل.</small></span></label>
-                                    <label class="sm:col-span-2 flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 cursor-pointer"><input id="yt-filter-strict" type="checkbox" class="accent-emerald-500 w-4 h-4"><span><strong class="block text-white">تطبيق الشروط بصرامة</strong><small class="text-neutral-500">فعّله فقط عندما تريد رفض كل فيديو لا يطابق الفلاتر المحددة حرفيًا.</small></span></label>
-                                </div>
-                            </details>
+                                placeholder="اكتب موضوع البحث هنا...&#10;&#10;مثال: تطورات الوضع الاقتصادي في اليمن وتأثيرها على الملاحة في البحر الأحمر"></textarea>
+                            <div class="rounded-2xl border border-neon-blue/20 bg-neon-blue/5 px-5 py-4 text-sm text-neutral-300">
+                                <div class="flex items-center gap-2 font-bold text-neon-blue"><i data-lucide="shield-check" class="w-4 h-4"></i> بحث الويب فقط</div>
+                                <p class="mt-2 text-xs leading-6 text-neutral-500">سيجلب الوكيل مقالات وتقارير وبيانات من الإنترنت، ويستبعد روابط YouTube تلقائيًا. لا توجد فلاتر فيديو أو إعادة محاولة للبحث عن مقاطع.</p>
+                            </div>
                             <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                                 <p id="youtube-research-status" class="text-xs font-mono text-neutral-500">جاهز لجلسة بحث جديدة</p>
                                 <button id="youtube-research-submit" type="submit" class="px-6 py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-600/20">
@@ -3990,6 +3969,27 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
         function renderYouTubeResearch(report) {
             const container = document.getElementById('youtube-research-results');
             if (!container) return;
+            if (report.web_only) {
+                const stats = report.stats || {};
+                const warningHtml = (report.warnings || []).map(w => `<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">${escapeResearchHtml(w)}</div>`).join('');
+                const factsHtml = (report.verified_facts || []).map(fact => `<li>${escapeResearchHtml(fact)}</li>`).join('');
+                const conflictsHtml = (report.conflicting_narratives || []).map(item => `<li>${escapeResearchHtml(item)}</li>`).join('');
+                const limitsHtml = (report.research_limitations || []).map(item => `<li>${escapeResearchHtml(item)}</li>`).join('');
+                const sourceKeys = new Set();
+                const sources = (report.web_sources || []).filter(source => {
+                    const url = String(source.url || '').trim();
+                    const key = url.toLowerCase();
+                    if (!/^https?:\/\//i.test(url) || /(?:youtube\.com|youtu\.be)/i.test(url) || !key || sourceKeys.has(key)) return false;
+                    sourceKeys.add(key); return true;
+                }).slice(0, 24);
+                const sourceHtml = sources.map((source, index) => `<a href="${escapeResearchHtml(source.url)}" target="_blank" rel="noopener" class="block rounded-xl border border-white/10 bg-white/[0.03] p-4 hover:border-neon-blue/50 transition-colors"><div class="flex items-start gap-3"><span class="shrink-0 w-7 h-7 rounded-full bg-neon-blue/15 text-neon-blue font-black flex items-center justify-center">${index + 1}</span><div class="min-w-0"><strong class="block text-sm leading-7 text-white">${escapeResearchHtml(source.title || source.url)}</strong><span class="block mt-1 text-[10px] text-neutral-500">${escapeResearchHtml(source.publisher || 'مصدر ويب')}${source.published ? ` · ${escapeResearchHtml(source.published)}` : ''}</span></div><i data-lucide="external-link" class="w-4 h-4 shrink-0 text-neon-blue"></i></div></a>`).join('');
+                const planHtml = (report.search_plan || []).map(item => `<span class="inline-flex rounded-full border border-white/10 px-3 py-1.5 text-[11px] text-neutral-400">${escapeResearchHtml(item.query)}</span>`).join('');
+                const latestHtml = report.latest_development?.url ? `<a href="${escapeResearchHtml(report.latest_development.url)}" target="_blank" rel="noopener" class="block rounded-xl border border-neon-blue/20 bg-neon-blue/5 p-4"><strong class="block text-white">${escapeResearchHtml(report.latest_development.title || 'أحدث تطور')}</strong><span class="block mt-1 text-xs text-neutral-500">${escapeResearchHtml(report.latest_development.source || '')} ${escapeResearchHtml(report.latest_development.published || '')}</span></a>` : '';
+                container.innerHTML = `${warningHtml}<section class="rounded-2xl border border-neon-blue/20 bg-gradient-to-b from-neon-blue/5 to-neutral-950 p-5 md:p-6"><div class="flex items-center gap-3 mb-4"><i data-lucide="scan-search" class="w-5 h-5 text-neon-blue"></i><div><h3 class="font-bold text-white">خلاصة بحث الويب</h3><p class="text-[10px] font-mono text-neon-blue">مصادر إنترنت فقط — لا توجد نتائج YouTube</p></div></div><p class="text-sm leading-8 text-neutral-300">${escapeResearchHtml(report.research_overview || 'لم تُرجع جلسة البحث ملخصًا.')}</p><div class="grid md:grid-cols-2 gap-4 mt-5">${factsHtml ? `<div class="rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-4"><strong class="text-xs text-emerald-300">الحقائق المؤكدة</strong><ul class="mt-3 list-disc pr-5 space-y-2 text-xs leading-6 text-neutral-300">${factsHtml}</ul></div>` : ''}${conflictsHtml ? `<div class="rounded-xl border border-amber-500/15 bg-amber-500/5 p-4"><strong class="text-xs text-amber-300">الروايات المتعارضة</strong><ul class="mt-3 list-disc pr-5 space-y-2 text-xs leading-6 text-neutral-300">${conflictsHtml}</ul></div>` : ''}</div>${limitsHtml ? `<div class="mt-4 rounded-xl bg-white/[0.03] p-4"><strong class="text-xs text-neutral-300">حدود البحث</strong><ul class="mt-2 list-disc pr-5 space-y-1 text-xs text-neutral-500">${limitsHtml}</ul></div>` : ''}</section><section class="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><div class="flex items-center justify-between gap-3 mb-4"><div><h3 class="font-bold text-white">مصادر الإنترنت</h3><p class="text-xs text-neutral-500 mt-1">${sources.length} مصدرًا مباشرًا — افتح أي مصدر لقراءة التفاصيل</p></div><span class="rounded-full bg-neon-blue/10 px-3 py-1 text-[10px] text-neon-blue">بدون YouTube</span></div><div class="grid md:grid-cols-2 gap-3">${sourceHtml || '<p class="text-sm text-neutral-500">لم تُعثر على روابط قابلة للعرض في هذه الجلسة.</p>'}</div></section>${latestHtml}<section class="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h3 class="font-bold text-white mb-3">عبارات البحث المستخدمة</h3><div class="flex flex-wrap gap-2">${planHtml || '<span class="text-xs text-neutral-500">غير متاح</span>'}</div><div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs"><div><strong class="block text-lg text-white">${escapeResearchHtml(stats.web_search_calls ?? 0)}</strong><span class="text-neutral-500">طلبات بحث الويب</span></div><div><strong class="block text-lg text-white">${escapeResearchHtml(stats.selected ?? sources.length)}</strong><span class="text-neutral-500">مصادر معروضة</span></div><div><strong class="block text-lg text-white">${escapeResearchHtml(stats.openai_input_tokens ?? 0)}</strong><span class="text-neutral-500">رموز الإدخال</span></div><div><strong class="block text-lg text-white">${stats.web_research_cache_hit ? 'نعم' : 'لا'}</strong><span class="text-neutral-500">من التخزين المؤقت</span></div></div></section>`;
+                container.classList.remove('hidden');
+                lucide.createIcons();
+                return;
+            }
             const stats = report.stats || {};
             const warnings = (report.warnings || []).map(w => `<div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">${escapeResearchHtml(w)}</div>`).join('');
             const verifiedFacts = (report.verified_facts || []).map(fact => `<li>${escapeResearchHtml(fact)}</li>`).join('');
@@ -4122,7 +4122,7 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             button.disabled = true;
             button.classList.add('opacity-60', 'cursor-wait');
             button.querySelector('span').textContent = 'جاري البحث والتحقق...';
-            status.textContent = 'بدء بحث ويب متعدد المصادر، ثم التحقق من أفضل روابط YouTube...';
+            status.textContent = 'بدء بحث ويب متعدد المصادر؛ لا يتم البحث عن مقاطع YouTube...';
             if (results) results.classList.add('hidden');
             try {
                 const fieldValue = id => document.getElementById(id)?.value ?? '';
@@ -4159,22 +4159,15 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                 const response = await fetch(`${API_URL}/youtube-research/jobs`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt, exclude_video_ids: previousVideoIds, filters, research_mode: researchMode })
+                    body: JSON.stringify({ prompt, exclude_video_ids: [], filters, research_mode: 'economy', web_only: true })
                 });
                 const startedJob = await parseYouTubeResearchResponse(response);
                 if (!response.ok) throw new Error(startedJob.detail || 'فشل بدء البحث');
                 if (!startedJob.job_id) throw new Error('لم يُرجع الخادم رقم مهمة البحث.');
-                status.textContent = 'بدأ البحث في الخلفية؛ جارٍ التحقق من المصادر والفيديوهات…';
+                status.textContent = 'بدأ البحث في الخلفية؛ جارٍ جمع المصادر والتحقق منها…';
                 const payload = await waitForYouTubeResearchJob(startedJob.job_id, status);
-                const currentVideoIds = (payload.videos || []).map(video => video.video_id).filter(Boolean);
-                localStorage.setItem('youtubeResearchPreviousVideoIds', JSON.stringify({ signature: searchSignature, ids: currentVideoIds }));
                 renderYouTubeResearch(payload);
-                const excludedCount = payload.stats?.excluded_from_previous_search || 0;
-                const reusedPrevious = Boolean(payload.stats?.reused_previous_results);
-                const provisionalMode = Boolean(payload.stats?.provisional_rate_limit_mode);
-                status.textContent = provisionalMode
-                    ? `اكتمل الاكتشاف: عُرض ${payload.stats?.selected || 0} مرشحين بتحقق جزئي لأن YouTube حجب صفحات التفاصيل مؤقتًا.`
-                    : `اكتملت الجلسة: ${payload.stats?.selected || 0} فيديو موثق${reusedPrevious ? ' من أفضل النتائج المتاحة سابقًا' : ' جديد'} — توفرت نصوص ${payload.stats?.transcripts_available || 0} من ${payload.stats?.transcripts_attempted || 0}${excludedCount && !reusedPrevious ? ` — تم استبعاد ${excludedCount} من البحث السابق` : ''}`;
+                status.textContent = `اكتملت الجلسة: تم العثور على ${payload.stats?.selected || 0} مصدر ويب مرتبط بالموضوع.`;
             } catch (error) {
                 status.textContent = error.message || 'تعذر إكمال البحث';
                 if (results) {
