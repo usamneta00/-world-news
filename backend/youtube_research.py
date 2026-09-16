@@ -384,21 +384,40 @@ async def _openai_web_research(
         # Keep the low-cost budget isolated from every legacy/deep setting.
         maximum_calls = max(1, min(3, int(os.environ.get("YOUTUBE_RESEARCH_ECONOMY_MAX_CALLS", "2"))))
         maximum_output = 5000
-        response = requests.post(
-            "https://api.openai.com/v1/responses",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={
-                "model": model,
-                "tools": [{"type": "web_search", "search_context_size": "low"}],
-                "tool_choice": "required",
-                "max_tool_calls": maximum_calls,
-                "max_output_tokens": maximum_output,
-                "reasoning": {"effort": "none"},
-                "input": prompt,
-            },
-            timeout=max(30, min(180, int(os.environ.get("YOUTUBE_RESEARCH_WEB_TIMEOUT", "45")))),
-        )
-        response.raise_for_status()
+        timeout = max(30, min(180, int(os.environ.get("YOUTUBE_RESEARCH_WEB_TIMEOUT", "120"))))
+        request_payload = {
+            "model": model,
+            "tools": [{"type": "web_search", "search_context_size": "low"}],
+            "tool_choice": "required",
+            "max_tool_calls": maximum_calls,
+            "max_output_tokens": maximum_output,
+            "reasoning": {"effort": "none"},
+            "input": prompt,
+        }
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        last_error: Optional[Exception] = None
+        for attempt in range(2):
+            try:
+                response = requests.post(
+                    "https://api.openai.com/v1/responses",
+                    headers=headers,
+                    json=request_payload,
+                    timeout=timeout,
+                )
+                response.raise_for_status()
+                break
+            except (requests.Timeout, requests.ConnectionError) as exc:
+                last_error = exc
+                if attempt == 0:
+                    logger.warning(
+                        "Web research request timed out or failed to connect; retrying in 3 seconds (timeout=%ss)",
+                        timeout,
+                    )
+                    time.sleep(3)
+                    continue
+                raise
+        else:
+            raise last_error or RuntimeError("Web research request failed")
         payload = response.json()
         result = _normalise_web_research(_json_from_text(_responses_output_text(payload)))
         if result:
