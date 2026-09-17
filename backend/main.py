@@ -2339,6 +2339,7 @@ async def clean_full_transcript_ai(transcript: str) -> str:
         temp_text = temp_text[len(chunk):].lstrip()
 
     cleaned_chunks = []
+    client = OpenAI(api_key=OPENAI_API_KEY)
     
     system_prompt = (
         "أنت مساعد محترف في معالجة النصوص والترجمة. مهمتك هي تنظيف النصوص المستخرجة من الفيديوهات وترجمتها بالكامل إلى اللغة العربية وصياغتها بأسلوب سردي سليم.\n"
@@ -2354,23 +2355,20 @@ async def clean_full_transcript_ai(transcript: str) -> str:
     for i, chunk in enumerate(chunks):
         try:
             logger.info(f"🧹 Cleaning transcript chunk {i+1}/{len(chunks)}...")
-            headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
-            payload = {
-                "model": "gpt-5.6-luna",
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"نظف النص التالي بدقة:\n\n{chunk}"}
-                ],
-                "temperature": 0.3
-            }
             response = await asyncio.to_thread(
-                lambda: requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=60)
+                lambda: client.responses.create(
+                    model="gpt-5.6-luna",
+                    input=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": f"ترجم ونظف النص التالي إلى العربية بدقة:\n\n{chunk}"},
+                    ],
+                )
             )
-            if response.status_code == 200:
-                cleaned_text = response.json()['choices'][0]['message']['content'].strip()
+            cleaned_text = (response.output_text or "").strip()
+            if cleaned_text:
                 cleaned_chunks.append(cleaned_text)
             else:
-                logger.error(f"AI cleaning failed for chunk {i}: {response.status_code}")
+                logger.error(f"AI cleaning returned empty output for chunk {i}")
                 cleaned_chunks.append(chunk)
         except Exception as e:
             logger.error(f"Exception cleaning transcript chunk {i}: {e}")
