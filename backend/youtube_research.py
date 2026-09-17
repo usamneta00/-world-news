@@ -1166,6 +1166,9 @@ async def _enrich_transcripts(
 ) -> Dict[str, int]:
     if not transcript_fetcher or not items or limit <= 0:
         return {"attempted": 0, "available": 0, "skipped_rate_limit": 0, "cache_hits": 0}
+    external_transcript_provider = bool(
+        getattr(transcript_fetcher, "bypasses_youtube_rate_limit", False)
+    )
     targets = items[:limit]
     delay_seconds = min(30.0, max(0.0, float(delay_seconds or 0)))
     if cache_dir:
@@ -1211,7 +1214,7 @@ async def _enrich_transcripts(
             except (OSError, ValueError, TypeError):
                 logger.info("Ignoring unreadable transcript cache file: %s", cache_path)
 
-        if _youtube_rate_limited():
+        if _youtube_rate_limited() and not external_transcript_provider:
             item["transcript_available"] = False
             item["transcript_quality"] = 0.0
             item["transcript_skipped_rate_limit"] = True
@@ -1237,14 +1240,20 @@ async def _enrich_transcripts(
                         logger.warning("Could not persist transcript cache for %s: %s", video_id, exc)
                 continue
             error_message = str((data or {}).get("error") or "لا تتوفر ترجمة لهذا الفيديو")
-            if "429" in error_message or "Too Many Requests" in error_message or "Sign in to confirm" in error_message:
+            if (
+                not external_transcript_provider
+                and ("429" in error_message or "Too Many Requests" in error_message or "Sign in to confirm" in error_message)
+            ):
                 _mark_youtube_rate_limited("yt-dlp transcript")
             item["transcript_available"] = False
             item["transcript_error"] = error_message[:500]
             item["transcript_quality"] = 0.0
         except Exception as exc:
             message = str(exc)
-            if "429" in message or "Too Many Requests" in message or "Sign in to confirm" in message:
+            if (
+                not external_transcript_provider
+                and ("429" in message or "Too Many Requests" in message or "Sign in to confirm" in message)
+            ):
                 _mark_youtube_rate_limited("yt-dlp transcript")
             item["transcript_available"] = False
             item["transcript_error"] = message[:500]

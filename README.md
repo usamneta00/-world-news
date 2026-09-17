@@ -129,6 +129,16 @@ YEMEN_FILTER_KEYWORDS = [
 await asyncio.sleep(180)  # 180 ثانية = 3 دقائق
 ```
 
+### إعداد DownSub لجلب نصوص الفيديو
+
+يستخدم التطبيق DownSub API لجلب ملفات `TXT` و`SRT`. ضع مفتاح الاشتراك في متغير البيئة، ولا تضعه داخل الملفات أو المستودع:
+
+```bash
+DOWNSUB_API_KEY=ضع_مفتاح_DownSub_هنا
+```
+
+يمكن ضبط مهلات الطلب وعدد المحاولات عبر `DOWNSUB_RETRIES` و`DOWNSUB_POST_TIMEOUT` و`DOWNSUB_GET_TIMEOUT`.
+
 ## 📊 API Endpoints
 
 ### الأخبار العالمية

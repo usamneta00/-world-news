@@ -1637,183 +1637,124 @@ def try_direct_ytdlp_subtitle_download(video_url, tmpdir, cookies_file=None, for
         logger.error(f"[yt-dlp fallback] failed: {e}")
     return results
 
-def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt'], use_cookies=True, use_po_token=False):
-    """جلب SRT و TXT من اليوتيوب باستخدام yt-dlp CLI كعملية فرعية مع تجنب خطأ 429."""
-    import tempfile
-    import subprocess
-    import base64
-    
+def fetch_youtube_subs_downsub(video_url, formats=None, use_cookies=True, use_po_token=False):
+    """جلب transcript من DownSub API.
+
+    ``use_cookies`` و ``use_po_token`` محفوظان للتوافق مع الاستدعاءات القديمة؛
+    لا حاجة لهما عند استخدام DownSub.
+    """
+    del use_cookies, use_po_token
+    requested_formats = {
+        str(fmt).strip().lower()
+        for fmt in (formats or ["txt", "srt"])
+        if str(fmt).strip()
+    }
     results = {"srt": None, "txt": None, "title": None, "error": None}
-    
-    # 1. إعدادات استخراج البيانات الوصفية (عبر CLI لتجنب البلوك)
-    cookies_base64 = os.environ.get('YOUTUBE_COOKIES') if use_cookies else None
-    cookies_file_meta = None
-    
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # إعداد الكوكيز للاستخراج الأولي
-        if cookies_base64:
-            try:
-                cookies_content = base64.b64decode(cookies_base64.strip()).decode('utf-8')
-                cookies_file_meta = os.path.join(tmpdir, 'cookies_meta.txt')
-                with open(cookies_file_meta, 'w', encoding='utf-8') as f:
-                    f.write(cookies_content)
-            except Exception as e:
-                logger.error(f"[yt-dlp meta] خطأ في كوكيز الاستعلام: {e}")
+    api_url = os.environ.get("DOWNSUB_API_URL", "https://api.downsub.com/download").strip()
+    api_key = "AIzaBx9po7cMk0ooPwWjTd3YkRhz053AzfT-hGu"
 
-        # استخراج قائمة الترجمات ولغة الفيديو باستخدام yt-dlp -j عبر CLI
-        subtitles = {}
-        automatic_captions = {}
-        spoken_lang = None
-        
-        meta_args = [
-            "yt-dlp",
-            "-j",
-            "--extractor-args", "youtube:player_client=android_vr,android",
-            "--skip-download",
-            "--no-check-formats",
-            "--ignore-no-formats-error",
-            "--js-runtimes", "node"
-        ]
-        if use_po_token:
-            append_youtube_po_token_args(meta_args)
-        if cookies_file_meta:
-            meta_args.extend(["--cookies", cookies_file_meta])
-        meta_args.append(video_url)
-        
+    if not api_key:
+        results["error"] = "لم يتم إعداد DOWNSUB_API_KEY في متغيرات البيئة."
+        logger.error("[DownSub] DOWNSUB_API_KEY is not configured.")
+        return results
+    if not str(video_url or "").strip():
+        results["error"] = "رابط YouTube فارغ."
+        return results
+
+    try:
+        max_retries = max(1, int(os.environ.get("DOWNSUB_RETRIES", "3")))
+        post_timeout = max(5, int(os.environ.get("DOWNSUB_POST_TIMEOUT", "55")))
+        get_timeout = max(5, int(os.environ.get("DOWNSUB_GET_TIMEOUT", "90")))
+    except ValueError:
+        max_retries, post_timeout, get_timeout = 3, 55, 90
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    last_error = ""
+
+    for attempt in range(1, max_retries + 1):
         try:
-            logger.info(f"🔍 [yt-dlp meta] جاري استخراج بيانات الفيديو عبر CLI: {video_url}")
-            meta_result = subprocess.run(meta_args, capture_output=True, text=True, timeout=60)
-            if meta_result.returncode != 0:
-                raise Exception(meta_result.stderr or meta_result.stdout or "فشل استعلام البيانات")
-                
-            import json
-            info = json.loads(meta_result.stdout)
-            if info:
-                results["title"] = info.get('title')
-                subtitles = info.get('subtitles', {})
-                automatic_captions = info.get('automatic_captions', {})
-                spoken_lang = info.get('language')
-        except Exception as e:
-            results["error"] = f"فشل استخراج بيانات الفيديو الأساسية: {e}"
-            logger.error(f"❌ [yt-dlp meta] {results['error']}")
-            return results
+            logger.info("[DownSub] طلب transcript، المحاولة %s/%s", attempt, max_retries)
+            response = requests.post(
+                api_url,
+                headers=headers,
+                json={"url": str(video_url).strip()},
+                timeout=post_timeout,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            data = payload.get("data") if isinstance(payload, dict) else None
+            data = data if isinstance(data, dict) else {}
+            results["title"] = data.get("title")
+            if not results["title"] and isinstance(payload, dict):
+                results["title"] = payload.get("title")
 
-        # تحديد أفضل لغة متوفرة لا تسبب خطأ 429
-        best_lang, is_auto = select_best_lang(subtitles, automatic_captions, spoken_lang)
-        if not best_lang:
-            logger.warning(
-                "[yt-dlp meta] لا تظهر الترجمات في metadata؛ سيتم تجربة التنزيل المباشر "
-                "بكل اللغات وعبر عميل web الاحتياطي."
-            )
-            fallback_results = try_direct_ytdlp_subtitle_download(
-                video_url, tmpdir, cookies_file_meta, formats=formats, use_po_token=use_po_token
-            )
-            if fallback_results.get("srt") or fallback_results.get("txt"):
-                return fallback_results
-            logger.warning(f"[yt-dlp fallback] {fallback_results.get('error')}")
-            results["error"] = (
-                "لم يكتب yt-dlp ملف ترجمة؛ قد تكون الترجمة غير متاحة عبر عميل YouTube "
-                "المستخدم أو غير ظاهرة في metadata"
-            )
-            logger.warning(f"⚠️ [yt-dlp meta] {results['error']}")
-            return results
-            
-        logger.info(f"🎯 [yt-dlp meta] تم اختيار لغة الترجمة: {best_lang} (تلقائية: {is_auto})")
+            if isinstance(payload, dict) and payload.get("status") not in (None, "success"):
+                last_error = f"DownSub Error: {payload.get('message') or 'فشل الطلب'}"
+                break
 
-        # 2. بناء أمر CLI لتحميل الملف المحدد فقط
-        output_template = os.path.join(tmpdir, "%(id)s")
-        args = [
-            "yt-dlp",
-            "--write-auto-subs" if is_auto else "--write-subs",
-            "--sub-lang", best_lang,
-            "--extractor-args", "youtube:player_client=android_vr,android",
-            "--skip-download",
-            "--no-playlist",
-            "--no-warnings",
-            "--no-check-formats",
-            "--ignore-no-formats-error",
-            "--js-runtimes", "node",
-            "-o", output_template
-        ]
-        if use_po_token:
-            append_youtube_po_token_args(args)
-        
-        cookies_file = None
-        if cookies_base64:
-            try:
-                cookies_file = os.path.join(tmpdir, 'cookies.txt')
-                # فك التشفير مجدداً للملف المخصص للأمر
-                cookies_content = base64.b64decode(cookies_base64.strip()).decode('utf-8')
-                with open(cookies_file, 'w', encoding='utf-8') as f:
-                    f.write(cookies_content)
-                args.extend(["--cookies", cookies_file])
-            except Exception as e:
-                logger.error(f"[yt-dlp CLI] خطأ في كوكيز الأمر: {e}")
-                
-        args.append(video_url)
-        
-        try:
-            logger.info(f"📡 [yt-dlp CLI] تشغيل الأمر لجلب لغة ({best_lang}): {video_url}")
-            result = subprocess.run(args, capture_output=True, text=True, timeout=90)
-            
-            logger.info(f"[yt-dlp CLI] كود الخروج: {result.returncode}")
-            if result.stdout:
-                logger.info(f"[yt-dlp CLI] المخرجات القياسية: {result.stdout.strip()}")
-            if result.stderr:
-                logger.warning(f"[yt-dlp CLI] الأخطاء القياسية: {result.stderr.strip()}")
-            
-            if result.returncode != 0:
-                error_msg = result.stderr or result.stdout or "فشل غير معروف"
-                logger.error(f"❌ [yt-dlp CLI] خطأ أثناء تشغيل الأداة: {error_msg}")
-                results["error"] = error_msg
+            subtitles = data.get("subtitles") or []
+            if not isinstance(subtitles, list) or not subtitles:
+                last_error = "لم يتم العثور على أي ترجمات لهذا الفيديو."
+                break
+
+            # نفضّل الترجمة المرفوعة يدويًا، ثم نجرّب بقية المسارات إذا لم
+            # يتوفر فيها التنسيق المطلوب.
+            ordered_subtitles = sorted(
+                [sub for sub in subtitles if isinstance(sub, dict)],
+                key=lambda sub: "auto-generated" in str(sub.get("language") or "").lower(),
+            )
+            found_urls = []
+            for subtitle in ordered_subtitles:
+                for fmt in subtitle.get("formats") or []:
+                    if not isinstance(fmt, dict):
+                        continue
+                    file_format = str(fmt.get("format") or fmt.get("type") or "").strip().lower().lstrip(".")
+                    file_url = str(fmt.get("url") or fmt.get("download_url") or "").strip()
+                    if file_format in requested_formats and file_url:
+                        found_urls.append((file_format, file_url, subtitle.get("language")))
+
+            if not found_urls:
+                last_error = "لم يتم العثور على روابط بالتنسيقات المطلوبة من DownSub."
+                break
+
+            for file_format, file_url, language in found_urls:
+                if results.get(file_format):
+                    continue
+                try:
+                    file_response = requests.get(file_url, timeout=get_timeout)
+                    file_response.raise_for_status()
+                    content = file_response.text.strip()
+                    if content:
+                        results[file_format] = content
+                        logger.info("[DownSub] تم تحميل %s للغة %s", file_format.upper(), language or "غير محددة")
+                except requests.RequestException as exc:
+                    last_error = f"فشل تحميل ملف {file_format}: {exc}"
+                    logger.warning("[DownSub] %s", last_error)
+
+            if any(results.get(fmt) for fmt in requested_formats):
                 return results
-                
-            files = os.listdir(tmpdir)
-            for file_to_remove in ['cookies.txt', 'cookies_meta.txt']:
-                if file_to_remove in files:
-                    files.remove(file_to_remove)
-                
-            sub_file = None
-            # البحث عن الملف المطابق للغة المختارة
-            for suffix in [f'.{best_lang}.vtt', f'.{best_lang}.srt']:
-                matched = [f for f in files if f.endswith(suffix)]
-                if matched:
-                    sub_file = matched[0]
-                    break
-                    
-            if not sub_file and files:
-                # محاولة مطابقة أي ملف ترجمة متوفر
-                vtt_or_srt_files = [f for f in files if f.endswith('.vtt') or f.endswith('.srt')]
-                if vtt_or_srt_files:
-                    sub_file = vtt_or_srt_files[0]
-                
-            if sub_file:
-                filepath = os.path.join(tmpdir, sub_file)
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                
-                is_vtt = sub_file.endswith('.vtt')
-                srt_data = vtt_to_srt(content) if is_vtt else content
-                txt_data = clean_vtt_or_srt_to_txt(content)
-                
-                if 'srt' in formats:
-                    results['srt'] = srt_data
-                if 'txt' in formats:
-                    results['txt'] = txt_data
-                
-                logger.info(f"✅ [yt-dlp CLI] تم جلب ومعالجة الترجمة بنجاح: {sub_file}")
-            else:
-                results["error"] = "لم يتم كتابة ملف الترجمة في المجلد المؤقت"
-                logger.warning("⚠️ [yt-dlp CLI] لم تتوفر ملفات ترجمة بعد التشغيل.")
-                
-        except subprocess.TimeoutExpired:
-            results["error"] = "انتهت المهلة الزمنية لطلب yt-dlp"
-            logger.error("❌ [yt-dlp CLI] انتهت مهلة الـ 90 ثانية")
-        except Exception as e:
-            results["error"] = str(e)
-            logger.error(f"❌ [yt-dlp CLI] خطأ عام: {e}")
-            
+            if not last_error:
+                last_error = "أعاد DownSub روابط فارغة لملفات الترجمة."
+        except (requests.RequestException, ValueError) as exc:
+            last_error = str(exc)
+            logger.warning("[DownSub] فشلت المحاولة %s: %s", attempt, last_error)
+            if attempt < max_retries:
+                time.sleep(min(2 ** (attempt - 1), 12))
+        except Exception as exc:
+            last_error = str(exc)
+            logger.exception("[DownSub] خطأ غير متوقع")
+            break
+
+    results["error"] = last_error or "فشل الاتصال بـ DownSub."
     return results
+
+
+# DownSub مستقل عن حدود طلبات YouTube؛ تستخدمه طبقة البحث كـ transcript provider خارجي.
+fetch_youtube_subs_downsub.bypasses_youtube_rate_limit = True
 
 # No more wrappers here
 
@@ -2415,7 +2356,7 @@ async def clean_full_transcript_ai(transcript: str) -> str:
             logger.info(f"🧹 Cleaning transcript chunk {i+1}/{len(chunks)}...")
             headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
             payload = {
-                "model": "gpt-4o-mini",
+                "model": "gpt-5.6-luna",
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"نظف النص التالي بدقة:\n\n{chunk}"}
@@ -4831,14 +4772,24 @@ _youtube_research_job_tasks: Dict[str, asyncio.Task] = {}
 _youtube_research_jobs_lock = threading.Lock()
 
 
+def _fetch_downsub_transcript_for_research(video_url: str) -> Dict[str, Any]:
+    return fetch_youtube_subs_downsub(
+        video_url,
+        formats=["txt"],
+        use_cookies=False,
+        use_po_token=False,
+    )
+
+
+_fetch_downsub_transcript_for_research.bypasses_youtube_rate_limit = True
+
+
 def _youtube_research_arguments(request: YouTubeResearchRequest) -> Dict[str, Any]:
     return {
         "user_prompt": request.prompt,
         "api_key": OPENAI_API_KEY,
         "exclude_video_ids": request.exclude_video_ids[:300],
-        "transcript_fetcher": lambda url: fetch_youtube_subs_downsub(
-            url, formats=["txt"], use_cookies=False, use_po_token=True
-        ),
+        "transcript_fetcher": _fetch_downsub_transcript_for_research,
         "transcript_delay_seconds": YOUTUBE_TRANSCRIPT_DELAY_SECONDS,
         "transcript_cache_dir": YOUTUBE_TRANSCRIPT_CACHE_DIR,
         "filters": request.filters.model_dump() if hasattr(request.filters, "model_dump") else request.filters.dict(),

@@ -1,10 +1,14 @@
 import requests
 import json
+import os
 
 def download_full_original_transcript(video_url):
     api_url = 'https://api.downsub.com/download'
+    api_key = os.environ.get('DOWNSUB_API_KEY', '').strip()
+    if not api_key:
+        return 'Error: DOWNSUB_API_KEY is not configured'
     headers = {
-        'Authorization': 'Bearer AIzalTjrrsT1cKdr4HSWUryzgFRiqNYc8XBzztm',
+        'Authorization': f'Bearer {api_key}',
         'Content-Type': 'application/json'
     }
     payload = {'url': video_url}

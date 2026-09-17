@@ -1126,8 +1126,9 @@ async def post_to_telegram_channel(message_text):
 def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
     """جلب SRT و TXT من DownSub في طلب واحد."""
     api_url = 'https://api.downsub.com/download'
+    api_key = os.environ.get('DOWNSUB_API_KEY', '').strip()
     headers = {
-        'Authorization': 'Bearer AIzalTjrrsT1cKdr4HSWUryzgFRiqNYc8XBzztm',
+        'Authorization': f'Bearer {api_key}',
         'Content-Type': 'application/json'
     }
     payload = {'url': video_url}
@@ -1137,6 +1138,9 @@ def fetch_youtube_subs_downsub(video_url, formats=['txt', 'srt']):
 
     results = {"srt": None, "txt": None, "title": None, "error": None}
     last_err: Optional[str] = None
+
+    if not api_key:
+        return {"srt": None, "txt": None, "title": None, "error": "DOWNSUB_API_KEY is not configured"}
 
     for attempt in range(1, max_retries + 1):
         try:
@@ -1296,7 +1300,7 @@ async def translate_title_ai(english_title: str) -> str:
     try:
         headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
         payload = {
-            "model": "gpt-4o-mini",
+            "model": "gpt-5.6-luna",
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.3
         }
