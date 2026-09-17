@@ -1970,9 +1970,9 @@ def video_update_payload(update: VideoSummaryUpdate) -> dict:
 VIDEO_SUMMARY_CONCURRENCY = int(os.environ.get("VIDEO_SUMMARY_CONCURRENCY", "1"))
 video_summary_semaphore = asyncio.Semaphore(max(1, VIDEO_SUMMARY_CONCURRENCY))
 
-# Global flag: controls whether automatic video summarization is enabled
-# Default = True (auto summarize new videos on every run AFTER the first run)
-_auto_summary_enabled: bool = True
+# Global flag: controls whether automatic video summarization is enabled.
+# Automatic summaries are opt-in and start disabled after every server restart.
+_auto_summary_enabled: bool = False
 _skip_next_auto_summary_batch_for_types = set()
 _auto_summary_suppressed_items = set()
 
