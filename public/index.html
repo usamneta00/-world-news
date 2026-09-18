@@ -3966,6 +3966,24 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
             throw new Error('استمر البحث أكثر من 20 دقيقة. أعد المحاولة بموضوع أكثر تحديدًا.');
         }
 
+        let latestResearchSources = [];
+
+        function buildResearchChatGPTPrompt(sources) {
+            const links = sources.map(source => source.url).join('\n');
+            return `أريد منك قراءة جميع الروابط التالية وتحليلها معًا بالتفصيل:\n\n${links}\n\nبعد قراءة الروابط، نفّذ ما يلي باللغة العربية:\n1. اشرح موضوع كل رابط وأهم المعلومات الواردة فيه .\n2. اربط المعلومات ببعضها واشرح السياق الكامل والتسلسل الزمني والجهات والأسباب والنتائج إن وُجدت.\n5. اختم بملخص واحد شامل ومترابط يوضح الصورة العامة لما تتحدث عنه جميع الروابط، مع الحفاظ على الحياد وعدم اختلاق أي معلومة غير موجودة في المصادر.\n`;
+        }
+
+        function copyResearchLinks() {
+            if (!latestResearchSources.length) return;
+            copyTextToClipboard(buildResearchChatGPTPrompt(latestResearchSources)).then(() => {
+                document.querySelectorAll('[data-copy-research-links]').forEach(button => {
+                    const label = button.querySelector('span');
+                    if (label) label.textContent = 'تم نسخ الروابط والبرومبت';
+                    setTimeout(() => { if (label) label.textContent = 'نسخ كل الروابط + برومبت ChatGPT'; }, 2600);
+                });
+            }).catch(() => alert('تعذر نسخ الروابط. أعد المحاولة من المتصفح.'));
+        }
+
         function renderYouTubeResearch(report) {
             const container = document.getElementById('youtube-research-results');
             if (!container) return;
@@ -3981,11 +3999,13 @@ BBC عربي، DW عربية، فرانس 24 عربي، CNN بالعربية، �
                     const key = url.toLowerCase();
                     if (!/^https?:\/\//i.test(url) || /(?:youtube\.com|youtu\.be)/i.test(url) || !key || sourceKeys.has(key)) return false;
                     sourceKeys.add(key); return true;
-                }).slice(0, 24);
+                });
+                latestResearchSources = sources;
                 const sourceHtml = sources.map((source, index) => `<a href="${escapeResearchHtml(source.url)}" target="_blank" rel="noopener" class="block rounded-xl border border-white/10 bg-white/[0.03] p-4 hover:border-neon-blue/50 transition-colors"><div class="flex items-start gap-3"><span class="shrink-0 w-7 h-7 rounded-full bg-neon-blue/15 text-neon-blue font-black flex items-center justify-center">${index + 1}</span><div class="min-w-0"><strong class="block text-sm leading-7 text-white">${escapeResearchHtml(source.title || source.url)}</strong><span class="block mt-1 text-[10px] text-neutral-500">${escapeResearchHtml(source.publisher || 'مصدر ويب')}${source.published ? ` · ${escapeResearchHtml(source.published)}` : ''}</span></div><i data-lucide="external-link" class="w-4 h-4 shrink-0 text-neon-blue"></i></div></a>`).join('');
                 const planHtml = (report.search_plan || []).map(item => `<span class="inline-flex rounded-full border border-white/10 px-3 py-1.5 text-[11px] text-neutral-400">${escapeResearchHtml(item.query)}</span>`).join('');
                 const latestHtml = report.latest_development?.url ? `<a href="${escapeResearchHtml(report.latest_development.url)}" target="_blank" rel="noopener" class="block rounded-xl border border-neon-blue/20 bg-neon-blue/5 p-4"><strong class="block text-white">${escapeResearchHtml(report.latest_development.title || 'أحدث تطور')}</strong><span class="block mt-1 text-xs text-neutral-500">${escapeResearchHtml(report.latest_development.source || '')} ${escapeResearchHtml(report.latest_development.published || '')}</span></a>` : '';
                 container.innerHTML = `${warningHtml}<section class="rounded-2xl border border-neon-blue/20 bg-gradient-to-b from-neon-blue/5 to-neutral-950 p-5 md:p-6"><div class="flex items-center gap-3 mb-4"><i data-lucide="scan-search" class="w-5 h-5 text-neon-blue"></i><div><h3 class="font-bold text-white">خلاصة بحث الويب</h3><p class="text-[10px] font-mono text-neon-blue">مصادر إنترنت فقط — لا توجد نتائج YouTube</p></div></div><p class="text-sm leading-8 text-neutral-300">${escapeResearchHtml(report.research_overview || 'لم تُرجع جلسة البحث ملخصًا.')}</p><div class="grid md:grid-cols-2 gap-4 mt-5">${factsHtml ? `<div class="rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-4"><strong class="text-xs text-emerald-300">الحقائق المؤكدة</strong><ul class="mt-3 list-disc pr-5 space-y-2 text-xs leading-6 text-neutral-300">${factsHtml}</ul></div>` : ''}${conflictsHtml ? `<div class="rounded-xl border border-amber-500/15 bg-amber-500/5 p-4"><strong class="text-xs text-amber-300">الروايات المتعارضة</strong><ul class="mt-3 list-disc pr-5 space-y-2 text-xs leading-6 text-neutral-300">${conflictsHtml}</ul></div>` : ''}</div>${limitsHtml ? `<div class="mt-4 rounded-xl bg-white/[0.03] p-4"><strong class="text-xs text-neutral-300">حدود البحث</strong><ul class="mt-2 list-disc pr-5 space-y-1 text-xs text-neutral-500">${limitsHtml}</ul></div>` : ''}</section><section class="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><div class="flex items-center justify-between gap-3 mb-4"><div><h3 class="font-bold text-white">مصادر الإنترنت</h3><p class="text-xs text-neutral-500 mt-1">${sources.length} مصدرًا مباشرًا — افتح أي مصدر لقراءة التفاصيل</p></div><span class="rounded-full bg-neon-blue/10 px-3 py-1 text-[10px] text-neon-blue">بدون YouTube</span></div><div class="grid md:grid-cols-2 gap-3">${sourceHtml || '<p class="text-sm text-neutral-500">لم تُعثر على روابط قابلة للعرض في هذه الجلسة.</p>'}</div></section>${latestHtml}<section class="rounded-2xl border border-white/10 bg-white/[0.03] p-5"><h3 class="font-bold text-white mb-3">عبارات البحث المستخدمة</h3><div class="flex flex-wrap gap-2">${planHtml || '<span class="text-xs text-neutral-500">غير متاح</span>'}</div><div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs"><div><strong class="block text-lg text-white">${escapeResearchHtml(stats.web_search_calls ?? 0)}</strong><span class="text-neutral-500">طلبات بحث الويب</span></div><div><strong class="block text-lg text-white">${escapeResearchHtml(stats.selected ?? sources.length)}</strong><span class="text-neutral-500">مصادر معروضة</span></div><div><strong class="block text-lg text-white">${escapeResearchHtml(stats.openai_input_tokens ?? 0)}</strong><span class="text-neutral-500">رموز الإدخال</span></div><div><strong class="block text-lg text-white">${stats.web_research_cache_hit ? 'نعم' : 'لا'}</strong><span class="text-neutral-500">من التخزين المؤقت</span></div></div></section>`;
+                container.insertAdjacentHTML('afterbegin', `<button type="button" data-copy-research-links onclick="copyResearchLinks()" class="mb-4 inline-flex items-center gap-2 rounded-xl border border-neon-blue/40 bg-neon-blue/10 px-4 py-2 text-xs font-bold text-neon-blue hover:bg-neon-blue/20"><i data-lucide="copy" class="w-4 h-4"></i><span>نسخ كل الروابط + برومبت ChatGPT</span></button>`);
                 container.classList.remove('hidden');
                 lucide.createIcons();
                 return;
