@@ -2361,6 +2361,12 @@
                                         title="نسخ النص">
                                         <i data-lucide="copy" class="w-4 h-4"></i>
                                     </button>
+                                    <button id="copy-timeline-prompt" onclick="copyTimelinePrompt()"
+                                        class="hidden px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl text-[11px] font-bold text-amber-300 transition-all uppercase tracking-wider flex items-center gap-2"
+                                        title="نسخ برومبت البحث الزمني مع النص الكامل">
+                                        <i data-lucide="history" class="w-3.5 h-3.5"></i>
+                                        <span>برومبت الخط الزمني</span>
+                                    </button>
                                     <button id="evaluate-video" onclick="evaluateVideo()"
                                         class="px-5 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-[11px] font-bold text-emerald-400 transition-all uppercase tracking-wider flex items-center gap-2"
                                         title="تقييم الفيديو بالذكاء الاصطناعي">
@@ -2875,6 +2881,7 @@
             const contentEl = document.getElementById('insight-full-text-content');
             const loadingEl = document.getElementById('insight-full-text-loading');
             const copyBtn = document.getElementById('copy-full-text');
+            const timelinePromptBtn = document.getElementById('copy-timeline-prompt');
 
             if (container.classList.contains('hidden')) {
                 container.classList.remove('hidden');
@@ -2886,6 +2893,7 @@
                     loadingEl.classList.remove('hidden');
                     contentEl.classList.add('hidden');
                     copyBtn.classList.add('hidden');
+                    timelinePromptBtn.classList.add('hidden');
 
                     try {
                         const r = await fetch(`/api/video-full-text/${currentInsightType}/${currentInsightId}`);
@@ -2900,6 +2908,7 @@
                                 </p>
                             `).join('');
                             copyBtn.classList.remove('hidden');
+                            timelinePromptBtn.classList.remove('hidden');
                         } else if (data.error) {
                             contentEl.innerHTML = `<div class="text-red-400 text-center py-10 font-mono text-xs uppercase tracking-widest">Neural Link Error: ${data.error}</div>`;
                         }
@@ -2911,11 +2920,13 @@
                     }
                 } else {
                     copyBtn.classList.remove('hidden');
+                    timelinePromptBtn.classList.remove('hidden');
                 }
             } else {
                 container.classList.add('hidden');
                 btn.innerHTML = '<i data-lucide="eye" class="w-3.5 h-3.5"></i><span>عرض النص</span>';
                 copyBtn.classList.add('hidden');
+                timelinePromptBtn.classList.add('hidden');
                 if (window.lucide) lucide.createIcons();
             }
         }
@@ -3033,6 +3044,47 @@
             }).catch(err => {
                 console.error('Failed to copy text:', err);
                 showToast('فشل نسخ النص');
+            });
+        }
+
+        function copyTimelinePrompt() {
+            const contentEl = document.getElementById('insight-full-text-content');
+            const fullText = contentEl ? contentEl.innerText.trim() : '';
+            if (!fullText) {
+                showToast('اعرض النص الكامل أولاً');
+                return;
+            }
+
+            const prompt = `أريد منك إجراء بحث زمني شامل ومفصل حول الموضوع أو الخبر التالي:
+
+ابدأ من أصل الموضوع منذ أول ظهور له، ولا تكتفِ بالبحث عن آخر الأخبار أو بإعادة نشر الملخصات الحديثة. ابحث في الإنترنت عن جميع المصادر الموثوقة المرتبطة بهذا الموضوع، واقرأ محتوى المقالات والتقارير والبيانات الأصلية فعلياً قبل الاعتماد عليها، ولا تعتمد على عناوين نتائج البحث أو مقتطفاتها فقط. ابدأ بالمصادر التي نشرت خلال آخر 24 ساعة، ثم وسّع البحث إلى آخر 7 أيام، ثم ارجع إلى الأسابيع أو الأشهر أو السنوات السابقة عند الحاجة لفهم بداية الموضوع وسياقه وتطوره الكامل.
+
+ابحث أولاً في رويترز وAssociated Press وBBC وCNN وBloomberg والجزيرة والعربية والحدث وسكاي نيوز، ثم ابحث في المصادر الحكومية الرسمية والمنظمات الدولية والبيانات الرسمية والتقارير الأصلية، وبعد ذلك ابحث في المصادر المحلية والصحف المتخصصة والمراكز البحثية والمنظمات غير الحكومية والمصادر الميدانية المهمة للموضوع. لا تستبدل المصادر المطلوبة بمصادر أخرى إذا كانت تغطي الموضوع؛ افحصها هي أولاً، واذكر بوضوح إذا لم تجد تغطية من إحدى الجهات المطلوبة أو إذا كان المقال غير متاح أو محجوباً. لا تعتبر عدة مقالات مصدراً مستقلاً إذا كانت جميعها تنقل الخبر نفسه عن وكالة أو بيان واحد.
+
+بعد جمع المصادر وقراءتها، اكتب شرحاً زمنياً متواصلاً ومفصلاً للموضوع باللغة العربية، يبدأ من الخلفية الأولى وبداية المشكلة، ثم يشرح أول حدث أو تصريح أو قرار أدى إلى ظهور القضية، وبعد ذلك يتابع جميع مراحل تطورها بالترتيب الزمني حتى أحدث تطور منشور. اربط كل مرحلة بالمصدر الذي يثبتها، واشرح كيف انتقل الموضوع من مرحلة إلى أخرى، وما الذي تغير في مواقف الأطراف أو الأرقام أو القرارات أو النتائج. لا تكتب مجرد قائمة أحداث منفصلة، بل اكتب سرداً مترابطاً يجعل القارئ يفهم القصة كاملة منذ بدايتها حتى وضعها الحالي.
+
+ميّز بوضوح بين الوقائع المؤكدة، والتصريحات أو الادعاءات المنقولة عن طرف معين، والتحليلات والتفسيرات، والتوقعات المستقبلية. إذا اختلفت المصادر في رقم أو تاريخ أو وصف أو تفسير، اذكر الاختلاف كما هو، واشرح مصدر كل رواية، ولا تحاول توحيد الروايات دون دليل واضح. اشرح الجهات والأشخاص المرتبطين بالموضوع ودور كل طرف وموقفه ومصلحته، وأضف السياق الضروري دون اختلاق أي معلومة أو استنتاج غير مدعوم.
+
+يجب أن يكون الناتج النهائي مقالاً تحليلياً متواصلاً باللغة العربية، وليس نقاطاً مختصرة أو جدولاً زمنياً جافاً. اكتب فقرات مترابطة تحافظ على التسلسل الزمني، ثم اختم بشرح الوضع الحالي، وما حدث مؤخراً، والقضايا المفتوحة، والتطورات التي ينبغي مراقبتها لاحقاً.
+
+بعد الانتهاء، أضف قائمة كاملة بالمصادر التي قرأتها، تتضمن عنوان كل مقال أو تقرير، واسم الموقع أو المؤسسة، والكاتب إن وجد، وتاريخ النشر أو آخر تحديث، والرابط الكامل المباشر، مع توضيح سبب أهمية كل مصدر وما أضافه إلى التسلسل الزمني. لا تكرر الروابط التي تقدم المحتوى نفسه، ولا تضع رابطاً لمقال لم تقرأ محتواه. إذا تعذر فتح مصدر، اذكر ذلك ولا تستخدمه دليلاً أساسياً.
+
+الموضوع المطلوب بحثه هو:
+${fullText}`;
+
+            copyTextToClipboard(prompt).then(() => {
+                const button = document.getElementById('copy-timeline-prompt');
+                const originalHTML = button.innerHTML;
+                button.innerHTML = '<i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400"></i><span>تم نسخ البرومبت</span>';
+                if (window.lucide) lucide.createIcons();
+                showToast('تم نسخ برومبت الخط الزمني مع النص الكامل');
+                setTimeout(() => {
+                    button.innerHTML = originalHTML;
+                    if (window.lucide) lucide.createIcons();
+                }, 2500);
+            }).catch(err => {
+                console.error('Failed to copy timeline prompt:', err);
+                showToast('فشل نسخ برومبت الخط الزمني');
             });
         }
 
