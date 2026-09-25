@@ -2734,38 +2734,6 @@ async def get_video_full_text_endpoint(news_type: str, news_id: int, db: Session
 
     return {"full_text": cleaned_text}
 
-@app.get("/api/evaluate-video/{news_type}/{news_id}")
-async def evaluate_video_endpoint(news_type: str, news_id: int, db: Session = Depends(get_db)):
-    """تقييم الفيديو بناءً على النص."""
-    news_item = None
-    if news_type == 'world':
-        news_item = db.query(NewsItem).filter(NewsItem.id == news_id).first()
-    elif news_type == 'yemen':
-        news_item = db.query(YemenNewsItem).filter(YemenNewsItem.id == news_id).first()
-    elif news_type == 'dubbed':
-        news_item = db.query(DubbedNewsItem).filter(DubbedNewsItem.id == news_id).first()
-    elif news_type == 'arabic':
-        news_item = db.query(ArabicNewsItem).filter(ArabicNewsItem.id == news_id).first()
-        
-    if not news_item:
-        return {"error": "Item not found"}, 404
-
-    # نستخدم النص المنظف إذا وجد، وإلا النص الأصلي
-    transcript = news_item.full_transcript_cleaned or news_item.full_transcript
-    
-    if not transcript:
-        # محاولة جلب النص إذا لم يكن موجوداً
-        logger.info(f"Transcript missing for evaluation, fetching via DownSub: {news_item.link}")
-        res = await asyncio.to_thread(fetch_youtube_subs_downsub, news_item.link, formats=['txt'])
-        transcript = res.get("txt")
-        if not transcript:
-            return {"error": "لا يوجد نص متاح لتقييمه لهذا الفيديو"}, 404
-        news_item.full_transcript = transcript
-        db.commit()
-
-    evaluation = await evaluate_video_ai(transcript)
-    return {"evaluation": evaluation}
-
 # ============================================
 # News Clustering - Embedding & Clustering Logic
 # ============================================

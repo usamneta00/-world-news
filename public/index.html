@@ -2361,52 +2361,11 @@
                                         title="نسخ النص">
                                         <i data-lucide="copy" class="w-4 h-4"></i>
                                     </button>
-                                    <button id="copy-timeline-prompt" onclick="copyTimelinePrompt()"
-                                        class="hidden px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl text-[11px] font-bold text-amber-300 transition-all uppercase tracking-wider flex items-center gap-2"
-                                        title="نسخ برومبت البحث الزمني مع النص الكامل">
-                                        <i data-lucide="history" class="w-3.5 h-3.5"></i>
-                                        <span>برومبت الخط الزمني</span>
-                                    </button>
-                                    <button id="evaluate-video" onclick="evaluateVideo()"
-                                        class="px-5 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-[11px] font-bold text-emerald-400 transition-all uppercase tracking-wider flex items-center gap-2"
-                                        title="تقييم الفيديو بالذكاء الاصطناعي">
-                                        <i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i>
-                                        <span>تقييم الفيديو</span>
-                                    </button>
                                     <button id="toggle-full-text" onclick="toggleFullText()"
                                         class="px-5 py-2 bg-neon-blue/10 hover:bg-neon-blue/20 border border-neon-blue/30 rounded-xl text-[11px] font-bold text-neon-blue transition-all uppercase tracking-wider flex items-center gap-2">
                                         <i data-lucide="eye" class="w-3.5 h-3.5"></i>
                                         <span>عرض النص</span>
                                     </button>
-                                </div>
-                            </div>
-
-                            <div id="insight-evaluation-container"
-                                class="hidden mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
-                                <div class="relative group">
-                                    <div
-                                        class="absolute -inset-0.5 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 rounded-2xl blur opacity-30 group-hover:opacity-50 transition duration-1000">
-                                    </div>
-                                    <div
-                                        class="relative bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl p-8 md:p-10 text-right">
-                                        <div id="insight-evaluation-loading" class="hidden py-8 text-center">
-                                            <div class="relative w-10 h-10 mx-auto mb-4">
-                                                <div
-                                                    class="absolute inset-0 border-2 border-emerald-500/20 rounded-full">
-                                                </div>
-                                                <div
-                                                    class="absolute inset-0 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin">
-                                                </div>
-                                            </div>
-                                            <p
-                                                class="text-[10px] text-neutral-400 font-mono uppercase tracking-[0.2em] animate-pulse">
-                                                Analyzing Content Depth</p>
-                                        </div>
-                                        <div id="insight-evaluation-content"
-                                            class="text-sm md:text-base text-neutral-200 leading-[1.8] space-y-4">
-                                            <!-- Evaluation injected here -->
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
 
@@ -2881,7 +2840,6 @@
             const contentEl = document.getElementById('insight-full-text-content');
             const loadingEl = document.getElementById('insight-full-text-loading');
             const copyBtn = document.getElementById('copy-full-text');
-            const timelinePromptBtn = document.getElementById('copy-timeline-prompt');
 
             if (container.classList.contains('hidden')) {
                 container.classList.remove('hidden');
@@ -2893,7 +2851,6 @@
                     loadingEl.classList.remove('hidden');
                     contentEl.classList.add('hidden');
                     copyBtn.classList.add('hidden');
-                    timelinePromptBtn.classList.add('hidden');
 
                     try {
                         const r = await fetch(`/api/video-full-text/${currentInsightType}/${currentInsightId}`);
@@ -2908,7 +2865,6 @@
                                 </p>
                             `).join('');
                             copyBtn.classList.remove('hidden');
-                            timelinePromptBtn.classList.remove('hidden');
                         } else if (data.error) {
                             contentEl.innerHTML = `<div class="text-red-400 text-center py-10 font-mono text-xs uppercase tracking-widest">Neural Link Error: ${data.error}</div>`;
                         }
@@ -2920,59 +2876,12 @@
                     }
                 } else {
                     copyBtn.classList.remove('hidden');
-                    timelinePromptBtn.classList.remove('hidden');
                 }
             } else {
                 container.classList.add('hidden');
                 btn.innerHTML = '<i data-lucide="eye" class="w-3.5 h-3.5"></i><span>عرض النص</span>';
                 copyBtn.classList.add('hidden');
-                timelinePromptBtn.classList.add('hidden');
                 if (window.lucide) lucide.createIcons();
-            }
-        }
-
-        async function evaluateVideo() {
-            const container = document.getElementById('insight-evaluation-container');
-            const contentEl = document.getElementById('insight-evaluation-content');
-            const loadingEl = document.getElementById('insight-evaluation-loading');
-            const btn = document.getElementById('evaluate-video');
-
-            if (container.classList.contains('hidden')) {
-                container.classList.remove('hidden');
-                btn.classList.add('bg-emerald-500/30');
-
-                if (!contentEl.textContent.trim()) {
-                    loadingEl.classList.remove('hidden');
-                    contentEl.classList.add('hidden');
-
-                    try {
-                        const r = await fetch(`/api/evaluate-video/${currentInsightType}/${currentInsightId}`);
-                        const data = await r.json();
-
-                        if (data.evaluation) {
-                            // Basic markdown-like formatting for the evaluation result
-                            let formatted = data.evaluation
-                                .replace(/## (.*?)\n/g, '<h4 class="text-emerald-400 font-bold mt-6 mb-2 flex items-center gap-2"><i data-lucide="sparkles" class="w-4 h-4"></i>$1</h4>')
-                                .replace(/- (.*?)\n/g, '<div class="flex items-start gap-2 mb-2 pr-2 text-sm text-neutral-300"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500/40 mt-1.5"></span><span>$1</span></div>')
-                                .replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-bold">$1</strong>')
-                                .replace(/👉 المعنى:/g, '<div class="mt-2 text-xs font-bold text-teal-300 bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20 inline-flex items-center gap-2"><i data-lucide="info" class="w-3.5 h-3.5"></i><span>المعنى:</span></div>')
-                                .replace(/\n/g, '<br>');
-
-                            contentEl.innerHTML = formatted;
-                            if (window.lucide) lucide.createIcons();
-                        } else if (data.error) {
-                            contentEl.innerHTML = `<div class="text-red-400 text-center py-6 font-mono text-xs uppercase">Evaluation Link Error: ${data.error}</div>`;
-                        }
-                    } catch (e) {
-                        contentEl.innerHTML = `<div class="text-red-400 text-center py-6 font-mono text-xs uppercase">Nexus Connection Interrupted</div>`;
-                    } finally {
-                        loadingEl.classList.add('hidden');
-                        contentEl.classList.remove('hidden');
-                    }
-                }
-            } else {
-                container.classList.add('hidden');
-                btn.classList.remove('bg-emerald-500/30');
             }
         }
 
@@ -3023,11 +2932,24 @@
             const contentEl = document.getElementById('insight-full-text-content');
             let text = contentEl.innerText;
 
-            // بروم البحث عن المصادر، مع إدراج النص المعروض في الموضع المحدد.
-            const instructions =
-                "ابحث على الويب عن جميع المصادر الموثوقة والحديثة المتعلقة بـِ\n\n" +
-                text +
-                "\n\nأريد جمع المصادر من رويترز، وAP، وBBC، وCNN، وبلومبرغ، والجزيرة، والعربية، والحدث، وسكاي نيوز، والمصادر الرسمية الحكومية أو الدولية، وأي مصدر محلي أو متخصص مهم للموضوع. ابحث عن المصادر المنشورة خلال آخر 24 ساعة أولاً، ثم آخر 7 أيام إذا كانت المعلومات المهمة أقدم. لا تستبدل المصادر التي أعطيك إياها بمصادر أخرى؛ ابحث عنها هي أولاً. أعطني عنوان كل مقال، واسم الموقع، وتاريخ النشر، والرابط الكامل. لا تكتفِ بنتائج البحث أو العنوان؛ افتح المقال واقرأ محتواه. ميّز بوضوح بين الخبر المؤكد، والادعاء المنقول عن طرف، والتحليل أو التوقع. إذا وجدت اختلافاً بين المصادر، اذكر الاختلاف ولا تحاول توحيده دون دليل. أعطِ الأولوية للبيانات الرسمية والوثائق الأصلية عند توفرها. لا تكرر المقالات أو الروابط التي تتحدث عن نفس المحتوى، إلا إذا كانت الإضافة المعلوماتية مهمة. بعد جمع المصادر، رتّبها حسب أهميتها وصلتها بالموضوع، مع توضيح سبب إدراج كل مصدر. في النهاية، أعطني قائمة المصادر كاملة حتى أستطيع فتحها وقراءتها بنفسي.";
+            const instructions = `ابحث في الإنترنت عن جميع المصادر الموثوقة المرتبطة بالموضوع التالي، واقرأ محتوى المقالات والتقارير والبيانات الأصلية فعلياً قبل الاعتماد عليها، ولا تعتمد على العناوين أو مقتطفات نتائج البحث وحدها.
+
+الموضوع:
+${text}
+
+ابدأ بالمصادر المنشورة خلال آخر 24 ساعة، ثم وسّع البحث إلى آخر 7 أيام، ثم ارجع إلى الأسابيع أو الأشهر أو السنوات السابقة عند الحاجة لفهم بداية الموضوع وسياقه وتطوره الكامل.
+
+منهج البحث الإلزامي:
+1) افحص أولاً رويترز وAssociated Press وBBC وCNN وBloomberg والجزيرة والعربية والحدث وسكاي نيوز.
+2) ثم افحص المصادر الحكومية الرسمية والمنظمات الدولية والبيانات الرسمية والتقارير الأصلية.
+3) ثم افحص المصادر المحلية والصحف المتخصصة والمراكز البحثية والمنظمات غير الحكومية والمصادر الميدانية المهمة للموضوع.
+لا تستبدل المصادر المطلوبة بمصادر أخرى إذا كانت تغطي الموضوع. اذكر بوضوح إذا لم تجد تغطية من أي جهة مطلوبة أو كان المقال غير متاح أو محجوباً. لا تعتبر عدة مقالات مصدراً مستقلاً إذا كانت تنقل الخبر نفسه عن وكالة أو بيان واحد.
+
+بعد جمع المصادر وقراءتها، اكتب مقالاً تحليلياً متواصلاً ومفصلاً باللغة العربية، لا نقاطاً مختصرة ولا جدولاً زمنياً جافاً. اعرض الموضوع كسلسلة قضايا مترابطة زمنياً: ابدأ بالقضية وأسبابها، ثم بيّن نتيجة كل سبب وتأثيره، واعرض مواقف الأطراف كأنها حوار متتابع؛ طرف يطرح المشكلة، وآخر يقدّم حلاً، وثالث يوضح رأيه أو مصلحته، ثم بيّن هل يعالج الحل الجذور أم يخفف الأعراض. اربط كل مرحلة بالمصدر الذي يثبتها، وميّز بين الوقائع المؤكدة والادعاءات والتحليل والتوقعات، واشرح الخلافات بين المصادر دون اختلاق توحيد لها.
+
+اختم بشرح الوضع الحالي، وما حدث مؤخراً، والقضايا المفتوحة، والتطورات التي ينبغي مراقبتها لاحقاً.
+
+بعد المقال أضف قائمة كاملة بالمصادر التي قرأتها: عنوان كل مقال أو تقرير، المؤسسة أو الموقع، الكاتب إن وجد، تاريخ النشر أو آخر تحديث، الرابط المباشر الكامل، وسبب أهمية المصدر وما أضافه للتسلسل الزمني. لا تكرر الروابط التي تقدم المحتوى نفسه، ولا تضع رابطاً لم تقرأ محتواه. إذا تعذر فتح مصدر فاذكر ذلك ولا تستخدمه دليلاً أساسياً.`;
 
             text = instructions;
 
@@ -3098,10 +3020,6 @@ ${fullText}`;
             document.getElementById('insight-full-text-content').innerHTML = '';
             document.getElementById('toggle-full-text').innerHTML = '<i data-lucide="eye" class="w-3.5 h-3.5"></i><span>عرض النص</span>';
 
-            // Reset Evaluation container
-            document.getElementById('insight-evaluation-container').classList.add('hidden');
-            document.getElementById('insight-evaluation-content').innerHTML = '';
-            document.getElementById('evaluate-video').classList.remove('bg-emerald-500/30');
             if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
                 ytPlayer.stopVideo();
             } else {
