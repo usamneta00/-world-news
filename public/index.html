@@ -2361,6 +2361,12 @@
                                         title="نسخ النص">
                                         <i data-lucide="copy" class="w-4 h-4"></i>
                                     </button>
+                                    <button id="copy-timeline-prompt" onclick="copyTimelinePrompt()"
+                                        class="hidden px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl text-[11px] font-bold text-amber-300 transition-all uppercase tracking-wider flex items-center gap-2"
+                                        title="نسخ برومبت البحث الزمني مع النص الكامل">
+                                        <i data-lucide="history" class="w-3.5 h-3.5"></i>
+                                        <span>برومبت البحث الزمني</span>
+                                    </button>
                                     <button id="toggle-full-text" onclick="toggleFullText()"
                                         class="px-5 py-2 bg-neon-blue/10 hover:bg-neon-blue/20 border border-neon-blue/30 rounded-xl text-[11px] font-bold text-neon-blue transition-all uppercase tracking-wider flex items-center gap-2">
                                         <i data-lucide="eye" class="w-3.5 h-3.5"></i>
@@ -2840,6 +2846,7 @@
             const contentEl = document.getElementById('insight-full-text-content');
             const loadingEl = document.getElementById('insight-full-text-loading');
             const copyBtn = document.getElementById('copy-full-text');
+            const timelinePromptBtn = document.getElementById('copy-timeline-prompt');
 
             if (container.classList.contains('hidden')) {
                 container.classList.remove('hidden');
@@ -2851,6 +2858,7 @@
                     loadingEl.classList.remove('hidden');
                     contentEl.classList.add('hidden');
                     copyBtn.classList.add('hidden');
+                    timelinePromptBtn.classList.add('hidden');
 
                     try {
                         const r = await fetch(`/api/video-full-text/${currentInsightType}/${currentInsightId}`);
@@ -2865,6 +2873,7 @@
                                 </p>
                             `).join('');
                             copyBtn.classList.remove('hidden');
+                            timelinePromptBtn.classList.remove('hidden');
                         } else if (data.error) {
                             contentEl.innerHTML = `<div class="text-red-400 text-center py-10 font-mono text-xs uppercase tracking-widest">Neural Link Error: ${data.error}</div>`;
                         }
@@ -2876,11 +2885,13 @@
                     }
                 } else {
                     copyBtn.classList.remove('hidden');
+                    timelinePromptBtn.classList.remove('hidden');
                 }
             } else {
                 container.classList.add('hidden');
                 btn.innerHTML = '<i data-lucide="eye" class="w-3.5 h-3.5"></i><span>عرض النص</span>';
                 copyBtn.classList.add('hidden');
+                timelinePromptBtn.classList.add('hidden');
                 if (window.lucide) lucide.createIcons();
             }
         }
